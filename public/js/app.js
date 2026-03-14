@@ -20,6 +20,7 @@
   let isScreenSharing = false;
   let screenStream = null;
   let outgoingCallTo = null;
+  let remoteScreenActive = false; // true when peer is sharing their screen
 
   // ---- Helpers ----
   const $ = id => document.getElementById(id);
@@ -674,8 +675,11 @@
     });
 
     socket.on('screenshare_stopped', () => {
+      remoteScreenActive = false;
       $('screenshare-overlay').style.display = 'none';
       $('screenshare-video').srcObject = null;
+      $('view-screen-btn').style.display = 'none';
+      $('view-screen-btn').classList.remove('viewing');
       toast('Screen share ended', 'info');
     });
   }
@@ -742,6 +746,17 @@
 
   $('screenshare-close').addEventListener('click', () => {
     $('screenshare-overlay').style.display = 'none';
+    // Show the view button so they can reopen
+    if (isScreenSharing || remoteScreenActive) {
+      $('view-screen-btn').style.display = 'flex';
+      $('view-screen-btn').classList.add('viewing');
+    }
+  });
+
+  $('view-screen-btn').addEventListener('click', () => {
+    $('screenshare-overlay').style.display = 'flex';
+    $('view-screen-btn').classList.remove('viewing');
+    // don't hide it — keep it so they can close/reopen again
   });
 
   async function startScreenShare() {
@@ -773,6 +788,7 @@
       vid.srcObject = screenStream;
       vid.muted = true;
       $('screenshare-overlay').style.display = 'flex';
+      $('view-screen-btn').style.display = 'flex';
 
       socket.emit('screenshare_started', { roomId: callState.roomId, toId: callState.peerId });
 
@@ -810,6 +826,8 @@
     $('screenshare-btn').title = 'Share screen';
     $('screenshare-overlay').style.display = 'none';
     $('screenshare-video').srcObject = null;
+    $('view-screen-btn').style.display = 'none';
+    $('view-screen-btn').classList.remove('viewing');
   }
 
   // ---- Ringtone (Web Audio API) ----
@@ -885,15 +903,22 @@
           if (callState) callState.remoteAudio = audio;
         } else if (track.kind === 'video') {
           // Remote screen share incoming
+          remoteScreenActive = true;
           const peerName = callState && callState.peerUser ? callState.peerUser.displayName : 'Peer';
           $('screenshare-who').textContent = peerName + ' is sharing their screen';
           const vid = $('screenshare-video');
           vid.srcObject = e.streams[0];
           vid.muted = false;
           $('screenshare-overlay').style.display = 'flex';
+          $('view-screen-btn').style.display = 'flex';
+          $('view-screen-btn').classList.add('viewing');
+          toast((peerName) + ' is sharing their screen — click 👁 to view', 'info', 5000);
           track.onended = () => {
+            remoteScreenActive = false;
             $('screenshare-overlay').style.display = 'none';
             vid.srcObject = null;
+            $('view-screen-btn').style.display = 'none';
+            $('view-screen-btn').classList.remove('viewing');
           };
         }
       };
@@ -963,7 +988,10 @@
     $('screenshare-overlay').style.display = 'none';
     $('screenshare-video').srcObject = null;
     isScreenSharing = false;
+    remoteScreenActive = false;
     $('screenshare-btn').classList.remove('sharing');
+    $('view-screen-btn').style.display = 'none';
+    $('view-screen-btn').classList.remove('viewing');
   }
 
   // ---- Profile ----
