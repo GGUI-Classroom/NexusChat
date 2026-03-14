@@ -123,20 +123,26 @@ router.post('/', upload.single('icon'), async (req, res) => {
       `INSERT INTO server_members (id, server_id, user_id, role) VALUES ($1,$2,$3,'admin')`,
       [uuidv4(), id, req.session.userId]
     );
-    // Default roles
-    const adminRoleId = uuidv4();
-    const memberRoleId = uuidv4();
-    await pool.query(
-      `INSERT INTO server_roles (id, server_id, name, color, is_admin, position) VALUES ($1,$2,'Admin','#f05454',true,0),($3,$2,'Member','#8892a4',false,1)`,
-      [adminRoleId, id, memberRoleId]
-    );
-    // Assign admin role to owner
-    await pool.query(`UPDATE server_members SET role_id=$1 WHERE server_id=$2 AND user_id=$3`, [adminRoleId, id, req.session.userId]);
+    // Default roles — wrapped separately so if server_roles table is missing we still create the server
+    try {
+      const adminRoleId = uuidv4();
+      const memberRoleId = uuidv4();
+      await pool.query(
+        `INSERT INTO server_roles (id, server_id, name, color, is_admin, position) VALUES ($1,$2,'Admin','#f05454',true,0),($3,$2,'Member','#8892a4',false,1)`,
+        [adminRoleId, id, memberRoleId]
+      );
+      await pool.query(`UPDATE server_members SET role_id=$1 WHERE server_id=$2 AND user_id=$3`, [adminRoleId, id, req.session.userId]);
+    } catch(roleErr) {
+      console.error('Role creation failed (table may not exist yet):', roleErr.message);
+    }
     // Default channel
     await pool.query(`INSERT INTO channels (id, server_id, name, position) VALUES ($1,$2,'general',0)`, [uuidv4(), id]);
     const s = await pool.query('SELECT * FROM servers WHERE id=$1', [id]);
     res.json({ server: fmtServer(s.rows[0]) });
-  } catch(e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+  } catch(e) {
+    console.error('Create server error:', e.message, e.stack);
+    res.status(500).json({ error: e.message || 'Server error' });
+  }
 });
 
 // Get server details + channels + members + roles
