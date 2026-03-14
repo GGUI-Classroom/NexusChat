@@ -147,10 +147,8 @@
             <button class="ftab" data-ftab="pending">Pending <span id="pending-count"></span></button>
           </div>
 
-          <!-- Search Results -->
           <div id="search-results" class="search-results" style="display:none"></div>
 
-          <!-- All Friends -->
           <div class="ftab-panel active" id="ftab-all">
             <div id="friends-list" class="friends-grid"></div>
             <div class="empty-state" id="friends-empty" style="display:none">
@@ -160,21 +158,16 @@
             </div>
           </div>
 
-          <!-- Pending Requests -->
           <div class="ftab-panel" id="ftab-pending">
             <div class="pending-section">
               <h3 class="section-label">Incoming</h3>
               <div id="incoming-requests"></div>
-              <div class="empty-state" id="incoming-empty" style="display:none">
-                <p>No incoming requests</p>
-              </div>
+              <div class="empty-state" id="incoming-empty" style="display:none"><p>No incoming requests</p></div>
             </div>
             <div class="pending-section">
               <h3 class="section-label">Outgoing</h3>
               <div id="outgoing-requests"></div>
-              <div class="empty-state" id="outgoing-empty" style="display:none">
-                <p>No outgoing requests</p>
-              </div>
+              <div class="empty-state" id="outgoing-empty" style="display:none"><p>No outgoing requests</p></div>
             </div>
           </div>
         </div>
@@ -182,15 +175,11 @@
         <!-- DMs View -->
         <div class="view" id="view-dms">
           <div class="dm-layout">
-            <!-- DM List -->
             <div class="dm-sidebar">
-              <div class="dm-sidebar-header">
-                <h2>Messages</h2>
-              </div>
+              <div class="dm-sidebar-header"><h2>Messages</h2></div>
               <div id="dm-list" class="dm-list"></div>
             </div>
 
-            <!-- Chat Area -->
             <div class="chat-area" id="chat-area">
               <div class="chat-empty-state" id="chat-placeholder">
                 <div class="empty-icon">💬</div>
@@ -255,7 +244,7 @@
           <div class="avatar-upload-info">
             <label for="avatar-file-input" class="btn-secondary">Choose Photo</label>
             <input type="file" id="avatar-file-input" accept="image/*" style="display:none" />
-            <p class="field-hint">JPEG, PNG, GIF, WebP – max 5 MB</p>
+            <p class="field-hint">JPEG, PNG, GIF, WebP – max 2 MB</p>
           </div>
         </div>
         <div class="field-group">
@@ -304,14 +293,31 @@
       </div>
       <div class="call-hud-timer" id="call-timer">0:00</div>
       <div class="call-hud-controls">
-        <button class="hud-btn" id="mute-btn" title="Mute">
-          <svg id="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <button class="hud-btn" id="mute-btn" title="Mute mic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <button class="hud-btn" id="screenshare-btn" title="Share screen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M9 9l3-3 3 3M12 6v7"/></svg>
         </button>
         <button class="hud-btn end" id="end-call-btn" title="End Call">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg>
         </button>
       </div>
     </div>
+  </div>
+
+  <!-- Screen Share Overlay -->
+  <div class="screenshare-overlay" id="screenshare-overlay" style="display:none">
+    <div class="screenshare-header">
+      <div class="screenshare-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <span id="screenshare-who">Screen Share</span>
+      </div>
+      <button class="screenshare-close" id="screenshare-close" title="Close view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <video id="screenshare-video" autoplay playsinline></video>
   </div>
 
   <!-- Toast Notifications -->
