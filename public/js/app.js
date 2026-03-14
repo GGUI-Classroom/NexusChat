@@ -767,9 +767,11 @@
       $('screenshare-btn').classList.add('sharing');
       $('screenshare-btn').title = 'Stop sharing';
 
-      // Show own preview
+      // Show own preview (muted to avoid feedback)
       $('screenshare-who').textContent = 'You are sharing your screen';
-      $('screenshare-video').srcObject = screenStream;
+      const vid = $('screenshare-video');
+      vid.srcObject = screenStream;
+      vid.muted = true;
       $('screenshare-overlay').style.display = 'flex';
 
       socket.emit('screenshare_started', { roomId: callState.roomId, toId: callState.peerId });
@@ -885,11 +887,13 @@
           // Remote screen share incoming
           const peerName = callState && callState.peerUser ? callState.peerUser.displayName : 'Peer';
           $('screenshare-who').textContent = peerName + ' is sharing their screen';
-          $('screenshare-video').srcObject = e.streams[0];
+          const vid = $('screenshare-video');
+          vid.srcObject = e.streams[0];
+          vid.muted = false;
           $('screenshare-overlay').style.display = 'flex';
           track.onended = () => {
             $('screenshare-overlay').style.display = 'none';
-            $('screenshare-video').srcObject = null;
+            vid.srcObject = null;
           };
         }
       };
