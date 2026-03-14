@@ -34,7 +34,11 @@ const sessionMiddleware = session({
 app.use(express.json({ limit: '4mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(sessionMiddleware);
+app.use((req, res, next) => { req.io = io; req.userSockets = userSockets; next(); });
 app.use(express.static(path.join(__dirname, '../public')));
+
+// Expose io so routes can emit socket events
+app.set('io', io);
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/friends', require('./routes/friends'));
@@ -138,7 +142,12 @@ io.on('connection', (socket) => {
       [msgId, channelId, userId, trimmed, now]
     );
     const sender = await pool.query(
-      'SELECT username, display_name, avatar_data, avatar_mime FROM users WHERE id=$1', [userId]
+      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime,
+       sr.name as role_name, sr.color as role_color
+       FROM users u
+       LEFT JOIN server_members sm ON sm.server_id=$2 AND sm.user_id=u.id
+       LEFT JOIN server_roles sr ON sr.id=sm.role_id
+       WHERE u.id=$1`, [userId, serverId]
     );
     const s = sender.rows[0];
     const msg = {
@@ -146,7 +155,8 @@ io.on('connection', (socket) => {
       content: trimmed, createdAt: now,
       author: {
         username: s.username, displayName: s.display_name,
-        avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null
+        avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null,
+        roleColor: s.role_color || null, roleName: s.role_name || null
       }
     };
     io.to(`server:${serverId}`).emit('new_channel_message', msg);
