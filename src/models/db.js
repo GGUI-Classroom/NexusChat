@@ -52,11 +52,22 @@ async function initDb() {
       created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
     );
 
+    CREATE TABLE IF NOT EXISTS server_roles (
+      id TEXT PRIMARY KEY,
+      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      color TEXT DEFAULT '#8892a4',
+      is_admin BOOLEAN DEFAULT FALSE,
+      position INTEGER DEFAULT 0,
+      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+    );
+
     CREATE TABLE IF NOT EXISTS server_members (
       id TEXT PRIMARY KEY,
       server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       role TEXT DEFAULT 'member',
+      role_id TEXT DEFAULT NULL REFERENCES server_roles(id) ON DELETE SET NULL,
       joined_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
       UNIQUE(server_id, user_id)
     );
@@ -77,11 +88,32 @@ async function initDb() {
       created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
     );
 
+    CREATE TABLE IF NOT EXISTS server_invites (
+      id TEXT PRIMARY KEY,
+      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+      from_id TEXT NOT NULL REFERENCES users(id),
+      to_id TEXT NOT NULL REFERENCES users(id),
+      status TEXT DEFAULT 'pending',
+      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+      UNIQUE(server_id, to_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS server_bans (
+      id TEXT PRIMARY KEY,
+      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      banned_by TEXT NOT NULL REFERENCES users(id),
+      reason TEXT DEFAULT NULL,
+      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+      UNIQUE(server_id, user_id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_convo ON messages(from_id, to_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON friend_requests(to_id, status);
     CREATE INDEX IF NOT EXISTS idx_username_lower ON users(LOWER(username));
     CREATE INDEX IF NOT EXISTS idx_channel_messages ON channel_messages(channel_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_server_members ON server_members(user_id);
+    CREATE INDEX IF NOT EXISTS idx_server_invites_to ON server_invites(to_id, status);
   `);
   console.log('Database initialized');
 }
