@@ -295,8 +295,13 @@
       const isOwner = m.id === ownerId;
       const roleStyle = m.roleColor ? `color:${m.roleColor}` : '';
       const canManage = iAmAdmin && m.id !== currentUser.id && !isOwner;
+      const popupData = encodeURIComponent(JSON.stringify({
+        id: m.id, displayName: m.displayName, username: m.username,
+        avatarDataUrl: m.avatarDataUrl || null, status: m.status,
+        roleName: m.roleName || null, roleColor: m.roleColor || null
+      }));
       return `
-        <div class="server-member-item">
+        <div class="server-member-item" onclick="showProfilePopup(event, '${popupData}')">
           <div class="avatar-wrap" style="flex-shrink:0">
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
@@ -628,6 +633,19 @@
     loadBansList();
   };
   $('server-settings-close').addEventListener('click', () => $('server-settings-modal').classList.remove('active'));
+
+  $('leave-server-btn').addEventListener('click', async () => {
+    if (!activeServerId || !activeServerData) return;
+    const serverName = activeServerData.server.name;
+    if (!confirm('Leave "' + serverName + '"? You can rejoin with an invite code.')) return;
+    const r = await api('DELETE', '/api/servers/' + activeServerId + '/leave');
+    if (r.error) return toast(r.error, 'error');
+    servers = servers.filter(s => s.id !== activeServerId);
+    renderServerRail();
+    activeServerId = null; activeChannelId = null; activeServerData = null;
+    railSelect('dms');
+    toast('Left "' + serverName + '"', 'info');
+  });
   $('server-settings-modal').addEventListener('click', e => { if (e.target === $('server-settings-modal')) $('server-settings-modal').classList.remove('active'); });
 
   $('settings-icon-input').addEventListener('change', e => {
@@ -1607,6 +1625,7 @@
   // ---- Profile ----
   $('profile-btn').addEventListener('click', () => {
     $('profile-display-name').value = currentUser.displayName;
+    $('profile-bio').value = currentUser.bio || '';
     renderAvatar($('profile-avatar-preview'), currentUser);
     $('profile-modal').classList.add('active');
   });
@@ -1630,9 +1649,11 @@
   $('save-profile-btn').addEventListener('click', async () => {
     const name = $('profile-display-name').value.trim();
     if (!name) return showError('profile-error', 'Display name required');
-    const r = await api('PATCH', '/api/users/profile', { displayName: name });
+    const bio = $('profile-bio').value.trim();
+    const r = await api('PATCH', '/api/users/profile', { displayName: name, bio });
     if (r.error) return showError('profile-error', r.error);
     currentUser.displayName = name;
+    currentUser.bio = bio;
     updateSelfCard();
     $('profile-modal').classList.remove('active');
     toast('Profile updated!', 'success');
@@ -1648,6 +1669,55 @@
     activeDmUserId = null; activeDmUser = null;
     endCallLocal();
     showScreen('auth-screen');
+  });
+
+  // ---- Profile Popup ----
+  window.showProfilePopup = async function(e, encodedData) {
+    e.stopPropagation();
+    const data = JSON.parse(decodeURIComponent(encodedData));
+    const popup = $('profile-popup');
+
+    // Render what we have immediately
+    renderAvatar($('popup-avatar'), data);
+    $('popup-name').textContent = data.displayName;
+    $('popup-username').textContent = '@' + data.username;
+    $('popup-status').className = 'status-dot ' + (data.status === 'online' ? 'online' : '');
+    $('popup-bio-section').style.display = 'none';
+    $('popup-bio').textContent = '';
+
+    if (data.roleName) {
+      $('popup-role').style.display = 'inline-block';
+      $('popup-role').style.color = data.roleColor || 'var(--accent)';
+      $('popup-role').textContent = data.roleName;
+    } else {
+      $('popup-role').style.display = 'none';
+    }
+
+    // Position popup near the click
+    popup.style.display = 'block';
+    const x = e.clientX, y = e.clientY;
+    const pw = 280, ph = 260;
+    const left = Math.min(x + 10, window.innerWidth - pw - 10);
+    const top = Math.min(y, window.innerHeight - ph - 10);
+    popup.style.left = left + 'px';
+    popup.style.top = top + 'px';
+
+    // Fetch full profile for bio
+    try {
+      const r = await api('GET', '/api/users/profile/' + data.id);
+      if (r.bio) {
+        $('popup-bio').textContent = r.bio;
+        $('popup-bio-section').style.display = 'block';
+      }
+    } catch(err) {}
+  };
+
+  // Dismiss popup on outside click
+  document.addEventListener('click', e => {
+    const popup = $('profile-popup');
+    if (popup && popup.style.display !== 'none' && !popup.contains(e.target)) {
+      popup.style.display = 'none';
+    }
   });
 
   // ---- Escape helper ----
