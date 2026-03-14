@@ -396,7 +396,7 @@ html, body {
   margin-bottom: 16px;
 }
 
-.search-result-item, .friend-card, .request-card {
+.search-result-item, .request-card {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 14px;
   transition: var(--transition);
@@ -405,7 +405,7 @@ html, body {
 
 .friends-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 10px;
 }
 
@@ -413,15 +413,19 @@ html, body {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 16px 14px 12px;
   transition: var(--transition);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  text-align: center;
 }
 .friend-card:hover { border-color: var(--border-bright); background: var(--bg-hover); }
-.friend-card .person-info { flex: 1; min-width: 0; }
-.friend-card .card-actions { display: flex; gap: 6px; flex-shrink: 0; margin-left: auto; }
+.friend-card .avatar-wrap { margin-bottom: 2px; }
+.friend-card .avatar { width: 48px; height: 48px; font-size: 18px; }
+.friend-card .person-info { width: 100%; min-width: 0; }
+.friend-card .card-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
 
 .person-info { flex: 1; min-width: 0; }
 .person-info .display-name {
@@ -777,7 +781,7 @@ html, body {
 .call-hud {
   position: fixed;
   bottom: 20px; left: 50%; transform: translateX(-50%);
-  z-index: 900;
+  z-index: 1000;
   animation: slide-up 0.3s ease;
 }
 
@@ -878,13 +882,10 @@ html, body {
 .screenshare-overlay {
   position: fixed;
   inset: 0;
-  z-index: 800;
-  background: rgba(0,0,0,0.92);
+  z-index: 850;
+  background: #000;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
   animation: fade-in 0.2s ease;
 }
 
@@ -894,15 +895,14 @@ html, body {
 }
 
 .screenshare-header {
-  width: 100%;
-  max-width: 1200px;
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border-bright);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  padding: 10px 16px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
 }
 
 .screenshare-label {
@@ -915,21 +915,23 @@ html, body {
 }
 
 .screenshare-close {
-  width: 28px; height: 28px;
-  background: none; border: none;
-  color: var(--text-muted);
-  cursor: pointer; border-radius: var(--radius-sm);
-  display: flex; align-items: center; justify-content: center;
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-family: 'Syne', sans-serif;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
   transition: var(--transition);
 }
-.screenshare-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+.screenshare-close:hover { background: rgba(255,255,255,0.2); }
 
 #screenshare-video {
   width: 100%;
-  max-width: 1200px;
-  max-height: calc(100vh - 120px);
+  height: 100%;
+  object-fit: contain;
   background: #000;
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
   display: block;
 }
 
