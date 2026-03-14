@@ -415,8 +415,13 @@ html, body {
   border-radius: var(--radius-md);
   padding: 12px 14px;
   transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .friend-card:hover { border-color: var(--border-bright); background: var(--bg-hover); }
+.friend-card .person-info { flex: 1; min-width: 0; }
+.friend-card .card-actions { display: flex; gap: 6px; flex-shrink: 0; margin-left: auto; }
 
 .person-info { flex: 1; min-width: 0; }
 .person-info .display-name {
