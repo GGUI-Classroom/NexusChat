@@ -67,11 +67,22 @@
     const opts = {
       method,
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin'
+      credentials: 'include'
     };
     if (data) opts.body = JSON.stringify(data);
-    const res = await fetch(path, opts);
-    return res.json();
+    try {
+      const res = await fetch(path, opts);
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        console.error('Non-JSON response:', text);
+        return { error: 'Server returned invalid response: ' + text.slice(0, 100) };
+      }
+    } catch (e) {
+      console.error('Fetch error:', e);
+      return { error: 'Network error: ' + e.message };
+    }
   }
 
   async function checkAuth() {
@@ -106,6 +117,7 @@
     });
     btn.disabled = false; btn.textContent = 'Sign In';
     if (r.error) return showError('login-error', r.error);
+    if (!r.user) return showError('login-error', 'Unexpected response — check browser console');
     currentUser = r.user;
     enterApp();
   });
@@ -122,6 +134,7 @@
     });
     btn.disabled = false; btn.textContent = 'Create Account';
     if (r.error) return showError('register-error', r.error);
+    if (!r.user) return showError('register-error', 'Unexpected response — check browser console');
     currentUser = r.user;
     enterApp();
   });
