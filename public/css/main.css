@@ -868,3 +868,69 @@ html, body {
   .nav-btn { justify-content: center; padding: 10px; }
   .dm-sidebar { width: 180px; min-width: 180px; }
 }
+
+/* ===== SCREEN SHARE OVERLAY ===== */
+.screenshare-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  background: rgba(0,0,0,0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.screenshare-header {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-bright);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.screenshare-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.screenshare-close {
+  width: 28px; height: 28px;
+  background: none; border: none;
+  color: var(--text-muted);
+  cursor: pointer; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+}
+.screenshare-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+#screenshare-video {
+  width: 100%;
+  max-width: 1200px;
+  max-height: calc(100vh - 120px);
+  background: #000;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  display: block;
+}
+
+/* Screenshare active state on HUD button */
+.hud-btn.sharing {
+  background: var(--green);
+  color: var(--bg-void);
+  box-shadow: 0 0 10px var(--green-glow);
+}
