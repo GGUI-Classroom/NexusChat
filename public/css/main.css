@@ -1318,3 +1318,82 @@ html, body {
 
 /* ===== COLORED ROLE USERNAME IN MESSAGES ===== */
 .msg-author.has-role { font-weight: 800; }
+
+/* ===== USER PROFILE POPUP ===== */
+.profile-popup {
+  position: fixed;
+  width: 280px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 1100;
+  overflow: hidden;
+  animation: popup-in 0.15s ease;
+}
+@keyframes popup-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.profile-popup-banner {
+  height: 60px;
+  background: linear-gradient(135deg, var(--accent) 0%, #8b3cf7 100%);
+}
+.profile-popup-body {
+  padding: 0 16px 16px;
+  position: relative;
+}
+.profile-popup-avatar-wrap {
+  position: relative;
+  display: inline-block;
+  margin-top: -28px;
+  margin-bottom: 8px;
+}
+.profile-popup-avatar {
+  width: 56px; height: 56px;
+  font-size: 22px;
+  border: 3px solid var(--bg-elevated);
+  border-radius: 50%;
+}
+.profile-popup-avatar-wrap .status-dot {
+  width: 14px; height: 14px;
+  border-width: 3px;
+  border-color: var(--bg-elevated);
+  bottom: 2px; right: 2px;
+}
+.profile-popup-name {
+  font-size: 16px; font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.profile-popup-username {
+  font-size: 12px; color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.profile-popup-role {
+  display: inline-block;
+  font-size: 11px; font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: rgba(255,255,255,0.08);
+  margin-bottom: 10px;
+}
+.profile-popup-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0;
+}
+.profile-popup-label {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.profile-popup-bio {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.profile-popup-section { margin-bottom: 4px; }
