@@ -114,6 +114,7 @@ async function initDb() {
 
   // Add role_id column to server_members if it doesn't exist (for existing deployments)
   await runSql(`ALTER TABLE server_members ADD COLUMN IF NOT EXISTS role_id TEXT DEFAULT NULL`, 'alter_members_role_id');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT NULL`, 'alter_users_bio');
 
   console.log('Database initialized');
 }
