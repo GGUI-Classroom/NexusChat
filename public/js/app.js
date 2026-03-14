@@ -19,6 +19,7 @@
   let ringtoneNodes = [];
   let isScreenSharing = false;
   let screenStream = null;
+  let outgoingCallTo = null;
 
   // ---- Helpers ----
   const $ = id => document.getElementById(id);
@@ -613,6 +614,7 @@
 
     socket.on('call_accepted', async ({ roomId, byId }) => {
       stopRingtone();
+      outgoingCallTo = null;
       const friend = friends.find(f => f.id === byId);
       if (!friend) return;
       await startWebRTCCall(roomId, byId, friend, true);
@@ -620,6 +622,9 @@
 
     socket.on('call_declined', () => {
       stopRingtone();
+      outgoingCallTo = null;
+      $('call-hud').style.display = 'none';
+      $('call-timer').textContent = '0:00';
       toast('Call declined', 'info');
       callState = null;
     });
@@ -638,10 +643,14 @@
     socket.on('webrtc_offer', async ({ roomId, fromId, offer }) => {
       if (!callState || callState.roomId !== roomId) return;
       const pc = callState.peerConnection;
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit('webrtc_answer', { roomId, toId: fromId, answer });
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc_answer', { roomId, toId: fromId, answer });
+      } catch(e) {
+        console.error('offer handling error:', e);
+      }
     });
 
     socket.on('webrtc_answer', async ({ answer }) => {
@@ -674,7 +683,8 @@
   // ---- Voice Calls ----
   $('start-call-btn').addEventListener('click', () => {
     if (!activeDmUserId) return;
-    if (callState) return toast('Already in a call', 'error');
+    if (callState || outgoingCallTo) return toast('Already in a call', 'error');
+    outgoingCallTo = activeDmUserId;
     socket.emit('call_invite', { toId: activeDmUserId });
     const friend = friends.find(f => f.id === activeDmUserId);
     if (friend) showCallHud(friend, false);
@@ -700,9 +710,17 @@
   });
 
   $('end-call-btn').addEventListener('click', () => {
-    if (!callState) return;
-    socket.emit('call_end', { roomId: callState.roomId });
-    endCallLocal();
+    if (callState) {
+      socket.emit('call_end', { roomId: callState.roomId });
+      endCallLocal();
+    } else if (outgoingCallTo) {
+      // Still ringing — cancel it
+      socket.emit('call_cancel', { toId: outgoingCallTo });
+      outgoingCallTo = null;
+      stopRingtone();
+      $('call-hud').style.display = 'none';
+      $('call-timer').textContent = '0:00';
+    }
   });
 
   $('mute-btn').addEventListener('click', () => {
@@ -731,7 +749,6 @@
       screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       const screenTrack = screenStream.getVideoTracks()[0];
 
-      // Replace video track in peer connection (or add if none)
       const pc = callState.peerConnection;
       const senders = pc.getSenders();
       const videoSender = senders.find(s => s.track && s.track.kind === 'video');
@@ -740,6 +757,11 @@
       } else {
         pc.addTrack(screenTrack, screenStream);
       }
+
+      // Renegotiate so the peer actually receives the new video track
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('webrtc_offer', { roomId: callState.roomId, toId: callState.peerId, offer });
 
       isScreenSharing = true;
       $('screenshare-btn').classList.add('sharing');
@@ -750,10 +772,8 @@
       $('screenshare-video').srcObject = screenStream;
       $('screenshare-overlay').style.display = 'flex';
 
-      // Signal peer that screen share started
       socket.emit('screenshare_started', { roomId: callState.roomId, toId: callState.peerId });
 
-      // Auto-stop when user clicks "Stop sharing" in browser UI
       screenTrack.onended = () => stopScreenShare();
 
     } catch (e) {
@@ -763,17 +783,24 @@
     }
   }
 
-  function stopScreenShare() {
+  async function stopScreenShare() {
     if (screenStream) {
       screenStream.getTracks().forEach(t => t.stop());
       screenStream = null;
     }
-    // Replace with a blank/null track or just remove
     if (callState) {
       const pc = callState.peerConnection;
       const senders = pc.getSenders();
       const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-      if (videoSender) pc.removeTrack(videoSender);
+      if (videoSender) {
+        pc.removeTrack(videoSender);
+        // Renegotiate after removing track
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('webrtc_offer', { roomId: callState.roomId, toId: callState.peerId, offer });
+        } catch(e) {}
+      }
       socket.emit('screenshare_stopped', { roomId: callState.roomId, toId: callState.peerId });
     }
     isScreenSharing = false;
