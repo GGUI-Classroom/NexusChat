@@ -11,14 +11,24 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: false } });
 
+const isProd = process.env.NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nexus-dev-secret-change-in-prod';
+
+// Trust Render's proxy so secure cookies work over HTTPS
+if (isProd) app.set('trust proxy', 1);
 
 const sessionMiddleware = session({
   store: new pgSession({ pool, createTableIfMissing: true }),
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 }
+  name: 'nexus.sid',
+  cookie: {
+    secure: isProd,       // true on Render (HTTPS), false locally
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  }
 });
 
 app.use(express.json({ limit: '4mb' }));
