@@ -101,9 +101,14 @@
         <div class="sidebar-section" id="sidebar-server" style="display:none">
           <div class="server-sidebar-header" id="server-sidebar-header">
             <span id="server-sidebar-name">Server</span>
-            <button class="icon-btn" id="server-settings-btn" title="Server Settings">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-            </button>
+            <div style="display:flex;gap:2px">
+              <button class="icon-btn" id="leave-server-btn" title="Leave Server">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              </button>
+              <button class="icon-btn" id="server-settings-btn" title="Server Settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+              </button>
+            </div>
           </div>
           <div class="server-channels-label">
             <span>CHANNELS</span>
@@ -223,6 +228,10 @@
           <div class="avatar-upload-info"><label for="avatar-file-input" class="btn-secondary">Choose Photo</label><input type="file" id="avatar-file-input" accept="image/*" style="display:none" /><p class="field-hint">JPEG, PNG, GIF, WebP – max 2 MB</p></div>
         </div>
         <div class="field-group"><label>Display Name</label><input type="text" id="profile-display-name" /></div>
+        <div class="field-group">
+          <label>Bio <span style="color:var(--text-muted);font-weight:400;font-size:10px">— max 300 chars</span></label>
+          <textarea id="profile-bio" placeholder="Tell people a bit about yourself…" rows="3" maxlength="300" style="resize:vertical;min-height:70px"></textarea>
+        </div>
         <div class="form-error" id="profile-error"></div>
         <button class="btn-primary" id="save-profile-btn">Save Changes</button>
       </div>
@@ -341,6 +350,25 @@
   </div>
 
   <div class="toast-container" id="toast-container"></div>
+
+  <!-- User Profile Popup -->
+  <div class="profile-popup" id="profile-popup" style="display:none">
+    <div class="profile-popup-banner"></div>
+    <div class="profile-popup-body">
+      <div class="profile-popup-avatar-wrap">
+        <div class="avatar profile-popup-avatar" id="popup-avatar">?</div>
+        <div class="status-dot" id="popup-status"></div>
+      </div>
+      <div class="profile-popup-name" id="popup-name">–</div>
+      <div class="profile-popup-username" id="popup-username">–</div>
+      <div class="profile-popup-role" id="popup-role" style="display:none"></div>
+      <div class="profile-popup-divider"></div>
+      <div class="profile-popup-section" id="popup-bio-section" style="display:none">
+        <div class="profile-popup-label">ABOUT ME</div>
+        <div class="profile-popup-bio" id="popup-bio"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Screen Share Overlay — outside #app so fixed positioning works -->
   <div class="screenshare-overlay" id="screenshare-overlay" style="display:none">
