@@ -1,49 +1,64 @@
 # Nexus Chat
 
 A Discord-style real-time chat app with voice calls, DMs, and friend requests.
+Built with Node.js, Express, Socket.io, PostgreSQL, and WebRTC.
 
 ## Features
-- Account creation with avatar upload
-- Friend request system (send/accept/decline)
-- Real-time direct messages
-- Voice calls via WebRTC
+- Account creation with avatar upload (stored in PostgreSQL as base64)
+- Friend request system (send / accept / decline)
+- Real-time direct messages with typing indicators
+- Voice calls via WebRTC peer-to-peer audio
+- Online/offline presence
 - Dark themed UI
 
 ## Local Development
 
+You need a local PostgreSQL instance, then:
+
 ```bash
 npm install
-npm run dev
+DATABASE_URL=postgres://user:pass@localhost:5432/nexus npm run dev
 # Open http://localhost:3000
 ```
 
-## Deploy to Render (Free Tier)
+## Deploy to Render (Free Tier) — Web Service
 
-### Option A — Blueprint (recommended)
-1. Push this repo to GitHub
-2. Go to [render.com](https://render.com) → New → Blueprint
-3. Connect your GitHub repo
-4. Render will auto-detect `render.yaml` and configure everything
-5. Hit **Apply** — your app will be live in ~2 minutes
+### 1. Create a free PostgreSQL database
+- Render dashboard → **New → PostgreSQL**
+- Name: `nexus-db` | Plan: **Free** | Click **Create**
+- Copy the **Internal Database URL** once provisioned
 
-### Option B — Manual
-1. Push to GitHub
-2. Render → New → Web Service → Connect repo
-3. Set:
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-   - **Environment**: Node
-4. Add Environment Variables:
-   - `SESSION_SECRET` → any long random string
-   - `DATA_DIR` → `/opt/render/project/data`
-   - `UPLOADS_DIR` → `/opt/render/project/data/avatars`
-5. Add a **Disk** (under Advanced):
-   - Mount Path: `/opt/render/project/data`
-   - Size: 1 GB (free tier supports 1 GB)
-6. Deploy!
+### 2. Push to GitHub
+```bash
+git init
+git add .
+git commit -m "init nexus chat"
+# create a repo on github.com then:
+git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
+git branch -M main
+git push -u origin main
+```
+
+### 3. Create the Web Service
+- Render → **New → Web Service** → connect your repo
+- Settings:
+  - **Runtime**: Node
+  - **Build Command**: `npm install`
+  - **Start Command**: `npm start`
+  - **Plan**: Free
+
+### 4. Add Environment Variables
+| Key | Value |
+|-----|-------|
+| `DATABASE_URL` | Internal DB URL from step 1 |
+| `SESSION_SECRET` | Any long random string |
+| `NODE_ENV` | `production` |
+
+### 5. Deploy
+Click **Create Web Service** — live in ~2 minutes.
 
 ## Notes
-- The free Render tier spins down after 15min of inactivity (cold start ~30s)
-- Persistent disk keeps your database and avatars safe across deploys
-- Voice calls use STUN servers (Google's free ones) — works for most networks
-- For production, consider adding TURN server credentials for users behind strict firewalls
+- Free tier: 512 MB RAM, no persistent disk needed (everything in PostgreSQL)
+- Avatar uploads capped at 2 MB (stored as base64 in DB)
+- App spins down after 15 min idle on free tier (~30s cold start)
+- Voice calls use Google STUN servers — works for most home/mobile networks

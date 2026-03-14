@@ -20,18 +20,13 @@
   const $ = id => document.getElementById(id);
   const qs = sel => document.querySelector(sel);
 
-  function avatarUrl(user) {
-    if (!user) return null;
-    const av = user.avatar || user.avatar;
-    return av ? `/api/users/avatar/${user.id}` : null;
-  }
-
-  function renderAvatar(el, user, size = 36) {
-    const url = avatarUrl(user);
+  function renderAvatar(el, user) {
+    const url = user && user.avatarDataUrl;
     if (url) {
-      el.innerHTML = `<img src="${url}?t=${Date.now()}" alt="" onerror="this.parentElement.textContent='${(user.displayName||'?')[0].toUpperCase()}'">`;
+      const initial = (user.displayName || user.username || '?')[0].toUpperCase();
+      el.innerHTML = '<img src="' + url + '" alt="" onerror="this.parentElement.textContent='' + initial + ''">';
     } else {
-      el.textContent = (user.displayName || user.username || '?')[0].toUpperCase();
+      el.textContent = (user && (user.displayName || user.username) || '?')[0].toUpperCase();
     }
   }
 
@@ -465,7 +460,7 @@
 
     const isMe = msg.fromId === currentUser.id;
     const author = isMe
-      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatar: currentUser.avatar }
+      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl }
       : msg.author;
 
     el.innerHTML = `
@@ -781,13 +776,8 @@
     const res = await fetch('/api/users/avatar', { method: 'POST', body: fd, credentials: 'same-origin' });
     const r = await res.json();
     if (r.error) return toast(r.error, 'error');
-    currentUser.avatar = r.avatar;
-    // Preview
-    const reader = new FileReader();
-    reader.onload = ev => {
-      $('profile-avatar-preview').innerHTML = `<img src="${ev.target.result}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
-    };
-    reader.readAsDataURL(file);
+    currentUser.avatarDataUrl = r.avatarDataUrl;
+    $('profile-avatar-preview').innerHTML = `<img src="${r.avatarDataUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
     updateSelfCard();
     toast('Avatar updated!', 'success');
   });
