@@ -22,6 +22,14 @@
   let outgoingCallTo = null;
   let remoteScreenActive = false; // true when peer is sharing their screen
 
+  // Server state
+  let servers = [];
+  let activeServerId = null;
+  let activeChannelId = null;
+  let activeServerData = null; // { server, channels, members }
+  let channelTypingTimer = null;
+  let isChannelTyping = false;
+
   // ---- Helpers ----
   const $ = id => document.getElementById(id);
   const qs = sel => document.querySelector(sel);
@@ -159,6 +167,7 @@
       connectSocket();
       loadFriends();
       loadPendingRequests();
+      loadServers();
       switchView('friends');
     } catch(e) {
       console.error('enterApp crash:', e);
@@ -181,13 +190,357 @@
     });
   });
 
+  // ---- Servers ----
+  async function loadServers() {
+    const r = await api('GET', '/api/servers');
+    servers = r.servers || [];
+    renderServerRail();
+  }
+
+  function renderServerRail() {
+    const container = $('server-icons');
+    container.innerHTML = servers.map(s => {
+      const abbr = s.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+      return `<button class="rail-btn" data-server-id="${s.id}" title="${esc(s.name)}" onclick="railSelect('${s.id}')">
+        ${s.iconDataUrl
+          ? `<img src="${s.iconDataUrl}" alt="${esc(s.name)}">`
+          : `<span class="rail-initial">${abbr}</span>`}
+      </button>`;
+    }).join('');
+  }
+
+  async function loadServerSidebar(serverId) {
+    const r = await api('GET', `/api/servers/${serverId}`);
+    if (r.error) return toast(r.error, 'error');
+    activeServerId = serverId;
+    activeServerData = r;
+
+    $('server-sidebar-name').textContent = r.server.name;
+
+    // Show settings + add-channel only for admin/owner
+    const me = r.members.find(m => m.id === currentUser.id);
+    const isAdmin = me && me.role === 'admin';
+    $('server-settings-btn').style.display = isAdmin ? 'flex' : 'none';
+    $('add-channel-btn').style.display = isAdmin ? 'flex' : 'none';
+
+    renderChannelList(r.channels, isAdmin);
+    renderMemberList(r.members);
+
+    // Join socket room
+    if (socket) socket.emit('join_server_room', { serverId });
+
+    // Open first channel
+    if (r.channels.length) openChannel(r.channels[0]);
+  }
+
+  function renderChannelList(channels, isAdmin) {
+    $('channel-list').innerHTML = channels.map(c => `
+      <div class="channel-item ${activeChannelId === c.id ? 'active' : ''}" data-channel-id="${c.id}" onclick="openChannel({id:'${c.id}',name:'${esc(c.name)}'})">
+        <span class="ch-hash">#</span>
+        <span class="ch-name">${esc(c.name)}</span>
+        ${isAdmin ? `<button class="ch-delete" onclick="deleteChannel(event,'${c.id}')" title="Delete channel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>` : ''}
+      </div>
+    `).join('');
+  }
+
+  function renderMemberList(members) {
+    $('server-member-list').innerHTML = members.map(m => `
+      <div class="server-member-item">
+        <div class="avatar-wrap" style="flex-shrink:0">
+          <div class="avatar sm" id="smav-${m.id}"></div>
+          <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
+        </div>
+        <span class="member-name">${esc(m.displayName)}</span>
+        ${m.role === 'admin' ? '<span class="member-role">Admin</span>' : ''}
+      </div>
+    `).join('');
+    members.forEach(m => { const el = $(`smav-${m.id}`); if (el) renderAvatar(el, m); });
+  }
+
+  window.openChannel = function(channel) {
+    activeChannelId = channel.id;
+    // Update active state in sidebar
+    document.querySelectorAll('.channel-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.channelId === channel.id);
+    });
+    $('channel-name-header').textContent = channel.name;
+    $('channel-message-input').placeholder = 'Message #' + channel.name + '…';
+    $('channel-placeholder').style.display = 'none';
+    $('channel-container').style.display = 'flex';
+    loadChannelMessages(channel.id);
+    $('channel-message-input').focus();
+  };
+
+  window.deleteChannel = async function(e, channelId) {
+    e.stopPropagation();
+    if (!confirm('Delete this channel?')) return;
+    const r = await api('DELETE', `/api/servers/${activeServerId}/channels/${channelId}`);
+    if (r.error) return toast(r.error, 'error');
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    const me = s.members.find(m => m.id === currentUser.id);
+    renderChannelList(s.channels, me && me.role === 'admin');
+    if (activeChannelId === channelId) {
+      activeChannelId = null;
+      $('channel-placeholder').style.display = 'flex';
+      $('channel-container').style.display = 'none';
+    }
+  };
+
+  async function loadChannelMessages(channelId, prepend = false) {
+    const list = $('channel-messages-list');
+    const wrap = $('channel-messages-wrap');
+    const oldest = list.querySelector('.message');
+    const beforeTs = prepend && oldest ? oldest.dataset.ts : undefined;
+    const url = `/api/servers/${activeServerId}/channels/${channelId}/messages${beforeTs?`?before=${beforeTs}`:''}`;
+    const r = await api('GET', url);
+    if (!r.messages) return;
+    if (!prepend) {
+      list.innerHTML = '';
+      r.messages.forEach(m => appendChannelMessage(m, false));
+      wrap.scrollTop = wrap.scrollHeight;
+    } else {
+      const prev = wrap.scrollHeight;
+      r.messages.forEach(m => prependChannelMessage(m));
+      wrap.scrollTop = wrap.scrollHeight - prev;
+    }
+  }
+
+  $('channel-messages-wrap').addEventListener('scroll', function() {
+    if (this.scrollTop < 80 && activeChannelId) loadChannelMessages(activeChannelId, true);
+  });
+
+  function appendChannelMessage(msg, scroll=true) {
+    const list = $('channel-messages-list');
+    const el = buildMessageEl(msg, list.lastElementChild);
+    list.appendChild(el);
+    if (scroll) $('channel-messages-wrap').scrollTop = $('channel-messages-wrap').scrollHeight;
+  }
+
+  function prependChannelMessage(msg) {
+    const list = $('channel-messages-list');
+    const el = buildMessageEl(msg, null);
+    list.prepend(el);
+  }
+
+  // Channel message input
+  $('channel-message-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChannelMessage(); }
+  });
+  $('channel-message-input').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+    handleChannelTyping();
+  });
+  $('channel-send-btn').addEventListener('click', sendChannelMessage);
+
+  function sendChannelMessage() {
+    const input = $('channel-message-input');
+    const content = input.value.trim();
+    if (!content || !activeChannelId || !activeServerId || !socket) return;
+    socket.emit('send_channel_message', { serverId: activeServerId, channelId: activeChannelId, content });
+    input.value = '';
+    input.style.height = 'auto';
+    stopChannelTyping();
+  }
+
+  function handleChannelTyping() {
+    if (!activeChannelId || !socket) return;
+    if (!isChannelTyping) { isChannelTyping = true; socket.emit('channel_typing_start', { serverId: activeServerId, channelId: activeChannelId }); }
+    clearTimeout(channelTypingTimer);
+    channelTypingTimer = setTimeout(stopChannelTyping, 2000);
+  }
+
+  function stopChannelTyping() {
+    if (isChannelTyping && activeChannelId && socket) { isChannelTyping = false; socket.emit('channel_typing_stop', { serverId: activeServerId, channelId: activeChannelId }); }
+    clearTimeout(channelTypingTimer);
+  }
+
+  // ---- Add Channel ----
+  $('add-channel-btn').addEventListener('click', async () => {
+    const name = prompt('Channel name:');
+    if (!name || !name.trim()) return;
+    const r = await api('POST', `/api/servers/${activeServerId}/channels`, { name: name.trim() });
+    if (r.error) return toast(r.error, 'error');
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    renderChannelList(s.channels, true);
+    openChannel(r.channel);
+  });
+
+  // ---- Create / Join Server ----
+  $('add-server-rail-btn').addEventListener('click', () => {
+    $('server-modal').classList.add('active');
+  });
+  $('server-modal-close').addEventListener('click', () => $('server-modal').classList.remove('active'));
+  $('server-modal').addEventListener('click', e => { if (e.target === $('server-modal')) $('server-modal').classList.remove('active'); });
+
+  // Server icon preview
+  $('server-icon-input').addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      $('server-icon-preview').innerHTML = `<img src="${ev.target.result}" alt="">`;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  $('create-server-btn').addEventListener('click', async () => {
+    const name = $('server-name-input').value.trim();
+    if (!name) return showError('create-server-error', 'Name required');
+    const fd = new FormData();
+    fd.append('name', name);
+    const iconFile = $('server-icon-input').files[0];
+    if (iconFile) fd.append('icon', iconFile);
+    const res = await fetch('/api/servers', { method: 'POST', body: fd, credentials: 'include' });
+    const r = await res.json();
+    if (r.error) return showError('create-server-error', r.error);
+    servers.push(r.server);
+    renderServerRail();
+    $('server-modal').classList.remove('active');
+    $('server-name-input').value = '';
+    $('server-icon-input').value = '';
+    $('server-icon-preview').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+    showError('create-server-error', '');
+    railSelect(r.server.id);
+    toast('Server created!', 'success');
+  });
+
+  $('join-server-btn').addEventListener('click', async () => {
+    const code = $('join-code-input').value.trim();
+    if (!code) return showError('join-server-error', 'Enter a code');
+    const r = await api('POST', `/api/servers/join/${code}`);
+    if (r.error) return showError('join-server-error', r.error);
+    if (!servers.find(s => s.id === r.server.id)) servers.push(r.server);
+    renderServerRail();
+    $('server-modal').classList.remove('active');
+    $('join-code-input').value = '';
+    showError('join-server-error', '');
+    railSelect(r.server.id);
+    toast(r.alreadyMember ? 'Already a member!' : 'Joined server!', 'success');
+  });
+
+  // ---- Server Settings ----
+  $('server-settings-btn').addEventListener('click', () => {
+    if (!activeServerData) return;
+    const s = activeServerData.server;
+    $('settings-server-name').value = s.name;
+    $('settings-invite-code').value = s.inviteCode;
+    if (s.iconDataUrl) {
+      $('settings-icon-preview').innerHTML = `<img src="${s.iconDataUrl}" alt="">`;
+    } else {
+      $('settings-icon-preview').textContent = s.name[0].toUpperCase();
+    }
+    $('server-settings-modal').classList.add('active');
+  });
+  $('server-settings-close').addEventListener('click', () => $('server-settings-modal').classList.remove('active'));
+  $('server-settings-modal').addEventListener('click', e => { if (e.target === $('server-settings-modal')) $('server-settings-modal').classList.remove('active'); });
+
+  $('settings-icon-input').addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => { $('settings-icon-preview').innerHTML = `<img src="${ev.target.result}" alt="">`; };
+    reader.readAsDataURL(file);
+  });
+
+  $('copy-invite-btn').addEventListener('click', () => {
+    navigator.clipboard.writeText($('settings-invite-code').value);
+    toast('Invite code copied!', 'success');
+  });
+
+  $('save-server-btn').addEventListener('click', async () => {
+    const name = $('settings-server-name').value.trim();
+    if (!name) return showError('settings-server-error', 'Name required');
+    const fd = new FormData();
+    fd.append('name', name);
+    const iconFile = $('settings-icon-input').files[0];
+    if (iconFile) fd.append('icon', iconFile);
+    const res = await fetch(`/api/servers/${activeServerId}`, { method: 'PATCH', body: fd, credentials: 'include' });
+    const r = await res.json();
+    if (r.error) return showError('settings-server-error', r.error);
+    // Update local state
+    const idx = servers.findIndex(s => s.id === activeServerId);
+    if (idx >= 0) servers[idx] = r.server;
+    activeServerData.server = r.server;
+    $('server-sidebar-name').textContent = r.server.name;
+    renderServerRail();
+    $('server-settings-modal').classList.remove('active');
+    toast('Server updated!', 'success');
+  });
+
+  $('delete-server-btn').addEventListener('click', async () => {
+    if (!confirm('Delete this server? This cannot be undone.')) return;
+    const r = await api('DELETE', `/api/servers/${activeServerId}`);
+    if (r.error) return toast(r.error, 'error');
+    servers = servers.filter(s => s.id !== activeServerId);
+    activeServerId = null; activeChannelId = null; activeServerData = null;
+    renderServerRail();
+    $('server-settings-modal').classList.remove('active');
+    railSelect('dms');
+    toast('Server deleted', 'info');
+  });
+
+  // ---- Invite Friends to Server ----
+  $('invite-btn').addEventListener('click', () => {
+    if (!activeServerData) return;
+    $('modal-invite-code').value = activeServerData.server.inviteCode;
+    // Show friends who aren't members
+    const memberIds = new Set(activeServerData.members.map(m => m.id));
+    const nonMembers = friends.filter(f => !memberIds.has(f.id));
+    $('invite-friends-list').innerHTML = nonMembers.length
+      ? nonMembers.map(f => `
+          <div class="invite-friend-row">
+            <div class="avatar" id="invav-${f.id}" style="width:32px;height:32px;font-size:13px;flex-shrink:0"></div>
+            <div class="person-info"><div class="display-name" style="font-size:13px">${esc(f.displayName)}</div><div class="username">@${esc(f.username)}</div></div>
+            <button class="action-btn primary" onclick="inviteFriend('${f.id}', this)">Invite</button>
+          </div>`).join('')
+      : '<p style="font-size:13px;color:var(--text-muted)">All your friends are already members!</p>';
+    nonMembers.forEach(f => { const el = $(`invav-${f.id}`); if (el) renderAvatar(el, f); });
+    $('invite-modal').classList.add('active');
+  });
+  $('invite-modal-close').addEventListener('click', () => $('invite-modal').classList.remove('active'));
+  $('invite-modal').addEventListener('click', e => { if (e.target === $('invite-modal')) $('invite-modal').classList.remove('active'); });
+  $('modal-copy-invite-btn').addEventListener('click', () => { navigator.clipboard.writeText($('modal-invite-code').value); toast('Copied!', 'success'); });
+
+  window.inviteFriend = async function(userId, btn) {
+    btn.disabled = true; btn.textContent = 'Inviting…';
+    const r = await api('POST', `/api/servers/${activeServerId}/invite`, { userId });
+    if (r.error) { toast(r.error, 'error'); btn.disabled = false; btn.textContent = 'Invite'; return; }
+    btn.textContent = 'Invited!';
+    // Refresh member list
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    renderMemberList(s.members);
+    toast('Friend invited!', 'success');
+  };
+
   function switchView(view) {
     activeView = view;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    $(`view-${view}`).classList.add('active');
-    if (view === 'dms') renderDmList();
+    const el = $('view-' + view);
+    if (el) el.classList.add('active');
   }
+
+  // Rail selection: 'dms' or a server id
+  window.railSelect = function(id) {
+    document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
+    if (id === 'dms') {
+      $('rail-dms').classList.add('active');
+      $('sidebar-dms').style.display = 'flex';
+      $('sidebar-server').style.display = 'none';
+      activeServerId = null;
+      activeChannelId = null;
+      switchView('friends');
+    } else {
+      const btn = document.querySelector(`.rail-btn[data-server-id="${id}"]`);
+      if (btn) btn.classList.add('active');
+      $('sidebar-dms').style.display = 'none';
+      $('sidebar-server').style.display = 'flex';
+      loadServerSidebar(id);
+      switchView('channel');
+    }
+  };
 
   // ---- Friends Tab ----
   document.querySelectorAll('.ftab').forEach(btn => {
@@ -302,7 +655,8 @@
   window.openDmWith = function (id) {
     const user = friends.find(f => f.id === id);
     if (!user) return;
-    switchView('dms');
+    railSelect('dms');
+    switchView('dm');
     openDm(user);
   };
 
@@ -380,7 +734,7 @@
     const list = $('dm-list');
     if (!friends.length) { list.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--text-muted)">No friends yet</div>'; return; }
     list.innerHTML = friends.map(f => `
-      <div class="dm-item ${activeDmUserId === f.id ? 'active' : ''}" data-id="${f.id}" onclick="openDm(window._friendsMap['${f.id}'])">
+      <div class="dm-item ${activeDmUserId === f.id ? 'active' : ''}" data-id="${f.id}" onclick="railSelect('dms');switchView('dm');openDm(window._friendsMap['${f.id}'])">
         <div class="avatar-wrap">
           <div class="avatar sm" id="dav-${f.id}"></div>
           <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="ddot-${f.id}"></div>
@@ -666,6 +1020,32 @@
 
     socket.on('call_ended', ({ roomId }) => {
       if (callState && callState.roomId === roomId) endCallLocal();
+    });
+
+    socket.on('new_channel_message', msg => {
+      if (msg.channelId === activeChannelId) {
+        appendChannelMessage(msg);
+      } else if (msg.serverId) {
+        // Could show unread badge — for now just a subtle toast
+        const s = servers.find(sv => sv.id === msg.serverId);
+        // Only notify if not currently viewing that server
+        if (msg.serverId !== activeServerId) {
+          // silent — just mark could be added later
+        }
+      }
+    });
+
+    socket.on('channel_user_typing', ({ channelId, userId: uid, username }) => {
+      if (channelId === activeChannelId && uid !== currentUser.id) {
+        $('channel-typing-name').textContent = username;
+        $('channel-typing-indicator').style.display = 'flex';
+        clearTimeout(window._chTypingTimer);
+        window._chTypingTimer = setTimeout(() => $('channel-typing-indicator').style.display = 'none', 3000);
+      }
+    });
+
+    socket.on('channel_user_stop_typing', ({ channelId }) => {
+      if (channelId === activeChannelId) $('channel-typing-indicator').style.display = 'none';
     });
 
     socket.on('screenshare_started', ({ fromId }) => {
