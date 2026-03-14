@@ -160,6 +160,14 @@ io.on('connection', (socket) => {
     io.to(`user:${toId}`).emit('call_cancelled', { fromId: userId });
   });
 
+  socket.on('screenshare_started', ({ roomId, toId }) => {
+    io.to(`user:${toId}`).emit('screenshare_started', { fromId: userId });
+  });
+
+  socket.on('screenshare_stopped', ({ roomId, toId }) => {
+    io.to(`user:${toId}`).emit('screenshare_stopped', { fromId: userId });
+  });
+
   socket.on('disconnect', async () => {
     const sockets = userSockets.get(userId);
     if (sockets) {
