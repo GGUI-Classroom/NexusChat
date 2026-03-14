@@ -168,6 +168,7 @@
       loadFriends();
       loadPendingRequests();
       loadServers();
+      loadServerInvites();
       switchView('friends');
     } catch(e) {
       console.error('enterApp crash:', e);
@@ -196,6 +197,47 @@
     servers = r.servers || [];
     renderServerRail();
   }
+
+  async function loadServerInvites() {
+    const r = await api('GET', '/api/servers/invites/pending');
+    const invites = r.invites || [];
+    const container = $('server-invites-list');
+    const label = $('invites-section-label');
+    const badge = $('rail-invite-badge');
+    if (!invites.length) {
+      container.innerHTML = '';
+      label.style.display = 'none';
+      badge.style.display = 'none';
+      return;
+    }
+    label.style.display = 'block';
+    $('invite-badge-count').textContent = invites.length;
+    badge.style.display = 'flex';
+    badge.textContent = invites.length;
+    container.innerHTML = invites.map(inv => `
+      <div class="server-invite-item" id="inv-${inv.id}">
+        <div class="inv-server-name">${esc(inv.serverName)}</div>
+        <div class="inv-from">Invited by ${esc(inv.from.displayName)}</div>
+        <div class="inv-actions">
+          <button class="inv-accept" onclick="respondServerInvite('${inv.id}','accept','${inv.serverId}')">Accept</button>
+          <button class="inv-decline" onclick="respondServerInvite('${inv.id}','decline','${inv.serverId}')">Decline</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.respondServerInvite = async function(inviteId, action, serverId) {
+    const r = await api('POST', `/api/servers/invites/${inviteId}/respond`, { action });
+    if (r.error) return toast(r.error, 'error');
+    if (action === 'accept' && r.server) {
+      if (!servers.find(s => s.id === r.server.id)) servers.push(r.server);
+      renderServerRail();
+      toast('Joined server!', 'success');
+    } else {
+      toast('Invite declined', 'info');
+    }
+    loadServerInvites();
+  };
 
   function renderServerRail() {
     const container = $('server-icons');
@@ -244,18 +286,72 @@
   }
 
   function renderMemberList(members) {
-    $('server-member-list').innerHTML = members.map(m => `
-      <div class="server-member-item">
-        <div class="avatar-wrap" style="flex-shrink:0">
-          <div class="avatar sm" id="smav-${m.id}"></div>
-          <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
-        </div>
-        <span class="member-name">${esc(m.displayName)}</span>
-        ${m.role === 'admin' ? '<span class="member-role">Admin</span>' : ''}
-      </div>
-    `).join('');
+    const me = members.find(m => m.id === currentUser.id);
+    const iAmAdmin = me && (me.role === 'admin' || me.isAdmin);
+    const server = activeServerData && activeServerData.server;
+    const ownerId = server && server.ownerId;
+
+    $('server-member-list').innerHTML = members.map(m => {
+      const isOwner = m.id === ownerId;
+      const roleStyle = m.roleColor ? `color:${m.roleColor}` : '';
+      const canManage = iAmAdmin && m.id !== currentUser.id && !isOwner;
+      return `
+        <div class="server-member-item">
+          <div class="avatar-wrap" style="flex-shrink:0">
+            <div class="avatar sm" id="smav-${m.id}"></div>
+            <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
+          </div>
+          <span class="member-name" style="${roleStyle}">${esc(m.displayName)}</span>
+          ${isOwner ? '<span class="member-role" style="color:var(--yellow)">Owner</span>' : (m.roleName ? `<span class="member-role" style="color:${m.roleColor||'var(--accent)'}">${esc(m.roleName)}</span>` : '')}
+          ${canManage ? `<div class="member-actions">
+            <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
+            <button class="member-action-btn kick" onclick="kickMember('${m.id}','${esc(m.displayName)}')">Kick</button>
+            <button class="member-action-btn ban" onclick="banMember('${m.id}','${esc(m.displayName)}')">Ban</button>
+          </div>` : ''}
+        </div>`;
+    }).join('');
     members.forEach(m => { const el = $(`smav-${m.id}`); if (el) renderAvatar(el, m); });
   }
+
+  // ---- Kick / Ban ----
+  window.kickMember = async function(userId, name) {
+    if (!confirm(`Kick ${name} from the server?`)) return;
+    const r = await api('POST', `/api/servers/${activeServerId}/kick/${userId}`);
+    if (r.error) return toast(r.error, 'error');
+    toast(`${name} was kicked`, 'info');
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    renderMemberList(s.members);
+  };
+
+  window.banMember = async function(userId, name) {
+    const reason = prompt(`Reason for banning ${name}? (optional)`);
+    if (reason === null) return; // cancelled
+    const r = await api('POST', `/api/servers/${activeServerId}/ban/${userId}`, { reason });
+    if (r.error) return toast(r.error, 'error');
+    toast(`${name} was banned`, 'info');
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    renderMemberList(s.members);
+  };
+
+  // ---- Assign Role ----
+  window.openAssignRole = async function(userId, name) {
+    if (!activeServerData) return;
+    const roles = activeServerData.roles || [];
+    const roleNames = roles.map((r, i) => String(i+1) + '. ' + r.name + (r.isAdmin?' (Admin)':'')).join('\n');
+    const choice = prompt('Assign role to ' + name + ':\n' + roleNames + '\n\nType role name exactly (or leave blank to remove role):');
+    if (choice === null) return;
+    const matched = roles.find(r => r.name.toLowerCase() === choice.toLowerCase().trim());
+    const roleId = matched ? matched.id : null;
+    if (choice.trim() && !matched) return toast('Role not found', 'error');
+    const r = await api('PATCH', `/api/servers/${activeServerId}/members/${userId}/role`, { roleId });
+    if (r.error) return toast(r.error, 'error');
+    toast('Role updated!', 'success');
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    renderMemberList(s.members);
+  };
 
   window.openChannel = function(channel) {
     activeChannelId = channel.id;
@@ -421,7 +517,7 @@
   });
 
   // ---- Server Settings ----
-  $('server-settings-btn').addEventListener('click', () => {
+  $('server-settings-btn').addEventListener('click', async () => {
     if (!activeServerData) return;
     const s = activeServerData.server;
     $('settings-server-name').value = s.name;
@@ -431,8 +527,98 @@
     } else {
       $('settings-icon-preview').textContent = s.name[0].toUpperCase();
     }
+    switchSettingsTab('overview');
+    renderRolesList(activeServerData.roles || []);
+    loadBansList();
     $('server-settings-modal').classList.add('active');
   });
+
+  // Settings tab switching
+  window.switchSettingsTab = function(tab) {
+    document.querySelectorAll('.settings-tab').forEach(b => b.classList.toggle('active', b.dataset.stab === tab));
+    document.querySelectorAll('.settings-tab-panel').forEach(p => {
+      p.style.display = p.id === 'settings-tab-' + tab ? 'block' : 'none';
+      p.classList.toggle('active', p.id === 'settings-tab-' + tab);
+    });
+  };
+
+  function renderRolesList(roles) {
+    $('roles-list').innerHTML = roles.length
+      ? roles.map(r => `
+          <div class="role-row" id="role-row-${r.id}">
+            <div class="role-dot" style="background:${r.color}"></div>
+            <span class="role-name" style="color:${r.color}">${esc(r.name)}</span>
+            <span class="role-badge">${r.isAdmin ? 'Admin' : 'Member'}</span>
+            <div class="role-actions">
+              <button class="role-edit-btn" onclick="editRole('${r.id}','${esc(r.name)}','${r.color}',${r.isAdmin})">Edit</button>
+              <button class="role-del-btn" onclick="deleteRole('${r.id}','${esc(r.name)}')">Delete</button>
+            </div>
+          </div>`).join('')
+      : '<p style="font-size:13px;color:var(--text-muted);padding:8px 0">No custom roles yet. Create one below.</p>';
+  }
+
+  window.editRole = async function(roleId, currentName, currentColor, currentIsAdmin) {
+    const name = prompt('Role name:', currentName);
+    if (!name || !name.trim()) return;
+    const color = prompt('Color (hex, e.g. #ff5555):', currentColor);
+    const isAdminChoice = confirm('Should this role have admin permissions?');
+    const r = await api('PATCH', `/api/servers/${activeServerId}/roles/${roleId}`, {
+      name: name.trim(), color: color || currentColor, isAdmin: isAdminChoice
+    });
+    if (r.error) return toast(r.error, 'error');
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    renderRolesList(s.roles || []);
+    renderMemberList(s.members);
+    toast('Role updated!', 'success');
+  };
+
+  window.deleteRole = async function(roleId, name) {
+    if (!confirm(`Delete role "${name}"?`)) return;
+    const r = await api('DELETE', `/api/servers/${activeServerId}/roles/${roleId}`);
+    if (r.error) return toast(r.error, 'error');
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    renderRolesList(s.roles || []);
+    renderMemberList(s.members);
+    toast('Role deleted', 'info');
+  };
+
+  $('create-role-btn').addEventListener('click', async () => {
+    const name = $('new-role-name').value.trim();
+    const color = $('new-role-color').value;
+    const isAdmin = $('new-role-admin').value === 'true';
+    if (!name) return toast('Enter a role name', 'error');
+    const r = await api('POST', `/api/servers/${activeServerId}/roles`, { name, color, isAdmin });
+    if (r.error) return toast(r.error, 'error');
+    $('new-role-name').value = '';
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    renderRolesList(s.roles || []);
+    toast('Role created!', 'success');
+  });
+
+  async function loadBansList() {
+    const r = await api('GET', `/api/servers/${activeServerId}/bans`);
+    const bans = r.bans || [];
+    $('bans-list').innerHTML = bans.length
+      ? bans.map(b => `
+          <div class="ban-row">
+            <div class="ban-info">
+              <div class="ban-name">${esc(b.displayName)} <span style="color:var(--text-muted);font-weight:400">@${esc(b.username)}</span></div>
+              ${b.reason ? `<div class="ban-reason">Reason: ${esc(b.reason)}</div>` : ''}
+            </div>
+            <button class="action-btn success" onclick="unbanMember('${b.userId}','${esc(b.displayName)}')">Unban</button>
+          </div>`).join('')
+      : '<p style="font-size:13px;color:var(--text-muted)">No banned members.</p>';
+  }
+
+  window.unbanMember = async function(userId, name) {
+    const r = await api('POST', `/api/servers/${activeServerId}/unban/${userId}`);
+    if (r.error) return toast(r.error, 'error');
+    toast(`${name} was unbanned`, 'success');
+    loadBansList();
+  };
   $('server-settings-close').addEventListener('click', () => $('server-settings-modal').classList.remove('active'));
   $('server-settings-modal').addEventListener('click', e => { if (e.target === $('server-settings-modal')) $('server-settings-modal').classList.remove('active'); });
 
@@ -837,11 +1023,16 @@
       ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl }
       : msg.author;
 
+    const roleColor = author.roleColor || null;
+    const roleStyle = roleColor ? `style="color:${roleColor}"` : '';
+    const roleClass = roleColor ? 'msg-author has-role' : 'msg-author';
+    const roleTip = author.roleName ? `title="${esc(author.roleName)}"` : '';
+
     el.innerHTML = `
       <div class="avatar" id="mav-${msg.id}"></div>
       <div class="msg-body">
         <div class="msg-header">
-          <span class="msg-author">${esc(author.displayName)}</span>
+          <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>
           <span class="msg-time">${formatTime(msg.createdAt)}</span>
         </div>
         <div class="msg-content">${esc(msg.content)}</div>
@@ -1061,6 +1252,29 @@
       $('view-screen-btn').style.display = 'none';
       $('view-screen-btn').classList.remove('viewing');
       toast('Screen share ended', 'info');
+    });
+
+    socket.on('server_invite', (data) => {
+      toast(`You've been invited to "${data.serverName}" by ${data.from.displayName}`, 'info', 6000);
+      loadServerInvites();
+    });
+
+    socket.on('kicked_from_server', ({ serverId }) => {
+      servers = servers.filter(s => s.id !== serverId);
+      renderServerRail();
+      if (activeServerId === serverId) {
+        railSelect('dms');
+      }
+      toast('You were kicked from a server', 'error');
+    });
+
+    socket.on('banned_from_server', ({ serverId }) => {
+      servers = servers.filter(s => s.id !== serverId);
+      renderServerRail();
+      if (activeServerId === serverId) {
+        railSelect('dms');
+      }
+      toast('You were banned from a server', 'error');
     });
   }
 
