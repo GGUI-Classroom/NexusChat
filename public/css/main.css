@@ -881,11 +881,14 @@ html, body {
 /* ===== SCREEN SHARE OVERLAY ===== */
 .screenshare-overlay {
   position: fixed;
-  inset: 0;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: 850;
   background: #000;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   animation: fade-in 0.2s ease;
 }
 
@@ -940,4 +943,14 @@ html, body {
   background: var(--green);
   color: var(--bg-void);
   box-shadow: 0 0 10px var(--green-glow);
+}
+.hud-btn.viewing {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 10px var(--accent-glow);
+  animation: pulse-btn 2s ease-in-out infinite;
+}
+@keyframes pulse-btn {
+  0%, 100% { box-shadow: 0 0 10px var(--accent-glow); }
+  50% { box-shadow: 0 0 20px var(--accent-glow); }
 }
