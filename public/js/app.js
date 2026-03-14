@@ -15,6 +15,10 @@
   // Call state
   let callState = null; // { roomId, peerId, peerUser, peerConnection, localStream, timerInterval }
   let pendingCallData = null; // incoming call data before answering
+  let ringtoneCtx = null;
+  let ringtoneNodes = [];
+  let isScreenSharing = false;
+  let screenStream = null;
 
   // ---- Helpers ----
   const $ = id => document.getElementById(id);
@@ -600,24 +604,28 @@
       $('incoming-caller-name').textContent = caller.displayName;
       renderAvatar($('incoming-caller-avatar'), { id: fromId, ...caller });
       $('incoming-call-modal').classList.add('active');
+      playRingtone(true); // incoming — pulsing tone
     });
 
     socket.on('call_ringing', ({ roomId, toId }) => {
-      toast('Calling…', 'info');
+      playRingtone(false); // outgoing — gentle beep
     });
 
     socket.on('call_accepted', async ({ roomId, byId }) => {
+      stopRingtone();
       const friend = friends.find(f => f.id === byId);
       if (!friend) return;
       await startWebRTCCall(roomId, byId, friend, true);
     });
 
     socket.on('call_declined', () => {
+      stopRingtone();
       toast('Call declined', 'info');
       callState = null;
     });
 
     socket.on('call_cancelled', () => {
+      stopRingtone();
       $('incoming-call-modal').classList.remove('active');
       pendingCallData = null;
       toast('Caller hung up', 'info');
@@ -649,6 +657,18 @@
     socket.on('call_ended', ({ roomId }) => {
       if (callState && callState.roomId === roomId) endCallLocal();
     });
+
+    socket.on('screenshare_started', ({ fromId }) => {
+      // The ontrack handler deals with showing the video; this is just for notification
+      const peer = callState && callState.peerUser;
+      toast((peer ? peer.displayName : 'Peer') + ' started screen sharing', 'info');
+    });
+
+    socket.on('screenshare_stopped', () => {
+      $('screenshare-overlay').style.display = 'none';
+      $('screenshare-video').srcObject = null;
+      toast('Screen share ended', 'info');
+    });
   }
 
   // ---- Voice Calls ----
@@ -662,6 +682,7 @@
 
   $('accept-call-btn').addEventListener('click', async () => {
     if (!pendingCallData) return;
+    stopRingtone();
     const { roomId, fromId, caller } = pendingCallData;
     $('incoming-call-modal').classList.remove('active');
     socket.emit('call_accept', { roomId, toId: fromId });
@@ -672,6 +693,7 @@
 
   $('decline-call-btn').addEventListener('click', () => {
     if (!pendingCallData) return;
+    stopRingtone();
     socket.emit('call_decline', { roomId: pendingCallData.roomId, toId: pendingCallData.fromId });
     $('incoming-call-modal').classList.remove('active');
     pendingCallData = null;
@@ -691,6 +713,127 @@
     $('mute-btn').classList.toggle('muted', !track.enabled);
   });
 
+  $('screenshare-btn').addEventListener('click', async () => {
+    if (!callState) return;
+    if (isScreenSharing) {
+      stopScreenShare();
+    } else {
+      await startScreenShare();
+    }
+  });
+
+  $('screenshare-close').addEventListener('click', () => {
+    $('screenshare-overlay').style.display = 'none';
+  });
+
+  async function startScreenShare() {
+    try {
+      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const screenTrack = screenStream.getVideoTracks()[0];
+
+      // Replace video track in peer connection (or add if none)
+      const pc = callState.peerConnection;
+      const senders = pc.getSenders();
+      const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+      if (videoSender) {
+        await videoSender.replaceTrack(screenTrack);
+      } else {
+        pc.addTrack(screenTrack, screenStream);
+      }
+
+      isScreenSharing = true;
+      $('screenshare-btn').classList.add('sharing');
+      $('screenshare-btn').title = 'Stop sharing';
+
+      // Show own preview
+      $('screenshare-who').textContent = 'You are sharing your screen';
+      $('screenshare-video').srcObject = screenStream;
+      $('screenshare-overlay').style.display = 'flex';
+
+      // Signal peer that screen share started
+      socket.emit('screenshare_started', { roomId: callState.roomId, toId: callState.peerId });
+
+      // Auto-stop when user clicks "Stop sharing" in browser UI
+      screenTrack.onended = () => stopScreenShare();
+
+    } catch (e) {
+      if (e.name !== 'NotAllowedError') {
+        toast('Could not start screen share', 'error');
+      }
+    }
+  }
+
+  function stopScreenShare() {
+    if (screenStream) {
+      screenStream.getTracks().forEach(t => t.stop());
+      screenStream = null;
+    }
+    // Replace with a blank/null track or just remove
+    if (callState) {
+      const pc = callState.peerConnection;
+      const senders = pc.getSenders();
+      const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+      if (videoSender) pc.removeTrack(videoSender);
+      socket.emit('screenshare_stopped', { roomId: callState.roomId, toId: callState.peerId });
+    }
+    isScreenSharing = false;
+    $('screenshare-btn').classList.remove('sharing');
+    $('screenshare-btn').title = 'Share screen';
+    $('screenshare-overlay').style.display = 'none';
+    $('screenshare-video').srcObject = null;
+  }
+
+  // ---- Ringtone (Web Audio API) ----
+  function playRingtone(isIncoming) {
+    stopRingtone();
+    try {
+      ringtoneCtx = new (window.AudioContext || window.webkitAudioContext)();
+      let beat = 0;
+      // Discord-inspired: two-tone rising beep pattern
+      const schedule = isIncoming
+        ? [{ f: 660, t: 0, d: 0.15 }, { f: 880, t: 0.2, d: 0.15 }, { f: 0, t: 0.5, d: 0 }] // incoming: repeating
+        : [{ f: 520, t: 0, d: 0.1 }, { f: 0, t: 0.6, d: 0 }]; // outgoing: gentle pulse
+
+      function playPattern() {
+        if (!ringtoneCtx) return;
+        schedule.forEach(({ f, t, d }) => {
+          if (!f) return;
+          const osc = ringtoneCtx.createOscillator();
+          const gain = ringtoneCtx.createGain();
+          osc.connect(gain);
+          gain.connect(ringtoneCtx.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(f, ringtoneCtx.currentTime + t);
+          gain.gain.setValueAtTime(0, ringtoneCtx.currentTime + t);
+          gain.gain.linearRampToValueAtTime(0.18, ringtoneCtx.currentTime + t + 0.01);
+          gain.gain.linearRampToValueAtTime(0, ringtoneCtx.currentTime + t + d);
+          osc.start(ringtoneCtx.currentTime + t);
+          osc.stop(ringtoneCtx.currentTime + t + d + 0.05);
+          ringtoneNodes.push(osc);
+        });
+        const interval = isIncoming ? 1000 : 1200;
+        ringtoneNodes.push(setTimeout(playPattern, interval));
+      }
+      playPattern();
+    } catch(e) {
+      console.warn('Ringtone error:', e);
+    }
+  }
+
+  function stopRingtone() {
+    ringtoneNodes.forEach(n => {
+      try {
+        if (typeof n === 'number') clearTimeout(n);
+        else n.stop();
+      } catch(e) {}
+    });
+    ringtoneNodes = [];
+    if (ringtoneCtx) {
+      try { ringtoneCtx.close(); } catch(e) {}
+      ringtoneCtx = null;
+    }
+  }
+
   async function startWebRTCCall(roomId, peerId, peerUser, isCaller) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -704,11 +847,24 @@
       stream.getTracks().forEach(t => pc.addTrack(t, stream));
 
       pc.ontrack = e => {
-        const audio = document.createElement('audio');
-        audio.autoplay = true;
-        audio.srcObject = e.streams[0];
-        document.body.appendChild(audio);
-        if (callState) callState.remoteAudio = audio;
+        const track = e.track;
+        if (track.kind === 'audio') {
+          const audio = document.createElement('audio');
+          audio.autoplay = true;
+          audio.srcObject = e.streams[0];
+          document.body.appendChild(audio);
+          if (callState) callState.remoteAudio = audio;
+        } else if (track.kind === 'video') {
+          // Remote screen share incoming
+          const peerName = callState && callState.peerUser ? callState.peerUser.displayName : 'Peer';
+          $('screenshare-who').textContent = peerName + ' is sharing their screen';
+          $('screenshare-video').srcObject = e.streams[0];
+          $('screenshare-overlay').style.display = 'flex';
+          track.onended = () => {
+            $('screenshare-overlay').style.display = 'none';
+            $('screenshare-video').srcObject = null;
+          };
+        }
       };
 
       pc.onicecandidate = e => {
@@ -762,6 +918,8 @@
   }
 
   function endCallLocal() {
+    stopRingtone();
+    if (isScreenSharing) stopScreenShare();
     if (callState) {
       clearInterval(callState.timerInterval);
       if (callState.peerConnection) callState.peerConnection.close();
@@ -771,6 +929,10 @@
     }
     $('call-hud').style.display = 'none';
     $('call-timer').textContent = '0:00';
+    $('screenshare-overlay').style.display = 'none';
+    $('screenshare-video').srcObject = null;
+    isScreenSharing = false;
+    $('screenshare-btn').classList.remove('sharing');
   }
 
   // ---- Profile ----
