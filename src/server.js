@@ -40,6 +40,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/friends', require('./routes/friends'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/servers', require('./routes/servers'));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
@@ -102,6 +103,65 @@ io.on('connection', (socket) => {
 
   socket.on('typing_stop', ({ toId }) => {
     io.to(`user:${toId}`).emit('user_stop_typing', { fromId: userId });
+  });
+
+  // Join server socket rooms on connect
+  pool.query(
+    'SELECT server_id FROM server_members WHERE user_id=$1',
+    [userId]
+  ).then(r => {
+    r.rows.forEach(({ server_id }) => socket.join(`server:${server_id}`));
+  });
+
+  socket.on('join_server_room', ({ serverId }) => {
+    socket.join(`server:${serverId}`);
+  });
+
+  socket.on('send_channel_message', async ({ serverId, channelId, content }) => {
+    if (!content || typeof content !== 'string') return;
+    const trimmed = content.trim().slice(0, 4000);
+    if (!trimmed) return;
+    // Verify membership
+    const member = await pool.query(
+      'SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2',
+      [serverId, userId]
+    );
+    if (!member.rows.length) return;
+    // Verify channel belongs to server
+    const ch = await pool.query('SELECT id FROM channels WHERE id=$1 AND server_id=$2', [channelId, serverId]);
+    if (!ch.rows.length) return;
+
+    const msgId = require('uuid').v4();
+    const now = Math.floor(Date.now() / 1000);
+    await pool.query(
+      'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
+      [msgId, channelId, userId, trimmed, now]
+    );
+    const sender = await pool.query(
+      'SELECT username, display_name, avatar_data, avatar_mime FROM users WHERE id=$1', [userId]
+    );
+    const s = sender.rows[0];
+    const msg = {
+      id: msgId, channelId, serverId, fromId: userId,
+      content: trimmed, createdAt: now,
+      author: {
+        username: s.username, displayName: s.display_name,
+        avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null
+      }
+    };
+    io.to(`server:${serverId}`).emit('new_channel_message', msg);
+  });
+
+  socket.on('channel_typing_start', ({ serverId, channelId }) => {
+    pool.query('SELECT username FROM users WHERE id=$1', [userId]).then(r => {
+      socket.to(`server:${serverId}`).emit('channel_user_typing', {
+        channelId, userId, username: r.rows[0]?.username
+      });
+    });
+  });
+
+  socket.on('channel_typing_stop', ({ serverId, channelId }) => {
+    socket.to(`server:${serverId}`).emit('channel_user_stop_typing', { channelId, userId });
   });
 
   socket.on('call_invite', async ({ toId }) => {
