@@ -488,8 +488,16 @@
     fd.append('name', name);
     const iconFile = $('server-icon-input').files[0];
     if (iconFile) fd.append('icon', iconFile);
-    const res = await fetch('/api/servers', { method: 'POST', body: fd, credentials: 'include' });
-    const r = await res.json();
+    let r;
+    try {
+      const res = await fetch('/api/servers', { method: 'POST', body: fd, credentials: 'include' });
+      const text = await res.text();
+      try { r = JSON.parse(text); } catch(e) {
+        return showError('create-server-error', 'Server error: ' + text.slice(0, 120));
+      }
+    } catch(e) {
+      return showError('create-server-error', 'Network error: ' + e.message);
+    }
     if (r.error) return showError('create-server-error', r.error);
     servers.push(r.server);
     renderServerRail();
@@ -641,8 +649,16 @@
     fd.append('name', name);
     const iconFile = $('settings-icon-input').files[0];
     if (iconFile) fd.append('icon', iconFile);
-    const res = await fetch(`/api/servers/${activeServerId}`, { method: 'PATCH', body: fd, credentials: 'include' });
-    const r = await res.json();
+    let r;
+    try {
+      const res = await fetch(`/api/servers/${activeServerId}`, { method: 'PATCH', body: fd, credentials: 'include' });
+      const text = await res.text();
+      try { r = JSON.parse(text); } catch(e) {
+        return showError('settings-server-error', 'Server error: ' + text.slice(0, 120));
+      }
+    } catch(e) {
+      return showError('settings-server-error', 'Network error: ' + e.message);
+    }
     if (r.error) return showError('settings-server-error', r.error);
     // Update local state
     const idx = servers.findIndex(s => s.id === activeServerId);
