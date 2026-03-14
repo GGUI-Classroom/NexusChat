@@ -23,8 +23,14 @@
   function renderAvatar(el, user) {
     const url = user && user.avatarDataUrl;
     if (url) {
-      const initial = (user.displayName || user.username || '?')[0].toUpperCase();
-      el.innerHTML = '<img src="' + url + '" alt="" onerror="this.parentElement.textContent='' + initial + ''">';
+      const img = document.createElement('img');
+      img.src = url;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+      img.onerror = function() {
+        el.textContent = (user.displayName || user.username || '?')[0].toUpperCase();
+      };
+      el.innerHTML = '';
+      el.appendChild(img);
     } else {
       el.textContent = (user && (user.displayName || user.username) || '?')[0].toUpperCase();
     }
@@ -141,12 +147,17 @@
 
   // ---- App Entry ----
   function enterApp() {
-    updateSelfCard();
-    showScreen('main-screen');
-    connectSocket();
-    loadFriends();
-    loadPendingRequests();
-    switchView('friends');
+    try {
+      updateSelfCard();
+      showScreen('main-screen');
+      connectSocket();
+      loadFriends();
+      loadPendingRequests();
+      switchView('friends');
+    } catch(e) {
+      console.error('enterApp crash:', e);
+      alert('Login succeeded but app failed to load: ' + e.message);
+    }
   }
 
   function updateSelfCard() {
