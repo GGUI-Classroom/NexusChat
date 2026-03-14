@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: nexus-chat
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATA_DIR
+        value: /opt/render/project/data
+      - key: UPLOADS_DIR
+        value: /opt/render/project/data/avatars
+    disk:
+      name: nexus-data
+      mountPath: /opt/render/project/data
+      sizeGB: 1
