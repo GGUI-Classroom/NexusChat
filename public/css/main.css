@@ -1191,3 +1191,130 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 #invite-friends-list .invite-friend-row:last-child { border-bottom: none; }
+
+/* ===== SETTINGS TABS ===== */
+.settings-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+}
+.settings-tab {
+  padding: 10px 16px;
+  background: none; border: none;
+  color: var(--text-secondary);
+  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: var(--transition);
+}
+.settings-tab:hover { color: var(--text-primary); }
+.settings-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.settings-tab-panel { display: none; }
+.settings-tab-panel.active { display: block; }
+
+/* ===== ROLES ===== */
+.role-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+.role-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.role-name {
+  flex: 1;
+  font-size: 13px; font-weight: 700;
+}
+.role-badge {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 99px;
+  background: rgba(255,255,255,0.08);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.role-actions { display: flex; gap: 4px; }
+.role-actions button {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 600;
+  cursor: pointer; border: none; transition: var(--transition);
+}
+.role-edit-btn { background: var(--bg-hover); color: var(--text-secondary); }
+.role-edit-btn:hover { color: var(--text-primary); }
+.role-del-btn { background: rgba(240,84,84,0.1); color: var(--red); }
+.role-del-btn:hover { background: rgba(240,84,84,0.2); }
+
+/* ===== MEMBER LIST WITH KICK/BAN/ROLE ===== */
+.server-member-item .member-actions {
+  display: none;
+  gap: 4px;
+  margin-left: auto;
+}
+.server-member-item:hover .member-actions { display: flex; }
+.member-action-btn {
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700;
+  cursor: pointer; border: none; transition: var(--transition);
+  white-space: nowrap;
+}
+.member-action-btn.kick { background: rgba(245,200,66,0.15); color: var(--yellow); }
+.member-action-btn.kick:hover { background: rgba(245,200,66,0.25); }
+.member-action-btn.ban { background: rgba(240,84,84,0.15); color: var(--red); }
+.member-action-btn.ban:hover { background: rgba(240,84,84,0.25); }
+.member-action-btn.role { background: var(--accent-muted); color: var(--accent); }
+.member-action-btn.role:hover { background: rgba(91,110,245,0.25); }
+
+/* ===== BANS LIST ===== */
+.ban-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ban-row:last-child { border-bottom: none; }
+.ban-row .ban-info { flex: 1; }
+.ban-row .ban-name { font-size: 13px; font-weight: 700; }
+.ban-row .ban-reason { font-size: 11px; color: var(--text-muted); }
+
+/* ===== SERVER INVITES IN SIDEBAR ===== */
+.server-invite-item {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  margin-bottom: 6px;
+}
+.server-invite-item .inv-server-name {
+  font-size: 13px; font-weight: 700;
+  margin-bottom: 2px;
+}
+.server-invite-item .inv-from {
+  font-size: 11px; color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.server-invite-item .inv-actions { display: flex; gap: 6px; }
+.inv-accept { background: rgba(61,214,140,0.15); color: var(--green); border: none; border-radius: var(--radius-sm); padding: 5px 10px; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.inv-accept:hover { background: rgba(61,214,140,0.25); }
+.inv-decline { background: rgba(240,84,84,0.1); color: var(--red); border: none; border-radius: var(--radius-sm); padding: 5px 10px; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.inv-decline:hover { background: rgba(240,84,84,0.2); }
+
+/* ===== RAIL NOTIFICATION BADGE ===== */
+.rail-btn { position: relative; }
+.rail-notif {
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 14px; height: 14px;
+  background: var(--red);
+  border-radius: 50%;
+  border: 2px solid var(--bg-void);
+  font-size: 8px; font-weight: 700; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ===== COLORED ROLE USERNAME IN MESSAGES ===== */
+.msg-author.has-role { font-weight: 800; }
