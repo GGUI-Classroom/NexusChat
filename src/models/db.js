@@ -5,116 +5,116 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
+async function runSql(sql, label) {
+  try { await pool.query(sql); }
+  catch(e) { console.error(`Migration failed [${label}]:`, e.message); }
+}
+
 async function initDb() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      display_name TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
-      avatar_data TEXT DEFAULT NULL,
-      avatar_mime TEXT DEFAULT NULL,
-      status TEXT DEFAULT 'offline',
-      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL,
+    display_name TEXT NOT NULL, password_hash TEXT NOT NULL,
+    avatar_data TEXT DEFAULT NULL, avatar_mime TEXT DEFAULT NULL,
+    status TEXT DEFAULT 'offline',
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'users');
 
-    CREATE TABLE IF NOT EXISTS friend_requests (
-      id TEXT PRIMARY KEY,
-      from_id TEXT NOT NULL REFERENCES users(id),
-      to_id TEXT NOT NULL REFERENCES users(id),
-      status TEXT DEFAULT 'pending',
-      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
-      UNIQUE(from_id, to_id)
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS friend_requests (
+    id TEXT PRIMARY KEY,
+    from_id TEXT NOT NULL REFERENCES users(id),
+    to_id TEXT NOT NULL REFERENCES users(id),
+    status TEXT DEFAULT 'pending',
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(from_id, to_id)
+  )`, 'friend_requests');
 
-    CREATE TABLE IF NOT EXISTS friendships (
-      id TEXT PRIMARY KEY,
-      user1_id TEXT NOT NULL REFERENCES users(id),
-      user2_id TEXT NOT NULL REFERENCES users(id),
-      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS friendships (
+    id TEXT PRIMARY KEY,
+    user1_id TEXT NOT NULL REFERENCES users(id),
+    user2_id TEXT NOT NULL REFERENCES users(id),
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'friendships');
 
-    CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      from_id TEXT NOT NULL REFERENCES users(id),
-      to_id TEXT NOT NULL REFERENCES users(id),
-      content TEXT NOT NULL,
-      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    from_id TEXT NOT NULL REFERENCES users(id),
+    to_id TEXT NOT NULL REFERENCES users(id),
+    content TEXT NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'messages');
 
-    CREATE TABLE IF NOT EXISTS servers (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      owner_id TEXT NOT NULL REFERENCES users(id),
-      icon_data TEXT DEFAULT NULL,
-      icon_mime TEXT DEFAULT NULL,
-      invite_code TEXT UNIQUE NOT NULL,
-      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS servers (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL,
+    owner_id TEXT NOT NULL REFERENCES users(id),
+    icon_data TEXT DEFAULT NULL, icon_mime TEXT DEFAULT NULL,
+    invite_code TEXT UNIQUE NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'servers');
 
-    CREATE TABLE IF NOT EXISTS server_roles (
-      id TEXT PRIMARY KEY,
-      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      color TEXT DEFAULT '#8892a4',
-      is_admin BOOLEAN DEFAULT FALSE,
-      position INTEGER DEFAULT 0,
-      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS server_roles (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    name TEXT NOT NULL, color TEXT DEFAULT '#8892a4',
+    is_admin BOOLEAN DEFAULT FALSE, position INTEGER DEFAULT 0,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'server_roles');
 
-    CREATE TABLE IF NOT EXISTS server_members (
-      id TEXT PRIMARY KEY,
-      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      role TEXT DEFAULT 'member',
-      role_id TEXT DEFAULT NULL REFERENCES server_roles(id) ON DELETE SET NULL,
-      joined_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
-      UNIQUE(server_id, user_id)
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS server_members (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT DEFAULT 'member',
+    role_id TEXT DEFAULT NULL REFERENCES server_roles(id) ON DELETE SET NULL,
+    joined_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(server_id, user_id)
+  )`, 'server_members');
 
-    CREATE TABLE IF NOT EXISTS channels (
-      id TEXT PRIMARY KEY,
-      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      position INTEGER DEFAULT 0,
-      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS channels (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    name TEXT NOT NULL, position INTEGER DEFAULT 0,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'channels');
 
-    CREATE TABLE IF NOT EXISTS channel_messages (
-      id TEXT PRIMARY KEY,
-      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-      from_id TEXT NOT NULL REFERENCES users(id),
-      content TEXT NOT NULL,
-      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS channel_messages (
+    id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    from_id TEXT NOT NULL REFERENCES users(id),
+    content TEXT NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'channel_messages');
 
-    CREATE TABLE IF NOT EXISTS server_invites (
-      id TEXT PRIMARY KEY,
-      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-      from_id TEXT NOT NULL REFERENCES users(id),
-      to_id TEXT NOT NULL REFERENCES users(id),
-      status TEXT DEFAULT 'pending',
-      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
-      UNIQUE(server_id, to_id)
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS server_invites (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    from_id TEXT NOT NULL REFERENCES users(id),
+    to_id TEXT NOT NULL REFERENCES users(id),
+    status TEXT DEFAULT 'pending',
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(server_id, to_id)
+  )`, 'server_invites');
 
-    CREATE TABLE IF NOT EXISTS server_bans (
-      id TEXT PRIMARY KEY,
-      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-      user_id TEXT NOT NULL REFERENCES users(id),
-      banned_by TEXT NOT NULL REFERENCES users(id),
-      reason TEXT DEFAULT NULL,
-      created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
-      UNIQUE(server_id, user_id)
-    );
+  await runSql(`CREATE TABLE IF NOT EXISTS server_bans (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    banned_by TEXT NOT NULL REFERENCES users(id),
+    reason TEXT DEFAULT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(server_id, user_id)
+  )`, 'server_bans');
 
-    CREATE INDEX IF NOT EXISTS idx_messages_convo ON messages(from_id, to_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON friend_requests(to_id, status);
-    CREATE INDEX IF NOT EXISTS idx_username_lower ON users(LOWER(username));
-    CREATE INDEX IF NOT EXISTS idx_channel_messages ON channel_messages(channel_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_server_members ON server_members(user_id);
-    CREATE INDEX IF NOT EXISTS idx_server_invites_to ON server_invites(to_id, status);
-  `);
+  // Indexes
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_messages_convo ON messages(from_id, to_id, created_at)`, 'idx1');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON friend_requests(to_id, status)`, 'idx2');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_username_lower ON users(LOWER(username))`, 'idx3');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_channel_messages ON channel_messages(channel_id, created_at)`, 'idx4');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_members ON server_members(user_id)`, 'idx5');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_invites_to ON server_invites(to_id, status)`, 'idx6');
+
+  // Add role_id column to server_members if it doesn't exist (for existing deployments)
+  await runSql(`ALTER TABLE server_members ADD COLUMN IF NOT EXISTS role_id TEXT DEFAULT NULL`, 'alter_members_role_id');
+
   console.log('Database initialized');
 }
 
