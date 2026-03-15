@@ -277,10 +277,16 @@
 
   function renderChannelList(channels, isAdmin) {
     $('channel-list').innerHTML = channels.map(c => `
-      <div class="channel-item ${activeChannelId === c.id ? 'active' : ''}" data-channel-id="${c.id}" onclick="openChannel({id:'${c.id}',name:'${esc(c.name)}'})">
-        <span class="ch-hash">#</span>
+      <div class="channel-item ${activeChannelId === c.id ? 'active' : ''} ${c.locked ? 'locked' : ''}" data-channel-id="${c.id}" onclick="openChannel({id:'${c.id}',name:'${esc(c.name)}',locked:${!!c.locked}})">
+        <span class="ch-hash">${c.locked ? '🔒' : '#'}</span>
         <span class="ch-name">${esc(c.name)}</span>
-        ${isAdmin ? `<button class="ch-delete" onclick="deleteChannel(event,'${c.id}')" title="Delete channel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>` : ''}
+        ${isAdmin ? `
+          <button class="ch-perms" onclick="openChannelPerms(event,'${c.id}','${esc(c.name)}')" title="Permissions">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+          </button>
+          <button class="ch-delete" onclick="deleteChannel(event,'${c.id}')" title="Delete channel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>` : ''}
       </div>
     `).join('');
   }
@@ -1312,6 +1318,10 @@
       if (channelId === activeChannelId) $('channel-typing-indicator').style.display = 'none';
     });
 
+    socket.on('channel_error', ({ channelId, error }) => {
+      if (channelId === activeChannelId) toast(error, 'error');
+    });
+
     socket.on('screenshare_started', ({ fromId }) => {
       // The ontrack handler deals with showing the video; this is just for notification
       const peer = callState && callState.peerUser;
@@ -1758,6 +1768,85 @@
       popup.style.display = 'none';
     }
   });
+
+  // ---- Channel Permissions ----
+  let permsChannelId = null;
+  let permsChannelRoles = [];
+
+  window.openChannelPerms = async function(e, channelId, channelName) {
+    e.stopPropagation();
+    permsChannelId = channelId;
+    $('perms-channel-name').textContent = '#' + channelName;
+    $('channel-perms-error').textContent = '';
+
+    const r = await api('GET', `/api/servers/${activeServerId}/channels/${channelId}/permissions`);
+    if (r.error) return toast(r.error, 'error');
+
+    $('channel-locked-toggle').checked = !!r.locked;
+    $('perms-roles-section').style.display = r.locked ? 'block' : 'none';
+
+    // Build role permission rows
+    const roles = (activeServerData && activeServerData.roles) || [];
+    const permMap = {};
+    (r.permissions || []).forEach(p => { permMap[p.roleId] = p.allowSend; });
+
+    $('perms-roles-list').innerHTML = roles.map(role => {
+      const hasAllow = permMap[role.id] === true;
+      const hasDeny = permMap[role.id] === false;
+      return `
+        <div class="perm-role-row">
+          <div class="perm-role-dot" style="background:${role.color}"></div>
+          <span class="perm-role-name" style="color:${role.color}">${esc(role.name)}</span>
+          <button class="perm-allow-btn ${hasAllow ? 'active' : ''}"
+            onclick="setChannelPerm('${role.id}', true, this)">Allow</button>
+          <button class="perm-deny-btn ${hasDeny ? 'active' : ''}"
+            onclick="setChannelPerm('${role.id}', false, this)">Deny</button>
+          ${permMap[role.id] !== undefined ? `<button class="action-btn ghost" style="font-size:11px;padding:4px 8px" onclick="removeChannelPerm('${role.id}', this)">Reset</button>` : ''}
+        </div>`;
+    }).join('') || '<p style="font-size:13px;color:var(--text-muted)">No roles defined yet. Create roles in Server Settings first.</p>';
+
+    $('channel-perms-modal').classList.add('active');
+  };
+
+  $('channel-locked-toggle').addEventListener('change', async function() {
+    if (!permsChannelId) return;
+    const r = await api('PATCH', `/api/servers/${activeServerId}/channels/${permsChannelId}/lock`, { locked: this.checked });
+    if (r.error) { this.checked = !this.checked; return toast(r.error, 'error'); }
+    $('perms-roles-section').style.display = this.checked ? 'block' : 'none';
+    // Update local channel data
+    if (activeServerData) {
+      const ch = activeServerData.channels.find(c => c.id === permsChannelId);
+      if (ch) ch.locked = this.checked;
+      const me = activeServerData.members.find(m => m.id === currentUser.id);
+      renderChannelList(activeServerData.channels, me && (me.role === 'admin' || me.isAdmin));
+    }
+    toast(this.checked ? 'Channel locked' : 'Channel unlocked', 'success');
+  });
+
+  window.setChannelPerm = async function(roleId, allowSend, btn) {
+    if (!permsChannelId) return;
+    const r = await api('PUT', `/api/servers/${activeServerId}/channels/${permsChannelId}/permissions/${roleId}`, { allowSend });
+    if (r.error) return toast(r.error, 'error');
+    // Refresh the modal
+    const ch = activeServerData && activeServerData.channels.find(c => c.id === permsChannelId);
+    if (ch) openChannelPerms({ stopPropagation: ()=>{} }, permsChannelId, ch.name);
+    toast('Permission updated', 'success');
+  };
+
+  window.removeChannelPerm = async function(roleId, btn) {
+    if (!permsChannelId) return;
+    const r = await api('DELETE', `/api/servers/${activeServerId}/channels/${permsChannelId}/permissions/${roleId}`);
+    if (r.error) return toast(r.error, 'error');
+    const ch = activeServerData && activeServerData.channels.find(c => c.id === permsChannelId);
+    if (ch) openChannelPerms({ stopPropagation: ()=>{} }, permsChannelId, ch.name);
+    toast('Permission reset', 'info');
+  };
+
+  $('channel-perms-close').addEventListener('click', () => $('channel-perms-modal').classList.remove('active'));
+  $('channel-perms-modal').addEventListener('click', e => { if (e.target === $('channel-perms-modal')) $('channel-perms-modal').classList.remove('active'); });
+
+  // Handle channel_error from server (permission denied)
+  // Added in connectSocket below
 
   // ---- Escape helper ----
   function esc(str) {
