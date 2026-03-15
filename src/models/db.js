@@ -116,6 +116,17 @@ async function initDb() {
   await runSql(`ALTER TABLE server_members ADD COLUMN IF NOT EXISTS role_id TEXT DEFAULT NULL`, 'alter_members_role_id');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT NULL`, 'alter_users_bio');
 
+  // Channel permissions
+  await runSql(`CREATE TABLE IF NOT EXISTS channel_permissions (
+    id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    role_id TEXT REFERENCES server_roles(id) ON DELETE CASCADE,
+    allow_send BOOLEAN DEFAULT TRUE,
+    UNIQUE(channel_id, role_id)
+  )`, 'channel_permissions');
+
+  await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT FALSE`, 'alter_channels_locked');
+
   console.log('Database initialized');
 }
 
