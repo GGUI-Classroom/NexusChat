@@ -396,6 +396,57 @@ router.get('/:id/bans', async (req, res) => {
   res.json({ bans: r.rows.map(b => ({ id: b.id, userId: b.user_id, username: b.username, displayName: b.display_name, reason: b.reason })) });
 });
 
+// ---- CHANNEL PERMISSIONS ----
+// Get permissions for a channel
+router.get('/:id/channels/:chId/permissions', async (req, res) => {
+  const { id, chId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  const ch = await pool.query('SELECT locked FROM channels WHERE id=$1 AND server_id=$2', [chId, id]);
+  if (!ch.rows.length) return res.status(404).json({ error: 'Channel not found' });
+  const perms = await pool.query(
+    `SELECT cp.id, cp.role_id, cp.allow_send, sr.name as role_name, sr.color
+     FROM channel_permissions cp
+     JOIN server_roles sr ON sr.id=cp.role_id
+     WHERE cp.channel_id=$1`, [chId]
+  );
+  res.json({
+    locked: ch.rows[0].locked,
+    permissions: perms.rows.map(p => ({ id: p.id, roleId: p.role_id, roleName: p.role_name, color: p.color, allowSend: p.allow_send }))
+  });
+});
+
+// Set channel locked state
+router.patch('/:id/channels/:chId/lock', async (req, res) => {
+  const { id, chId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  const { locked } = req.body;
+  await pool.query('UPDATE channels SET locked=$1 WHERE id=$2 AND server_id=$3', [!!locked, chId, id]);
+  res.json({ success: true, locked: !!locked });
+});
+
+// Set role permission for a channel
+router.put('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
+  const { id, chId, roleId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  const { allowSend } = req.body;
+  const role = await pool.query('SELECT id FROM server_roles WHERE id=$1 AND server_id=$2', [roleId, id]);
+  if (!role.rows.length) return res.status(404).json({ error: 'Role not found' });
+  await pool.query(
+    `INSERT INTO channel_permissions (id, channel_id, role_id, allow_send) VALUES ($1,$2,$3,$4)
+     ON CONFLICT (channel_id, role_id) DO UPDATE SET allow_send=$4`,
+    [uuidv4(), chId, roleId, !!allowSend]
+  );
+  res.json({ success: true });
+});
+
+// Remove role permission override for a channel
+router.delete('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
+  const { id, chId, roleId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  await pool.query('DELETE FROM channel_permissions WHERE channel_id=$1 AND role_id=$2', [chId, roleId]);
+  res.json({ success: true });
+});
+
 // Get channel messages
 router.get('/:id/channels/:chId/messages', async (req, res) => {
   const { id, chId } = req.params;
