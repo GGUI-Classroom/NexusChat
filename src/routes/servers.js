@@ -166,7 +166,7 @@ router.get('/:id', async (req, res) => {
   if (!sRes.rows.length) return res.status(404).json({ error: 'Not found' });
   res.json({
     server: fmtServer(sRes.rows[0]),
-    channels: chRes.rows.map(c => ({ id: c.id, name: c.name, position: c.position })),
+    channels: chRes.rows.map(c => ({ id: c.id, name: c.name, position: c.position, locked: !!c.locked })),
     members: memRes.rows.map(m => ({
       id: m.id, username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
