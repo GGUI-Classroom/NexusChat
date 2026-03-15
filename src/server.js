@@ -77,17 +77,18 @@ io.on('connection', (socket) => {
     if (!toId || !content || typeof content !== 'string') return;
     const trimmed = content.trim().slice(0, 4000);
     if (!trimmed) return;
-    const isFriend = await pool.query(
-      `SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)`,
+    // Single query: check friendship AND get sender info at once
+    const check = await pool.query(
+      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime,
+        (SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1) as friend_id
+       FROM users u WHERE u.id=$1`,
       [userId, toId]
     );
-    if (!isFriend.rows.length) return;
+    if (!check.rows.length || !check.rows[0].friend_id) return;
+    const s = check.rows[0];
     const msgId = uuidv4();
     const now = Math.floor(Date.now() / 1000);
-    await pool.query('INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
-      [msgId, userId, toId, trimmed, now]);
-    const sender = await pool.query('SELECT username, display_name, avatar_data, avatar_mime FROM users WHERE id=$1', [userId]);
-    const s = sender.rows[0];
+    // Build message object immediately — emit to sender first for instant feedback
     const msg = {
       id: msgId, fromId: userId, toId, content: trimmed, createdAt: now,
       author: {
@@ -95,9 +96,15 @@ io.on('connection', (socket) => {
         avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null
       }
     };
+    // Emit to sender immediately (no await before this)
+    socket.emit('new_message', msg);
+    // Emit to recipient
     io.to(`user:${toId}`).emit('new_message', msg);
+    // Emit to sender's other tabs
     socket.to(`user:${userId}`).emit('new_message', msg);
-    socket.emit('message_sent', msg);
+    // Persist to DB (non-blocking for perceived speed)
+    pool.query('INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
+      [msgId, userId, toId, trimmed, now]).catch(e => console.error('DM insert error:', e));
   });
 
   socket.on('typing_start', async ({ toId }) => {
@@ -125,41 +132,57 @@ io.on('connection', (socket) => {
     if (!content || typeof content !== 'string') return;
     const trimmed = content.trim().slice(0, 4000);
     if (!trimmed) return;
-    // Verify membership
-    const member = await pool.query(
-      'SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2',
-      [serverId, userId]
-    );
-    if (!member.rows.length) return;
-    // Verify channel belongs to server
-    const ch = await pool.query('SELECT id FROM channels WHERE id=$1 AND server_id=$2', [channelId, serverId]);
-    if (!ch.rows.length) return;
 
-    const msgId = require('uuid').v4();
-    const now = Math.floor(Date.now() / 1000);
-    await pool.query(
-      'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
-      [msgId, channelId, userId, trimmed, now]
-    );
-    const sender = await pool.query(
-      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime,
-       sr.name as role_name, sr.color as role_color
-       FROM users u
-       LEFT JOIN server_members sm ON sm.server_id=$2 AND sm.user_id=u.id
+    // Single query: get member info, role info, channel validity, and permission check
+    const check = await pool.query(
+      `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color,
+        sr.is_admin,
+        u.username, u.display_name, u.avatar_data, u.avatar_mime,
+        ch.id as ch_id, ch.locked,
+        (SELECT allow_send FROM channel_permissions cp
+         WHERE cp.channel_id=$2 AND (cp.role_id=sm.role_id OR cp.role_id IS NULL)
+         ORDER BY cp.role_id NULLS LAST LIMIT 1) as perm_allow
+       FROM server_members sm
+       JOIN users u ON u.id=sm.user_id
+       JOIN channels ch ON ch.id=$2 AND ch.server_id=$1
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
-       WHERE u.id=$1`, [userId, serverId]
+       WHERE sm.server_id=$1 AND sm.user_id=$3`,
+      [serverId, channelId, userId]
     );
-    const s = sender.rows[0];
+    if (!check.rows.length) return; // not a member or channel doesn't belong to server
+    const row = check.rows[0];
+
+    // Check channel lock: if locked, only admins/roles with explicit allow_send=true can post
+    if (row.locked && !row.is_admin && row.member_role !== 'admin') {
+      const perm = await pool.query(
+        `SELECT allow_send FROM channel_permissions WHERE channel_id=$1 AND role_id=$2`,
+        [channelId, row.role_id]
+      );
+      if (!perm.rows.length || !perm.rows[0].allow_send) {
+        socket.emit('channel_error', { channelId, error: 'You do not have permission to send messages in this channel' });
+        return;
+      }
+    }
+
+    const msgId = uuidv4();
+    const now = Math.floor(Date.now() / 1000);
     const msg = {
       id: msgId, channelId, serverId, fromId: userId,
       content: trimmed, createdAt: now,
       author: {
-        username: s.username, displayName: s.display_name,
-        avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null,
-        roleColor: s.role_color || null, roleName: s.role_name || null
+        username: row.username, displayName: row.display_name,
+        avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null,
+        roleColor: row.role_color || null, roleName: row.role_name || null
       }
     };
-    io.to(`server:${serverId}`).emit('new_channel_message', msg);
+    // Emit to sender immediately, then rest of server room
+    socket.emit('new_channel_message', msg);
+    socket.to(`server:${serverId}`).emit('new_channel_message', msg);
+    // Persist non-blocking
+    pool.query(
+      'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
+      [msgId, channelId, userId, trimmed, now]
+    ).catch(e => console.error('Channel msg insert error:', e));
   });
 
   socket.on('channel_typing_start', ({ serverId, channelId }) => {
