@@ -368,6 +368,7 @@
     $('channel-message-input').placeholder = 'Message #' + channel.name + '…';
     $('channel-placeholder').style.display = 'none';
     $('channel-container').style.display = 'flex';
+    chLoadingOlder = false;
     loadChannelMessages(channel.id);
     $('channel-message-input').focus();
   };
@@ -389,33 +390,49 @@
   };
 
   async function loadChannelMessages(channelId, prepend = false) {
+    if (prepend && chLoadingOlder) return;
+    if (prepend) chLoadingOlder = true;
+
     const list = $('channel-messages-list');
     const wrap = $('channel-messages-wrap');
     const oldest = list.querySelector('.message');
     const beforeTs = prepend && oldest ? oldest.dataset.ts : undefined;
     const url = `/api/servers/${activeServerId}/channels/${channelId}/messages${beforeTs?`?before=${beforeTs}`:''}`;
     const r = await api('GET', url);
-    if (!r.messages) return;
+    if (!r.messages || !r.messages.length) {
+      if (prepend) chLoadingOlder = false;
+      return;
+    }
     if (!prepend) {
       list.innerHTML = '';
       r.messages.forEach(m => appendChannelMessage(m, false));
-      wrap.scrollTop = wrap.scrollHeight;
+      requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
     } else {
-      const prev = wrap.scrollHeight;
+      const distFromBottom = wrap.scrollHeight - wrap.scrollTop;
       r.messages.forEach(m => prependChannelMessage(m));
-      wrap.scrollTop = wrap.scrollHeight - prev;
+      requestAnimationFrame(() => {
+        wrap.scrollTop = wrap.scrollHeight - distFromBottom;
+        chLoadingOlder = false;
+      });
     }
   }
 
+  let chLoadingOlder = false;
+
   $('channel-messages-wrap').addEventListener('scroll', function() {
-    if (this.scrollTop < 80 && activeChannelId) loadChannelMessages(activeChannelId, true);
+    if (this.scrollTop < 80 && activeChannelId && !chLoadingOlder) {
+      loadChannelMessages(activeChannelId, true);
+    }
   });
 
   function appendChannelMessage(msg, scroll=true) {
     const list = $('channel-messages-list');
     const el = buildMessageEl(msg, list.lastElementChild);
     list.appendChild(el);
-    if (scroll) $('channel-messages-wrap').scrollTop = $('channel-messages-wrap').scrollHeight;
+    if (scroll) {
+      const wrap = $('channel-messages-wrap');
+      requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
+    }
   }
 
   function prependChannelMessage(msg) {
@@ -994,7 +1011,8 @@
     const statusDot = $('chat-peer-status');
     statusDot.className = `status-dot ${user.status === 'online' ? 'online' : ''}`;
 
-    // Load messages
+    // Reset pagination lock and load messages
+    dmLoadingOlder = false;
     await loadMessages(user.id);
 
     $('message-input').focus();
@@ -1007,22 +1025,40 @@
     $('chat-container').style.display = 'none';
   }
 
+  let dmLoadingOlder = false; // lock to prevent multiple simultaneous loads
+
   async function loadMessages(userId, prepend = false) {
+    if (prepend && dmLoadingOlder) return; // prevent double-fire
+    if (prepend) dmLoadingOlder = true;
+
     const list = $('messages-list');
     const wrap = $('messages-wrap');
     const oldest = list.querySelector('.message');
     const beforeTs = prepend && oldest ? oldest.dataset.ts : undefined;
+
+    // Don't re-fetch if we got nothing last time for this conversation
     const url = `/api/messages/${userId}${beforeTs ? `?before=${beforeTs}` : ''}`;
     const r = await api('GET', url);
-    if (!r.messages) return;
+
+    if (!r.messages || !r.messages.length) {
+      if (prepend) dmLoadingOlder = false;
+      return;
+    }
+
     if (!prepend) {
       list.innerHTML = '';
       r.messages.forEach(m => appendMessage(m, false));
-      wrap.scrollTop = wrap.scrollHeight;
+      // Use requestAnimationFrame so DOM is painted before we scroll
+      requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
     } else {
-      const prevHeight = wrap.scrollHeight;
+      // Save scroll position from the bottom before adding content
+      const distFromBottom = wrap.scrollHeight - wrap.scrollTop;
       r.messages.forEach(m => prependMessage(m));
-      wrap.scrollTop = wrap.scrollHeight - prevHeight;
+      // Restore position from bottom after DOM updates
+      requestAnimationFrame(() => {
+        wrap.scrollTop = wrap.scrollHeight - distFromBottom;
+        dmLoadingOlder = false;
+      });
     }
   }
 
@@ -1032,13 +1068,14 @@
     list.appendChild(el);
     if (scroll) {
       const wrap = $('messages-wrap');
-      wrap.scrollTop = wrap.scrollHeight;
+      requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
     }
   }
 
   function prependMessage(msg) {
     const list = $('messages-list');
-    const el = buildMessageEl(msg, null, list.firstElementChild);
+    // Build without grouping context (prepended messages are old, grouping is cosmetic)
+    const el = buildMessageEl(msg, null);
     list.prepend(el);
   }
 
@@ -1079,9 +1116,9 @@
     return el;
   }
 
-  // Infinite scroll (load older)
+  // Infinite scroll (load older) — only fires when near the top
   $('messages-wrap').addEventListener('scroll', function () {
-    if (this.scrollTop < 80 && activeDmUserId) {
+    if (this.scrollTop < 80 && activeDmUserId && !dmLoadingOlder) {
       loadMessages(activeDmUserId, true);
     }
   });
