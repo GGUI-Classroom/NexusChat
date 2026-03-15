@@ -277,18 +277,43 @@
 
   function renderChannelList(channels, isAdmin) {
     $('channel-list').innerHTML = channels.map(c => `
-      <div class="channel-item ${activeChannelId === c.id ? 'active' : ''} ${c.locked ? 'locked' : ''}" data-channel-id="${c.id}" onclick="openChannel({id:'${c.id}',name:'${esc(c.name)}',locked:${!!c.locked}})">
+      <div class="channel-item ${activeChannelId === c.id ? 'active' : ''} ${c.locked ? 'locked' : ''}"
+           data-channel-id="${c.id}"
+           data-channel-name="${esc(c.name)}"
+           data-channel-locked="${c.locked ? '1' : '0'}">
         <span class="ch-hash">${c.locked ? '🔒' : '#'}</span>
         <span class="ch-name">${esc(c.name)}</span>
         ${isAdmin ? `
-          <button class="ch-perms" onclick="openChannelPerms(event,'${c.id}','${esc(c.name)}')" title="Permissions">
+          <button class="ch-perms" data-ch-id="${c.id}" data-ch-name="${esc(c.name)}" title="Permissions">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
           </button>
-          <button class="ch-delete" onclick="deleteChannel(event,'${c.id}')" title="Delete channel">
+          <button class="ch-delete" data-ch-id="${c.id}" title="Delete channel">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
           </button>` : ''}
       </div>
     `).join('');
+
+    // Attach click handlers after rendering (safe, no inline data injection)
+    $('channel-list').querySelectorAll('.channel-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const chId = el.dataset.channelId;
+        const chName = el.dataset.channelName;
+        const locked = el.dataset.channelLocked === '1';
+        openChannel({ id: chId, name: chName, locked });
+      });
+    });
+    $('channel-list').querySelectorAll('.ch-perms').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openChannelPerms(e, btn.dataset.chId, btn.dataset.chName);
+      });
+    });
+    $('channel-list').querySelectorAll('.ch-delete').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        deleteChannel(e, btn.dataset.chId);
+      });
+    });
   }
 
   function renderMemberList(members) {
@@ -365,8 +390,13 @@
   };
 
   window.openChannel = function(channel) {
+    // Clear messages immediately before switching so old messages never bleed through
+    $('channel-messages-list').innerHTML = '';
+    $('channel-typing-indicator').style.display = 'none';
+    chLoadingOlder = false;
+
     activeChannelId = channel.id;
-    // Update active state in sidebar
+
     document.querySelectorAll('.channel-item').forEach(el => {
       el.classList.toggle('active', el.dataset.channelId === channel.id);
     });
@@ -374,7 +404,6 @@
     $('channel-message-input').placeholder = 'Message #' + channel.name + '…';
     $('channel-placeholder').style.display = 'none';
     $('channel-container').style.display = 'flex';
-    chLoadingOlder = false;
     loadChannelMessages(channel.id);
     $('channel-message-input').focus();
   };
