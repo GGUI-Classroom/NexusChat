@@ -323,6 +323,35 @@
     </div>
   </div>
 
+  <!-- Channel Permissions Modal -->
+  <div class="modal-overlay" id="channel-perms-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Channel Permissions — <span id="perms-channel-name">#general</span></h2>
+        <button class="modal-close" id="channel-perms-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="field-group" style="margin-bottom:16px">
+          <label>Channel Mode</label>
+          <div class="lock-toggle">
+            <label class="toggle-row">
+              <input type="checkbox" id="channel-locked-toggle" />
+              <span class="toggle-label">
+                <span class="toggle-title">Locked channel</span>
+                <span class="toggle-hint">Only roles with explicit permission can send messages</span>
+              </span>
+            </label>
+          </div>
+        </div>
+        <div id="perms-roles-section" style="display:none">
+          <div class="section-label" style="margin-bottom:10px">ROLE PERMISSIONS</div>
+          <div id="perms-roles-list"></div>
+        </div>
+        <div class="form-error" id="channel-perms-error"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Incoming Call Modal -->
   <div class="modal-overlay" id="incoming-call-modal">
     <div class="modal call-modal">
