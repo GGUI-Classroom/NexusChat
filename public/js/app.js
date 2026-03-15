@@ -1164,8 +1164,12 @@
     socket.on('disconnect', () => console.log('Socket disconnected'));
 
     socket.on('new_message', msg => {
-      // Update DM last message
-      const dlm = $(`dlm-${msg.fromId === currentUser.id ? msg.toId : msg.fromId}`);
+      // Deduplicate — if this message ID is already in the DOM, skip it
+      if ($(`[data-id="${msg.id}"]`)) return;
+
+      // Update DM last message preview
+      const peerId = msg.fromId === currentUser.id ? msg.toId : msg.fromId;
+      const dlm = $(`dlm-${peerId}`);
       if (dlm) dlm.textContent = msg.content.slice(0, 30) + (msg.content.length > 30 ? '…' : '');
 
       if (activeDmUserId && (msg.fromId === activeDmUserId || msg.toId === activeDmUserId)) {
@@ -1176,10 +1180,8 @@
       }
     });
 
+    // message_sent: only update the DM list preview, never render — new_message handles rendering
     socket.on('message_sent', msg => {
-      if (activeDmUserId && (msg.fromId === activeDmUserId || msg.toId === activeDmUserId)) {
-        appendMessage(msg);
-      }
       const dlm = $(`dlm-${msg.toId}`);
       if (dlm) dlm.textContent = msg.content.slice(0, 30) + (msg.content.length > 30 ? '…' : '');
     });
