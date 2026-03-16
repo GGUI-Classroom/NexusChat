@@ -155,7 +155,7 @@ router.get('/:id', async (req, res) => {
     pool.query('SELECT * FROM channels WHERE server_id=$1 ORDER BY position ASC', [id]),
     pool.query(
       `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.is_admin,
-       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status
+       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status, u.active_decoration
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
@@ -171,7 +171,8 @@ router.get('/:id', async (req, res) => {
       id: m.id, username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
       status: m.status, role: m.role, roleId: m.role_id,
-      roleName: m.role_name, roleColor: m.role_color, isAdmin: m.is_admin
+      roleName: m.role_name, roleColor: m.role_color, isAdmin: m.is_admin,
+      activeDecoration: m.active_decoration || null
     })),
     roles: roleRes.rows.map(r => ({ id: r.id, name: r.name, color: r.color, isAdmin: r.is_admin, position: r.position }))
   });
@@ -454,7 +455,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
   let q = `SELECT cm.id, cm.channel_id, cm.from_id, cm.content, cm.created_at,
-    u.username, u.display_name, u.avatar_data, u.avatar_mime,
+    u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration,
     sm.role_id, sr.name as role_name, sr.color as role_color
     FROM channel_messages cm
     JOIN users u ON u.id=cm.from_id
@@ -472,7 +473,8 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
     author: {
       username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
-      roleColor: m.role_color || null, roleName: m.role_name || null
+      roleColor: m.role_color || null, roleName: m.role_name || null,
+      activeDecoration: m.active_decoration || null
     }
   }))});
 });
