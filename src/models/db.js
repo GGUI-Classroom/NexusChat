@@ -126,6 +126,8 @@ async function initDb() {
   )`, 'channel_permissions');
 
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT FALSE`, 'alter_channels_locked');
+  await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS private BOOLEAN DEFAULT FALSE`, 'alter_channels_private');
+  await runSql(`ALTER TABLE channel_permissions ADD COLUMN IF NOT EXISTS allow_view BOOLEAN DEFAULT TRUE`, 'alter_cp_allow_view');
 
   await runSql(`CREATE TABLE IF NOT EXISTS user_decorations (
     id TEXT PRIMARY KEY,
