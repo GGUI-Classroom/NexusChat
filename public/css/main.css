@@ -297,7 +297,7 @@ html, body {
   cursor: default;
 }
 
-.avatar-wrap { position: relative; flex-shrink: 0; }
+.avatar-wrap { position: relative; flex-shrink: 0; overflow: visible; }
 .avatar {
   width: 36px; height: 36px; border-radius: 50%;
   background: var(--bg-elevated);
@@ -1608,7 +1608,6 @@ html, body {
   .avatar-wrap is already position:relative, so the deco spans it absolutely.
   The deco element is sized to perfectly cover the avatar plus a small overflow ring.
 */
-.avatar-wrap { position: relative; }
 
 .avatar-deco {
   position: absolute;
@@ -1624,7 +1623,7 @@ html, body {
 }
 
 /* -- GLOW BLUE -- */
-.deco-glow_blue .avatar-deco {
+.avatar-deco.deco-glow_blue {
   box-shadow: 0 0 0 3px rgba(91,110,245,0.8), 0 0 20px 6px rgba(91,110,245,0.5);
   animation: deco-pulse-blue 2s ease-in-out infinite;
 }
@@ -1634,7 +1633,7 @@ html, body {
 }
 
 /* -- GLOW GREEN (Glowy Moon) -- */
-.deco-glow_green .avatar-deco {
+.avatar-deco.deco-glow_green {
   box-shadow: 0 0 0 3px rgba(61,214,140,0.8), 0 0 20px 8px rgba(61,214,140,0.45);
   animation: deco-pulse-green 2.5s ease-in-out infinite;
 }
@@ -1644,17 +1643,17 @@ html, body {
 }
 
 /* -- ORBIT RING (white) -- */
-.deco-orbit_white .avatar-deco {
+.avatar-deco.deco-orbit_white {
   background: transparent;
 }
-.deco-orbit_white .avatar-deco::before {
+.avatar-deco.deco-orbit_white::before {
   content: '';
   position: absolute;
   inset: -2px;
   border-radius: 50%;
   border: 2.5px solid rgba(255,255,255,0.15);
 }
-.deco-orbit_white .avatar-deco::after {
+.avatar-deco.deco-orbit_white::after {
   content: '';
   position: absolute;
   inset: -2px;
@@ -1667,14 +1666,14 @@ html, body {
 }
 
 /* -- ORBIT GOLD -- */
-.deco-orbit_gold .avatar-deco::before {
+.avatar-deco.deco-orbit_gold::before {
   content: '';
   position: absolute;
   inset: -2px;
   border-radius: 50%;
   border: 2.5px solid rgba(245,200,66,0.15);
 }
-.deco-orbit_gold .avatar-deco::after {
+.avatar-deco.deco-orbit_gold::after {
   content: '';
   position: absolute;
   inset: -2px;
@@ -1692,7 +1691,7 @@ html, body {
 }
 
 /* -- HALO GOLD -- */
-.deco-halo_gold .avatar-deco {
+.avatar-deco.deco-halo_gold {
   width: 110%;
   height: 22%;
   top: -16%;
@@ -1710,7 +1709,7 @@ html, body {
 }
 
 /* -- NEON PINK -- */
-.deco-neon_pink .avatar-deco {
+.avatar-deco.deco-neon_pink {
   border: 3px solid #ff2d8e;
   box-shadow: 0 0 8px #ff2d8e, 0 0 20px rgba(255,45,142,0.5), inset 0 0 8px rgba(255,45,142,0.2);
   animation: deco-neon-flicker 3s ease-in-out infinite;
@@ -1727,7 +1726,7 @@ html, body {
 }
 
 /* -- GALAXY -- */
-.deco-galaxy .avatar-deco {
+.avatar-deco.deco-galaxy {
   background: conic-gradient(
     from 0deg,
     #5b6ef5, #8b3cf7, #ff2d8e, #f5c842, #3dd68c, #5b6ef5
@@ -1736,7 +1735,7 @@ html, body {
   padding: 3px;
   animation: deco-spin 3s linear infinite;
 }
-.deco-galaxy .avatar-deco::after {
+.avatar-deco.deco-galaxy::after {
   content: '';
   position: absolute;
   inset: 3px;
@@ -1746,7 +1745,7 @@ html, body {
 }
 
 /* -- FIRE -- */
-.deco-fire .avatar-deco {
+.avatar-deco.deco-fire {
   background: conic-gradient(
     from 0deg,
     #ff4500, #ff8c00, #ffd700, #ff4500, #ff6347, #ff4500
@@ -1755,7 +1754,7 @@ html, body {
   padding: 3px;
   animation: deco-spin 1s linear infinite, deco-fire-pulse 0.5s ease-in-out infinite alternate;
 }
-.deco-fire .avatar-deco::after {
+.avatar-deco.deco-fire::after {
   content: '';
   position: absolute;
   inset: 3px;
@@ -1769,7 +1768,7 @@ html, body {
 }
 
 /* -- RAINBOW -- */
-.deco-rainbow .avatar-deco {
+.avatar-deco.deco-rainbow {
   background: conic-gradient(
     red, orange, yellow, green, cyan, blue, violet, red
   );
@@ -1777,7 +1776,7 @@ html, body {
   padding: 3px;
   animation: deco-spin 2s linear infinite;
 }
-.deco-rainbow .avatar-deco::after {
+.avatar-deco.deco-rainbow::after {
   content: '';
   position: absolute;
   inset: 3px;
@@ -1787,7 +1786,7 @@ html, body {
 }
 
 /* -- FROST -- */
-.deco-frost .avatar-deco {
+.avatar-deco.deco-frost {
   border: 3px solid rgba(150,220,255,0.9);
   box-shadow: 0 0 10px rgba(150,220,255,0.7), 0 0 25px rgba(150,220,255,0.3), inset 0 0 10px rgba(150,220,255,0.2);
   animation: deco-frost-pulse 3s ease-in-out infinite;
