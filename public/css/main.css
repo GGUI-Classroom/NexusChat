@@ -608,6 +608,7 @@ html, body {
 
 .message .avatar { flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
 .message.grouped .avatar { visibility: hidden; }
+.message.grouped .avatar-deco { display: none; }
 
 .msg-body { flex: 1; min-width: 0; }
 .msg-header {
