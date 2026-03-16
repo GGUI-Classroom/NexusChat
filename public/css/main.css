@@ -1916,3 +1916,19 @@ html, body {
 
 /* Private channel icon */
 .channel-item .ch-hash.private { color: var(--yellow); }
+
+/* ===== MESSAGE DELETE BUTTON ===== */
+.msg-delete-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin-left: 6px;
+  transition: var(--transition);
+  vertical-align: middle;
+}
+.msg-delete-btn:hover { color: var(--red); background: rgba(240,84,84,0.15); }
+.message:hover .msg-delete-btn { opacity: 1; }
