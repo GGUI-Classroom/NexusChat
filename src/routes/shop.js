@@ -23,25 +23,11 @@ const DECORATIONS = [
     preview: 'orbit_white'
   },
   {
-    id: 'halo_gold',
-    name: 'Golden Halo',
-    description: 'A golden halo floating above',
-    rarity: 'rare',
-    preview: 'halo_gold'
-  },
-  {
     id: 'neon_pink',
     name: 'Neon Pink',
     description: 'A flickering neon pink border',
     rarity: 'epic',
     preview: 'neon_pink'
-  },
-  {
-    id: 'galaxy',
-    name: 'Galaxy Ring',
-    description: 'A rotating galaxy gradient around your avatar',
-    rarity: 'legendary',
-    preview: 'galaxy'
   },
   {
     id: 'glow_green',
