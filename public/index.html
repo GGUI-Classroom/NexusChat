@@ -55,6 +55,19 @@
 
     <!-- Main App -->
     <div id="main-screen" class="screen">
+
+      <!-- Mobile top bar (hidden on desktop) -->
+      <div id="mobile-topbar">
+        <button id="mobile-menu-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <span id="mobile-topbar-title">Nexus</span>
+        <div id="mobile-topbar-right"></div>
+      </div>
+
+      <!-- Sidebar backdrop (mobile only) -->
+      <div id="sidebar-backdrop"></div>
+
       <!-- Server Rail (far left, like Discord) -->
       <div class="server-rail">
         <div class="rail-section">
