@@ -7,6 +7,24 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireAuth);
 
+// Parse <@user:ID> and <@role:ID> tokens and resolve to display names
+async function resolveMentions(content, serverId) {
+  const userMentions = [...content.matchAll(/<@user:([a-f0-9-]+)>/g)];
+  const roleMentions = [...content.matchAll(/<@role:([a-f0-9-]+)>/g)];
+  const mentionData = { users: {}, roles: {} };
+  if (userMentions.length) {
+    const ids = [...new Set(userMentions.map(m => m[1]))];
+    const r = await pool.query(`SELECT id, username, display_name FROM users WHERE id = ANY($1)`, [ids]);
+    r.rows.forEach(u => { mentionData.users[u.id] = { username: u.username, displayName: u.display_name }; });
+  }
+  if (roleMentions.length) {
+    const ids = [...new Set(roleMentions.map(m => m[1]))];
+    const r = await pool.query(`SELECT id, name, color FROM server_roles WHERE id = ANY($1) AND server_id = $2`, [ids, serverId]);
+    r.rows.forEach(r => { mentionData.roles[r.id] = { name: r.name, color: r.color }; });
+  }
+  return mentionData;
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
@@ -152,7 +170,25 @@ router.get('/:id', async (req, res) => {
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
   const [sRes, chRes, memRes, roleRes] = await Promise.all([
     pool.query('SELECT * FROM servers WHERE id=$1', [id]),
-    pool.query('SELECT * FROM channels WHERE server_id=$1 ORDER BY position ASC', [id]),
+    pool.query(`
+      SELECT c.*,
+        CASE WHEN c.private = FALSE THEN TRUE
+             WHEN sm.role = 'admin' OR EXISTS(
+               SELECT 1 FROM server_roles sr2
+               WHERE sr2.id = sm.role_id AND sr2.is_admin = TRUE
+             ) THEN TRUE
+             WHEN c.private = TRUE AND EXISTS(
+               SELECT 1 FROM channel_permissions cp2
+               WHERE cp2.channel_id = c.id AND cp2.role_id = sm.role_id
+               AND cp2.allow_view = TRUE
+             ) THEN TRUE
+             ELSE FALSE
+        END as can_view
+      FROM channels c
+      LEFT JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
+      WHERE c.server_id = $1
+      ORDER BY c.position ASC
+    `, [id, req.session.userId]),
     pool.query(
       `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.is_admin,
        u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status, u.active_decoration
@@ -166,7 +202,7 @@ router.get('/:id', async (req, res) => {
   if (!sRes.rows.length) return res.status(404).json({ error: 'Not found' });
   res.json({
     server: fmtServer(sRes.rows[0]),
-    channels: chRes.rows.map(c => ({ id: c.id, name: c.name, position: c.position, locked: !!c.locked })),
+    channels: chRes.rows.filter(c => c.can_view).map(c => ({ id: c.id, name: c.name, position: c.position, locked: !!c.locked, private: !!c.private })),
     members: memRes.rows.map(m => ({
       id: m.id, username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
@@ -405,14 +441,15 @@ router.get('/:id/channels/:chId/permissions', async (req, res) => {
   const ch = await pool.query('SELECT locked FROM channels WHERE id=$1 AND server_id=$2', [chId, id]);
   if (!ch.rows.length) return res.status(404).json({ error: 'Channel not found' });
   const perms = await pool.query(
-    `SELECT cp.id, cp.role_id, cp.allow_send, sr.name as role_name, sr.color
+    `SELECT cp.id, cp.role_id, cp.allow_send, cp.allow_view, sr.name as role_name, sr.color
      FROM channel_permissions cp
      JOIN server_roles sr ON sr.id=cp.role_id
      WHERE cp.channel_id=$1`, [chId]
   );
   res.json({
     locked: ch.rows[0].locked,
-    permissions: perms.rows.map(p => ({ id: p.id, roleId: p.role_id, roleName: p.role_name, color: p.color, allowSend: p.allow_send }))
+    private: ch.rows[0].private || false,
+    permissions: perms.rows.map(p => ({ id: p.id, roleId: p.role_id, roleName: p.role_name, color: p.color, allowSend: p.allow_send, allowView: p.allow_view }))
   });
 });
 
@@ -425,6 +462,15 @@ router.patch('/:id/channels/:chId/lock', async (req, res) => {
   res.json({ success: true, locked: !!locked });
 });
 
+// Set channel private state
+router.patch('/:id/channels/:chId/private', async (req, res) => {
+  const { id, chId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  const { private: isPrivate } = req.body;
+  await pool.query('UPDATE channels SET private=$1 WHERE id=$2 AND server_id=$3', [!!isPrivate, chId, id]);
+  res.json({ success: true, private: !!isPrivate });
+});
+
 // Set role permission for a channel
 router.put('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
   const { id, chId, roleId } = req.params;
@@ -432,10 +478,12 @@ router.put('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
   const { allowSend } = req.body;
   const role = await pool.query('SELECT id FROM server_roles WHERE id=$1 AND server_id=$2', [roleId, id]);
   if (!role.rows.length) return res.status(404).json({ error: 'Role not found' });
+  const { allowView } = req.body;
   await pool.query(
-    `INSERT INTO channel_permissions (id, channel_id, role_id, allow_send) VALUES ($1,$2,$3,$4)
-     ON CONFLICT (channel_id, role_id) DO UPDATE SET allow_send=$4`,
-    [uuidv4(), chId, roleId, !!allowSend]
+    `INSERT INTO channel_permissions (id, channel_id, role_id, allow_send, allow_view)
+     VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (channel_id, role_id) DO UPDATE SET allow_send=$4, allow_view=$5`,
+    [uuidv4(), chId, roleId, allowSend !== false, allowView !== false]
   );
   res.json({ success: true });
 });
@@ -467,9 +515,14 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   q += ` ORDER BY cm.created_at DESC LIMIT $${params.length+1}`;
   params.push(parseInt(limit));
   const r = await pool.query(q, params);
-  res.json({ messages: r.rows.reverse().map(m => ({
+  const messages = r.rows.reverse();
+  // Collect all mention data for the batch
+  const allContent = messages.map(m => m.content).join(' ');
+  const mentionData = await resolveMentions(allContent, id);
+  res.json({ messages: messages.map(m => ({
     id: m.id, channelId: m.channel_id, fromId: m.from_id,
     content: m.content, createdAt: parseInt(m.created_at),
+    mentions: mentionData,
     author: {
       username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
