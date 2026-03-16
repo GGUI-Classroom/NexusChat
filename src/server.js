@@ -80,7 +80,7 @@ io.on('connection', (socket) => {
     if (!trimmed) return;
     // Single query: check friendship AND get sender info at once
     const check = await pool.query(
-      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime,
+      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration,
         (SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1) as friend_id
        FROM users u WHERE u.id=$1`,
       [userId, toId]
@@ -94,7 +94,8 @@ io.on('connection', (socket) => {
       id: msgId, fromId: userId, toId, content: trimmed, createdAt: now,
       author: {
         username: s.username, displayName: s.display_name,
-        avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null
+        avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null,
+        activeDecoration: s.active_decoration || null
       }
     };
     // Emit to sender immediately (no await before this)
@@ -138,7 +139,7 @@ io.on('connection', (socket) => {
     const check = await pool.query(
       `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color,
         sr.is_admin,
-        u.username, u.display_name, u.avatar_data, u.avatar_mime,
+        u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration,
         ch.id as ch_id, ch.locked,
         (SELECT allow_send FROM channel_permissions cp
          WHERE cp.channel_id=$2 AND (cp.role_id=sm.role_id OR cp.role_id IS NULL)
@@ -173,7 +174,8 @@ io.on('connection', (socket) => {
       author: {
         username: row.username, displayName: row.display_name,
         avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null,
-        roleColor: row.role_color || null, roleName: row.role_name || null
+        roleColor: row.role_color || null, roleName: row.role_name || null,
+        activeDecoration: row.active_decoration || null
       }
     };
     // Emit to sender immediately, then rest of server room
