@@ -38,49 +38,47 @@
     const url = user && user.avatarDataUrl;
     const deco = showDeco && user && user.activeDecoration;
 
-    // Set inner content
+    // Fill the avatar element
     if (url) {
       const img = document.createElement('img');
       img.src = url;
       img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
-      img.onerror = function() {
-        el.textContent = (user.displayName || user.username || '?')[0].toUpperCase();
-      };
+      img.onerror = () => { el.textContent = (user.displayName || user.username || '?')[0].toUpperCase(); };
       el.innerHTML = '';
       el.appendChild(img);
     } else {
       el.textContent = (user && (user.displayName || user.username) || '?')[0].toUpperCase();
     }
 
-    // Wrap with decoration if needed
-    if (deco) {
-      const parent = el.parentElement;
-      if (parent && !parent.classList.contains('avatar-decorated')) {
-        // Wrap the avatar element
-        const wrapper = document.createElement('div');
-        wrapper.className = 'avatar-decorated deco-' + deco;
-        parent.insertBefore(wrapper, el);
-        wrapper.appendChild(el);
-        // Add decoration layers
-        const layer = document.createElement('div');
-        layer.className = 'deco-layer';
-        wrapper.appendChild(layer);
-        if (deco === 'halo_gold') {
-          const outer = document.createElement('div');
-          outer.className = 'deco-layer-outer';
-          wrapper.appendChild(outer);
-        }
-      } else if (parent && parent.classList.contains('avatar-decorated')) {
-        // Update decoration class
-        parent.className = 'avatar-decorated deco-' + deco;
+    if (!deco) {
+      // Clean up any old deco on this element's wrap
+      const oldWrap = el.parentElement;
+      if (oldWrap) {
+        const old = oldWrap.querySelector('.avatar-deco');
+        if (old) old.remove();
+        delete oldWrap.dataset.deco;
       }
-    } else if (el.parentElement && el.parentElement.classList.contains('avatar-decorated')) {
-      // Remove decoration — unwrap
-      const wrapper = el.parentElement;
-      const grandparent = wrapper.parentElement;
-      grandparent.insertBefore(el, wrapper);
-      wrapper.remove();
+      return;
     }
+
+    // Find the wrap — either an existing .avatar-wrap, or the direct parent
+    let wrap = el.parentElement;
+    if (!wrap) return;
+
+    // If parent isn't position:relative capable, make it so
+    if (!wrap.classList.contains('avatar-wrap') && getComputedStyle(wrap).position === 'static') {
+      wrap.style.position = 'relative';
+    }
+
+    // Remove stale deco
+    const existing = wrap.querySelector('.avatar-deco');
+    if (existing) existing.remove();
+
+    // Inject deco as a sibling after the avatar
+    const decoEl = document.createElement('div');
+    decoEl.className = 'avatar-deco deco-' + deco;
+    wrap.appendChild(decoEl);
+    wrap.dataset.deco = deco;
   }
 
   function toast(msg, type = 'info', duration = 3500) {
@@ -1210,7 +1208,7 @@
     const roleTip = author.roleName ? `title="${esc(author.roleName)}"` : '';
 
     el.innerHTML = `
-      <div class="avatar" id="mav-${msg.id}"></div>
+      <div class="avatar-wrap" style="flex-shrink:0;align-self:flex-start;margin-top:2px"><div class="avatar" id="mav-${msg.id}"></div></div>
       <div class="msg-body">
         <div class="msg-header">
           <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>
@@ -1847,10 +1845,9 @@
       return `
         <div class="shop-card ${isOwned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}" id="shopcard-${d.id}">
           <div class="shop-card-preview">
-            <div class="avatar-decorated deco-${d.id}" style="width:64px;height:64px;display:flex;align-items:center;justify-content:center">
-              <div class="avatar" style="width:48px;height:48px;font-size:18px;font-weight:800;background:var(--bg-surface);border:1px solid var(--border-bright);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--accent)">N</div>
-              <div class="deco-layer"></div>
-              ${d.id === 'halo_gold' ? '<div class="deco-layer-outer"></div>' : ''}
+            <div class="avatar-wrap" style="width:48px;height:48px">
+              <div class="avatar" style="width:48px;height:48px;font-size:18px;font-weight:800">N</div>
+              ${d.owned ? '<div class="avatar-deco deco-' + d.id + '"></div>' : ''}
             </div>
           </div>
           <span class="shop-rarity rarity-${d.rarity}">${d.rarity}</span>
