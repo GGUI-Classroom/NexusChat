@@ -34,8 +34,11 @@
   const $ = id => document.getElementById(id);
   const qs = sel => document.querySelector(sel);
 
-  function renderAvatar(el, user) {
+  function renderAvatar(el, user, showDeco = true) {
     const url = user && user.avatarDataUrl;
+    const deco = showDeco && user && user.activeDecoration;
+
+    // Set inner content
     if (url) {
       const img = document.createElement('img');
       img.src = url;
@@ -47,6 +50,36 @@
       el.appendChild(img);
     } else {
       el.textContent = (user && (user.displayName || user.username) || '?')[0].toUpperCase();
+    }
+
+    // Wrap with decoration if needed
+    if (deco) {
+      const parent = el.parentElement;
+      if (parent && !parent.classList.contains('avatar-decorated')) {
+        // Wrap the avatar element
+        const wrapper = document.createElement('div');
+        wrapper.className = 'avatar-decorated deco-' + deco;
+        parent.insertBefore(wrapper, el);
+        wrapper.appendChild(el);
+        // Add decoration layers
+        const layer = document.createElement('div');
+        layer.className = 'deco-layer';
+        wrapper.appendChild(layer);
+        if (deco === 'halo_gold') {
+          const outer = document.createElement('div');
+          outer.className = 'deco-layer-outer';
+          wrapper.appendChild(outer);
+        }
+      } else if (parent && parent.classList.contains('avatar-decorated')) {
+        // Update decoration class
+        parent.className = 'avatar-decorated deco-' + deco;
+      }
+    } else if (el.parentElement && el.parentElement.classList.contains('avatar-decorated')) {
+      // Remove decoration — unwrap
+      const wrapper = el.parentElement;
+      const grandparent = wrapper.parentElement;
+      grandparent.insertBefore(el, wrapper);
+      wrapper.remove();
     }
   }
 
@@ -170,6 +203,8 @@
       loadServers();
       loadServerInvites();
       switchView('friends');
+      // Load shop in background
+      if (activeView === 'shop') loadShop();
     } catch(e) {
       console.error('enterApp crash:', e);
       alert('Login succeeded but app failed to load: ' + e.message);
@@ -827,6 +862,7 @@
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     const el = $('view-' + view);
     if (el) el.classList.add('active');
+    if (view === 'shop') loadShop();
   }
 
   // Rail selection: 'dms' or a server id
@@ -1786,6 +1822,81 @@
     activeDmUserId = null; activeDmUser = null;
     endCallLocal();
     showScreen('auth-screen');
+  });
+
+  // ---- Shop ----
+  let shopData = null;
+
+  async function loadShop() {
+    const r = await api('GET', '/api/shop');
+    if (r.error) return;
+    shopData = r;
+    renderShop(r.decorations, r.active);
+  }
+
+  function renderShop(decorations, active) {
+    const grid = $('shop-grid');
+    if (!grid) return;
+    grid.innerHTML = decorations.map(d => {
+      const isEquipped = active === d.id;
+      const isOwned = d.owned;
+      let btnClass = 'locked', btnText = '🔒 Locked';
+      if (isEquipped) { btnClass = 'unequip'; btnText = '✓ Equipped'; }
+      else if (isOwned) { btnClass = 'equip'; btnText = 'Equip'; }
+
+      return `
+        <div class="shop-card ${isOwned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}" id="shopcard-${d.id}">
+          <div class="shop-card-preview">
+            <div class="avatar-decorated deco-${d.id}" style="width:64px;height:64px;display:flex;align-items:center;justify-content:center">
+              <div class="avatar" style="width:48px;height:48px;font-size:18px;font-weight:800;background:var(--bg-surface);border:1px solid var(--border-bright);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--accent)">N</div>
+              <div class="deco-layer"></div>
+              ${d.id === 'halo_gold' ? '<div class="deco-layer-outer"></div>' : ''}
+            </div>
+          </div>
+          <span class="shop-rarity rarity-${d.rarity}">${d.rarity}</span>
+          <div class="shop-card-name">${esc(d.name)}</div>
+          <div class="shop-card-desc">${esc(d.description)}</div>
+          <button class="shop-card-btn ${btnClass}" onclick="shopAction('${d.id}','${isEquipped ? 'unequip' : isOwned ? 'equip' : 'locked'}')">
+            ${btnText}
+          </button>
+        </div>`;
+    }).join('');
+  }
+
+  window.shopAction = async function(decoId, action) {
+    if (action === 'locked') {
+      toast('Redeem a code to unlock this decoration!', 'info');
+      return;
+    }
+    const equipId = action === 'equip' ? decoId : null;
+    const r = await api('POST', '/api/shop/equip', { decorationId: equipId });
+    if (r.error) return toast(r.error, 'error');
+    currentUser.activeDecoration = equipId;
+    updateSelfCard();
+    if (shopData) {
+      shopData.active = equipId;
+      renderShop(shopData.decorations, equipId);
+    }
+    toast(action === 'equip' ? 'Decoration equipped! ✨' : 'Decoration removed', 'success');
+  };
+
+  $('shop-redeem-btn').addEventListener('click', async () => {
+    const code = $('shop-code-input').value.trim().toUpperCase();
+    if (!code) return showError('shop-error', 'Enter a code');
+    showError('shop-error', '');
+    const btn = $('shop-redeem-btn');
+    btn.disabled = true; btn.textContent = 'Redeeming…';
+    const r = await api('POST', '/api/shop/redeem', { code });
+    btn.disabled = false; btn.textContent = 'Redeem';
+    if (r.error) return showError('shop-error', r.error);
+    $('shop-code-input').value = '';
+    toast('🎉 Unlocked: ' + r.decoration.name + '!', 'success', 5000);
+    // Refresh shop
+    await loadShop();
+  });
+
+  $('shop-code-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') $('shop-redeem-btn').click();
   });
 
   // ---- Profile Popup ----
