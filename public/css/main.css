@@ -1934,3 +1934,9 @@ html, body {
 }
 .msg-delete-btn:hover { color: var(--red); background: rgba(240,84,84,0.15); }
 .message:hover .msg-delete-btn { opacity: 1; }
+
+.profile-divider {
+  height: 1px;
+  background: var(--border-bright);
+  margin: 20px 0 16px;
+}
