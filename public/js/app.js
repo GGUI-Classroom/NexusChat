@@ -2228,6 +2228,21 @@
     grid.innerHTML = decorations.map(d => {
       const isEquipped = active === d.id;
       const isOwned = d.owned;
+      const isMythical = d.rarity === 'mythical';
+
+      // Mythical unowned = mystery card
+      if (isMythical && !isOwned) {
+        return `
+          <div class="shop-card mystery" id="shopcard-${d.id}">
+            <div class="mystery-preview">
+              <div class="mystery-silhouette">✦</div>
+            </div>
+            <span class="shop-rarity rarity-mythical">MYTHICAL</span>
+            <div class="shop-card-name mystery-name">? ? ?</div>
+            <div class="mystery-hint">Redeem an exclusive code<br>to reveal this decoration</div>
+          </div>`;
+      }
+
       let btnClass = 'locked', btnText = '🔒 Locked';
       if (isEquipped) { btnClass = 'unequip'; btnText = '✓ Equipped'; }
       else if (isOwned) { btnClass = 'equip'; btnText = 'Equip'; }
@@ -2284,14 +2299,163 @@
     btn.disabled = false; btn.textContent = 'Redeem';
     if (r.error) return showError('shop-error', r.error);
     $('shop-code-input').value = '';
-    toast('🎉 Unlocked: ' + r.decoration.name + '!', 'success', 5000);
-    // Refresh shop
+    if (r.decoration.rarity === 'mythical') {
+      // Show dramatic claim animation first, then refresh shop
+      await showClaimAnimation(r.decoration);
+    } else {
+      toast('🎉 Unlocked: ' + r.decoration.name + '!', 'success', 5000);
+    }
     await loadShop();
   });
 
   $('shop-code-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') $('shop-redeem-btn').click();
   });
+
+  // ---- Mythical Claim Animation ----
+  function showClaimAnimation(decoration) {
+    return new Promise(resolve => {
+      const overlay = $('claim-overlay');
+      const canvas = $('claim-canvas');
+      const ctx = canvas.getContext('2d');
+      const wrap = $('claim-avatar-wrap');
+
+      // Set canvas size
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      // Set text
+      $('claim-name').textContent = decoration.name;
+      $('claim-desc').textContent = decoration.description;
+      $('claim-stamp').style.opacity = '0';
+      $('claim-dismiss').style.opacity = '0';
+
+      // Apply decoration to preview avatar
+      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
+      const decoEl = document.createElement('div');
+      decoEl.className = 'avatar-deco deco-' + decoration.id;
+      wrap.appendChild(decoEl);
+      if (decoration.id === 'nexus_admin') {
+        const crown = document.createElement('span');
+        crown.className = 'admin-crown';
+        crown.textContent = '\u{1F451}';
+        wrap.appendChild(crown);
+      }
+      if (decoration.id === 'storm') {
+        setTimeout(() => startStormCanvas(wrap), 100);
+      }
+
+      // Particle system
+      const particles = [];
+      function spawnParticles() {
+        const cx = canvas.width / 2, cy = canvas.height / 2;
+        for (let i = 0; i < 6; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 2 + Math.random() * 5;
+          const isStar = Math.random() < 0.3;
+          particles.push({
+            x: cx + (Math.random()-0.5)*100,
+            y: cy + (Math.random()-0.5)*100,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 1,
+            life: 1,
+            decay: 0.008 + Math.random() * 0.015,
+            size: isStar ? 3 + Math.random()*4 : 1.5 + Math.random()*2.5,
+            color: Math.random() < 0.6
+              ? `hsl(${45+Math.random()*20},100%,${60+Math.random()*30}%)`  // gold
+              : `hsl(${270+Math.random()*40},100%,${60+Math.random()*30}%)`, // purple
+            star: isStar
+          });
+        }
+      }
+
+      let spawnInterval = setInterval(spawnParticles, 40);
+      let animId;
+      let startTime = null;
+
+      function drawFrame(ts) {
+        if (!startTime) startTime = ts;
+        const elapsed = (ts - startTime) / 1000;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Background radial glow
+        const glowAlpha = Math.min(elapsed / 0.5, 1) * 0.4;
+        const grd = ctx.createRadialGradient(
+          canvas.width/2, canvas.height/2, 0,
+          canvas.width/2, canvas.height/2, 300
+        );
+        grd.addColorStop(0, `rgba(255,200,50,${glowAlpha * 0.3})`);
+        grd.addColorStop(0.4, `rgba(180,80,255,${glowAlpha * 0.2})`);
+        grd.addColorStop(1, 'transparent');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Update and draw particles
+        for (let i = particles.length-1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.05; // gravity
+          p.life -= p.decay;
+          if (p.life <= 0) { particles.splice(i,1); continue; }
+
+          ctx.save();
+          ctx.globalAlpha = p.life;
+          if (p.star) {
+            // Draw a 4-point star
+            ctx.fillStyle = p.color;
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = 8;
+            ctx.translate(p.x, p.y);
+            ctx.beginPath();
+            for (let j = 0; j < 8; j++) {
+              const r = j % 2 === 0 ? p.size : p.size * 0.4;
+              const a = (j * Math.PI) / 4;
+              j === 0 ? ctx.moveTo(Math.cos(a)*r, Math.sin(a)*r) : ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+            }
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            ctx.fillStyle = p.color;
+            ctx.shadowColor = p.color;
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI*2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+
+        // Slow down spawning after 2s
+        if (elapsed > 2 && spawnInterval) {
+          clearInterval(spawnInterval);
+          spawnInterval = null;
+          spawnInterval = setInterval(spawnParticles, 200);
+        }
+
+        animId = requestAnimationFrame(drawFrame);
+      }
+
+      animId = requestAnimationFrame(drawFrame);
+      overlay.style.display = 'flex';
+
+      // Dismiss handler
+      function dismiss() {
+        overlay.removeEventListener('click', dismiss);
+        clearInterval(spawnInterval);
+        cancelAnimationFrame(animId);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        overlay.style.display = 'none';
+        if (decoration.id === 'storm') stopStormCanvas(wrap);
+        wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
+        resolve();
+      }
+
+      // Allow dismiss after 2.5s
+      setTimeout(() => overlay.addEventListener('click', dismiss), 2500);
+    });
+  }
 
   // ---- Profile Popup ----
   window.showProfilePopup = async function(e, encodedData) {
