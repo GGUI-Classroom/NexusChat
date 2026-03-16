@@ -318,6 +318,7 @@ html, body {
   border-radius: 50%;
   border: 2px solid var(--bg-surface);
   background: var(--text-muted);
+  z-index: 10;
 }
 .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
 
