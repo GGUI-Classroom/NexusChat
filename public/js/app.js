@@ -349,7 +349,7 @@
            data-channel-id="${c.id}"
            data-channel-name="${esc(c.name)}"
            data-channel-locked="${c.locked ? '1' : '0'}">
-        <span class="ch-hash">${c.locked ? '🔒' : '#'}</span>
+        <span class="ch-hash">${c.locked ? '🔒' : c.private ? '👁' : '#'}</span>
         <span class="ch-name">${esc(c.name)}</span>
         ${isAdmin ? `
           <button class="ch-perms" data-ch-id="${c.id}" data-ch-name="${esc(c.name)}" title="Permissions">
@@ -573,6 +573,114 @@
     clearTimeout(channelTypingTimer);
     channelTypingTimer = setTimeout(stopChannelTyping, 2000);
   }
+
+  // ---- Mention Autocomplete ----
+  let mentionQuery = null;
+  let mentionStart = -1;
+  let selectedMentionIdx = 0;
+  let mentionItems = [];
+
+  $('channel-message-input').addEventListener('input', function() {
+    checkMentionTrigger(this);
+  });
+
+  $('channel-message-input').addEventListener('keydown', function(e) {
+    const ac = $('channel-mention-autocomplete');
+    if (ac.style.display !== 'none') {
+      if (e.key === 'ArrowDown') { e.preventDefault(); selectedMentionIdx = Math.min(selectedMentionIdx+1, mentionItems.length-1); renderMentionList(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); selectedMentionIdx = Math.max(selectedMentionIdx-1, 0); renderMentionList(); }
+      else if (e.key === 'Enter' || e.key === 'Tab') {
+        if (mentionItems.length) { e.preventDefault(); insertMention(mentionItems[selectedMentionIdx]); }
+      }
+      else if (e.key === 'Escape') { closeMentionAC(); }
+    }
+  });
+
+  function checkMentionTrigger(textarea) {
+    const val = textarea.value;
+    const pos = textarea.selectionStart;
+    // Find the last @ before cursor
+    const before = val.slice(0, pos);
+    const atIdx = before.lastIndexOf('@');
+    if (atIdx === -1) { closeMentionAC(); return; }
+    // Only trigger if @ is at start or preceded by space
+    const charBefore = before[atIdx-1];
+    if (charBefore && charBefore !== ' ' && charBefore !== '\n') { closeMentionAC(); return; }
+    const query = before.slice(atIdx+1);
+    if (query.includes(' ')) { closeMentionAC(); return; }
+    mentionStart = atIdx;
+    mentionQuery = query.toLowerCase();
+    buildMentionItems();
+  }
+
+  function buildMentionItems() {
+    if (!activeServerData) return;
+    const q = mentionQuery;
+    const roles = (activeServerData.roles || []).filter(r => r.name.toLowerCase().startsWith(q));
+    const members = (activeServerData.members || []).filter(m =>
+      m.displayName.toLowerCase().includes(q) || m.username.toLowerCase().includes(q)
+    ).slice(0, 8);
+
+    mentionItems = [
+      ...roles.map(r => ({ type: 'role', id: r.id, name: r.name, color: r.color })),
+      ...members.map(m => ({ type: 'user', id: m.id, name: m.displayName, username: m.username, avatarDataUrl: m.avatarDataUrl }))
+    ];
+
+    if (!mentionItems.length) { closeMentionAC(); return; }
+    selectedMentionIdx = 0;
+    renderMentionList();
+    $('channel-mention-autocomplete').style.display = 'block';
+  }
+
+  function renderMentionList() {
+    const ac = $('channel-mention-autocomplete');
+    ac.innerHTML = mentionItems.map((item, i) => {
+      if (item.type === 'role') {
+        return `<div class="mention-item ${i===selectedMentionIdx?'selected':''}" onclick="insertMention(mentionItems[${i}])">
+          <div class="mention-item-icon mention-item-role-icon" style="background:${item.color}22;color:${item.color}">@</div>
+          <div><div class="mention-item-name" style="color:${item.color}">${esc(item.name)}</div><div class="mention-item-sub">Role</div></div>
+        </div>`;
+      } else {
+        return `<div class="mention-item ${i===selectedMentionIdx?'selected':''}" onclick="insertMention(mentionItems[${i}])">
+          <div class="mention-item-icon" id="miac-${item.id}" style="background:var(--bg-hover)">
+            ${item.avatarDataUrl ? `<img src="${item.avatarDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : esc((item.name||'?')[0].toUpperCase())}
+          </div>
+          <div><div class="mention-item-name">${esc(item.name)}</div><div class="mention-item-sub">@${esc(item.username||'')}</div></div>
+        </div>`;
+      }
+    }).join('');
+  }
+
+  window.insertMention = function(item) {
+    const ta = $('channel-message-input');
+    const val = ta.value;
+    const token = item.type === 'role'
+      ? `<@role:${item.id}>`
+      : `<@user:${item.id}>`;
+    // Replace @query with token
+    const before = val.slice(0, mentionStart);
+    const after = val.slice(ta.selectionStart);
+    ta.value = before + token + ' ' + after;
+    // Move cursor after token
+    const newPos = before.length + token.length + 1;
+    ta.setSelectionRange(newPos, newPos);
+    ta.focus();
+    closeMentionAC();
+  };
+
+  function closeMentionAC() {
+    $('channel-mention-autocomplete').style.display = 'none';
+    mentionQuery = null;
+    mentionStart = -1;
+    mentionItems = [];
+  }
+
+  // Close autocomplete on outside click
+  document.addEventListener('click', e => {
+    if (!$('channel-mention-autocomplete').contains(e.target) && e.target !== $('channel-message-input')) {
+      closeMentionAC();
+    }
+  });
 
   function stopChannelTyping() {
     if (isChannelTyping && activeChannelId && socket) { isChannelTyping = false; socket.emit('channel_typing_stop', { serverId: activeServerId, channelId: activeChannelId }); }
@@ -1194,7 +1302,15 @@
     const prevTs = prevEl ? parseInt(prevEl.dataset.ts) : 0;
     const prevFrom = prevEl ? prevEl.dataset.from : '';
     const grouped = prevFrom === msg.fromId && (msg.createdAt - prevTs) < 300;
-    el.className = `message${grouped ? ' grouped' : ''}`;
+    const isMentioned = msg.content && currentUser && (
+      msg.content.includes('<@user:' + currentUser.id + '>') ||
+      (msg.mentions && activeServerData && msg.content.match(/<@role:[a-f0-9-]+>/) &&
+       activeServerData.members && (() => {
+         const me = activeServerData.members.find(m => m.id === currentUser.id);
+         return me && msg.content.includes('<@role:' + (me.roleId || '') + '>');
+       })())
+    );
+    el.className = `message${grouped ? ' grouped' : ''}${isMentioned ? ' mentioned-me' : ''}`;
     el.dataset.ts = msg.createdAt;
     el.dataset.from = msg.fromId;
     el.dataset.id = msg.id;
@@ -1216,7 +1332,7 @@
           <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>
           <span class="msg-time">${formatTime(msg.createdAt)}</span>
         </div>
-        <div class="msg-content">${esc(msg.content)}</div>
+        <div class="msg-content">${renderContent(msg.content, msg.mentions)}</div>
       </div>
     `;
     setTimeout(() => {
@@ -1430,6 +1546,11 @@
       // The ontrack handler deals with showing the video; this is just for notification
       const peer = callState && callState.peerUser;
       toast((peer ? peer.displayName : 'Peer') + ' started screen sharing', 'info');
+    });
+
+    socket.on('mentioned', ({ type, serverId: sid, channelId: cid, fromUser, preview }) => {
+      const serverName = servers.find(s => s.id === sid)?.name || 'a server';
+      toast(`@mention from ${fromUser.displayName} in ${serverName}: ${preview}`, 'info', 6000);
     });
 
     socket.on('screenshare_stopped', () => {
@@ -1961,25 +2082,35 @@
     if (r.error) return toast(r.error, 'error');
 
     $('channel-locked-toggle').checked = !!r.locked;
-    $('perms-roles-section').style.display = r.locked ? 'block' : 'none';
+    $('channel-private-toggle').checked = !!r.private;
+    $('perms-roles-section').style.display = (r.locked || r.private) ? 'block' : 'none';
 
-    // Build role permission rows
     const roles = (activeServerData && activeServerData.roles) || [];
+    // permMap: { roleId: { allowSend, allowView } }
     const permMap = {};
-    (r.permissions || []).forEach(p => { permMap[p.roleId] = p.allowSend; });
+    (r.permissions || []).forEach(p => { permMap[p.roleId] = { allowSend: p.allowSend, allowView: p.allowView }; });
 
     $('perms-roles-list').innerHTML = roles.map(role => {
-      const hasAllow = permMap[role.id] === true;
-      const hasDeny = permMap[role.id] === false;
+      const p = permMap[role.id] || {};
+      const sendAllow = p.allowSend === true;
+      const sendDeny = p.allowSend === false;
+      const viewAllow = p.allowView === true;
+      const viewDeny = p.allowView === false;
       return `
-        <div class="perm-role-row">
-          <div class="perm-role-dot" style="background:${role.color}"></div>
-          <span class="perm-role-name" style="color:${role.color}">${esc(role.name)}</span>
-          <button class="perm-allow-btn ${hasAllow ? 'active' : ''}"
-            onclick="setChannelPerm('${role.id}', true, this)">Allow</button>
-          <button class="perm-deny-btn ${hasDeny ? 'active' : ''}"
-            onclick="setChannelPerm('${role.id}', false, this)">Deny</button>
-          ${permMap[role.id] !== undefined ? `<button class="action-btn ghost" style="font-size:11px;padding:4px 8px" onclick="removeChannelPerm('${role.id}', this)">Reset</button>` : ''}
+        <div class="perm-role-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;width:100%">
+            <div class="perm-role-dot" style="background:${role.color}"></div>
+            <span class="perm-role-name" style="color:${role.color}">${esc(role.name)}</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-left:20px">
+            <span style="font-size:11px;color:var(--text-muted);min-width:40px">Send:</span>
+            <button class="perm-allow-btn ${sendAllow?'active':''}" onclick="setChannelPerm('${role.id}',{allowSend:true},this)">✓</button>
+            <button class="perm-deny-btn ${sendDeny?'active':''}" onclick="setChannelPerm('${role.id}',{allowSend:false},this)">✗</button>
+            <span style="font-size:11px;color:var(--text-muted);min-width:40px;margin-left:8px">View:</span>
+            <button class="perm-allow-btn ${viewAllow?'active':''}" onclick="setChannelPerm('${role.id}',{allowView:true},this)">✓</button>
+            <button class="perm-deny-btn ${viewDeny?'active':''}" onclick="setChannelPerm('${role.id}',{allowView:false},this)">✗</button>
+            ${Object.keys(p).length ? `<button class="action-btn ghost" style="font-size:11px;padding:3px 7px;margin-left:4px" onclick="removeChannelPerm('${role.id}',this)">Reset</button>` : ''}
+          </div>
         </div>`;
     }).join('') || '<p style="font-size:13px;color:var(--text-muted)">No roles defined yet. Create roles in Server Settings first.</p>';
 
@@ -1991,7 +2122,6 @@
     const r = await api('PATCH', `/api/servers/${activeServerId}/channels/${permsChannelId}/lock`, { locked: this.checked });
     if (r.error) { this.checked = !this.checked; return toast(r.error, 'error'); }
     $('perms-roles-section').style.display = this.checked ? 'block' : 'none';
-    // Update local channel data
     if (activeServerData) {
       const ch = activeServerData.channels.find(c => c.id === permsChannelId);
       if (ch) ch.locked = this.checked;
@@ -2001,11 +2131,24 @@
     toast(this.checked ? 'Channel locked' : 'Channel unlocked', 'success');
   });
 
-  window.setChannelPerm = async function(roleId, allowSend, btn) {
+  $('channel-private-toggle').addEventListener('change', async function() {
     if (!permsChannelId) return;
-    const r = await api('PUT', `/api/servers/${activeServerId}/channels/${permsChannelId}/permissions/${roleId}`, { allowSend });
+    const r = await api('PATCH', `/api/servers/${activeServerId}/channels/${permsChannelId}/private`, { private: this.checked });
+    if (r.error) { this.checked = !this.checked; return toast(r.error, 'error'); }
+    $('perms-roles-section').style.display = (this.checked || $('channel-locked-toggle').checked) ? 'block' : 'none';
+    if (activeServerData) {
+      const ch = activeServerData.channels.find(c => c.id === permsChannelId);
+      if (ch) ch.private = this.checked;
+      const me = activeServerData.members.find(m => m.id === currentUser.id);
+      renderChannelList(activeServerData.channels, me && (me.role === 'admin' || me.isAdmin));
+    }
+    toast(this.checked ? 'Channel set to private' : 'Channel set to public', 'success');
+  });
+
+  window.setChannelPerm = async function(roleId, permObj, btn) {
+    if (!permsChannelId) return;
+    const r = await api('PUT', `/api/servers/${activeServerId}/channels/${permsChannelId}/permissions/${roleId}`, permObj);
     if (r.error) return toast(r.error, 'error');
-    // Refresh the modal
     const ch = activeServerData && activeServerData.channels.find(c => c.id === permsChannelId);
     if (ch) openChannelPerms({ stopPropagation: ()=>{} }, permsChannelId, ch.name);
     toast('Permission updated', 'success');
@@ -2030,6 +2173,31 @@
   function esc(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ---- Render message content with mentions ----
+  function renderContent(rawContent, mentions) {
+    // First escape HTML
+    let html = esc(rawContent);
+    if (!mentions) return html;
+
+    // Replace <@user:ID> tokens
+    html = html.replace(/&lt;@user:([a-f0-9-]+)&gt;/g, (match, id) => {
+      const u = mentions.users && mentions.users[id];
+      const name = u ? u.displayName : 'Unknown';
+      const isSelf = id === currentUser.id;
+      return `<span class="mention-user${isSelf ? ' mention-self' : ''}" data-user-id="${id}">@${esc(name)}</span>`;
+    });
+
+    // Replace <@role:ID> tokens
+    html = html.replace(/&lt;@role:([a-f0-9-]+)&gt;/g, (match, id) => {
+      const r = mentions.roles && mentions.roles[id];
+      const name = r ? r.name : 'Unknown Role';
+      const color = r ? r.color : 'var(--accent)';
+      return `<span class="mention-role" style="color:${color}" data-role-id="${id}">@${esc(name)}</span>`;
+    });
+
+    return html;
   }
 
   // ---- Start ----
