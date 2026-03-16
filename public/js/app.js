@@ -2308,6 +2308,18 @@
     await loadShop();
   });
 
+  window.unclaimDeco = async function(decoId, name) {
+    if (!confirm('Remove "' + name + '" from your collection? You will need the code to reclaim it.')) return;
+    const r = await api('DELETE', '/api/shop/unclaim/' + decoId);
+    if (r.error) return toast(r.error, 'error');
+    if (currentUser.activeDecoration === decoId) {
+      currentUser.activeDecoration = null;
+      updateSelfCard();
+    }
+    toast('Removed "' + name + '" from your collection', 'info');
+    await loadShop();
+  };
+
   $('shop-code-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') $('shop-redeem-btn').click();
   });
