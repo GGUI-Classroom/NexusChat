@@ -1611,12 +1611,8 @@ html, body {
 
 .avatar-deco {
   position: absolute;
-  /* Center over the avatar */
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  /* Slightly larger than the avatar to show the ring outside */
-  width: calc(100% + 14px);
-  height: calc(100% + 14px);
+  /* Extend 7px beyond the avatar on all sides */
+  inset: -7px;
   border-radius: 50%;
   pointer-events: none;
   z-index: 3;
@@ -1821,14 +1817,18 @@ html, body {
   width: 64px; height: 64px;
   position: relative;
   display: flex; align-items: center; justify-content: center;
+  overflow: visible;
 }
 /* Shop preview uses avatar-wrap structure too */
 .shop-card-preview .avatar-wrap {
   width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: visible;
 }
 .shop-card-preview .avatar {
-  width: 48px; height: 48px;
-  font-size: 18px;
+  width: 48px !important; height: 48px !important;
+  font-size: 18px !important;
+  flex-shrink: 0;
 }
 .shop-card-name { font-size: 13px; font-weight: 700; text-align: center; }
 .shop-card-desc { font-size: 11px; color: var(--text-muted); text-align: center; line-height: 1.4; }
