@@ -246,6 +246,11 @@ io.on('connection', (socket) => {
     socket.to(`server:${serverId}`).emit('channel_user_stop_typing', { channelId, userId });
   });
 
+  socket.on('channel_message_deleted', ({ serverId, channelId, messageId }) => {
+    // Broadcast deletion to all server members
+    io.to(`server:${serverId}`).emit('channel_message_deleted', { channelId, messageId });
+  });
+
   socket.on('call_invite', async ({ toId }) => {
     if (userInCall.has(toId)) { socket.emit('call_busy', { userId: toId }); return; }
     const roomId = uuidv4();
