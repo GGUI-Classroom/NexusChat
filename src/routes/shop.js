@@ -23,11 +23,25 @@ const DECORATIONS = [
     preview: 'orbit_white'
   },
   {
+    id: 'halo_gold',
+    name: 'Golden Halo',
+    description: 'A golden halo floating above',
+    rarity: 'rare',
+    preview: 'halo_gold'
+  },
+  {
     id: 'neon_pink',
     name: 'Neon Pink',
     description: 'A flickering neon pink border',
     rarity: 'epic',
     preview: 'neon_pink'
+  },
+  {
+    id: 'galaxy',
+    name: 'Galaxy Ring',
+    description: 'A rotating galaxy gradient around your avatar',
+    rarity: 'legendary',
+    preview: 'galaxy'
   },
   {
     id: 'glow_green',
@@ -63,6 +77,20 @@ const DECORATIONS = [
     description: 'An icy frost aura',
     rarity: 'epic',
     preview: 'frost'
+  },
+  {
+    id: 'nexus_admin',
+    name: 'Nexus Admin',
+    description: 'A red power surge that consumes your avatar. For those who run the grid.',
+    rarity: 'legendary',
+    preview: 'nexus_admin'
+  },
+  {
+    id: 'storm',
+    name: 'Storm',
+    description: 'Electric sparks orbit you, then a lightning bolt tears through every 5 seconds.',
+    rarity: 'legendary',
+    preview: 'storm'
   }
 ];
 
@@ -78,7 +106,9 @@ function getCodeMap() {
     [process.env.DECO_CODE_RAINBOW   || 'RAINBOW']:         'rainbow',
     [process.env.DECO_CODE_FROSTBITE || 'FROSTBITE']:       'frost',
     [process.env.DECO_CODE_GOLDRING  || 'GOLDRING']:        'orbit_gold',
-    [process.env.DECO_CODE_BLUEGLOW  || 'BLUEGLOW']:        'glow_blue',
+    [process.env.DECO_CODE_BLUEGLOW      || 'BLUEGLOW']:      'glow_blue',
+    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSADMIN']:    'nexus_admin',
+    [process.env.DECO_CODE_STORMBRINGER  || 'STORMBRINGER']:  'storm',
   };
 }
 
