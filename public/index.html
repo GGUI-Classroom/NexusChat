@@ -227,7 +227,11 @@
               </div>
             </div>
             <div class="messages-wrap" id="channel-messages-wrap"><div id="channel-messages-list" class="messages-list"></div><div class="typing-indicator" id="channel-typing-indicator" style="display:none"><span id="channel-typing-name">Someone</span> is typing<span class="typing-dots"><span></span><span></span><span></span></span></div></div>
-            <div class="message-input-wrap"><textarea id="channel-message-input" placeholder="Message #general…" rows="1" maxlength="4000"></textarea><button class="send-btn" id="channel-send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div>
+            <div class="message-input-wrap" style="position:relative">
+              <div class="mention-autocomplete" id="channel-mention-autocomplete" style="display:none"></div>
+              <textarea id="channel-message-input" placeholder="Message #general…" rows="1" maxlength="4000"></textarea>
+              <button class="send-btn" id="channel-send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+            </div>
           </div>
         </div>
 
@@ -235,7 +239,7 @@
         <div class="view" id="view-shop">
           <div class="view-header" style="padding:20px 20px 0">
             <h1>🛍 Decoration Shop</h1>
-            <h3>Claim decorations in the G.GUI server (8PTDLSDK)</h3>
+            <h3>Get codes in the G.GUI server (8PTDLSDK)</h3>
           </div>
           <div class="shop-redeem-area">
             <div class="field-group">
@@ -365,7 +369,7 @@
         <button class="modal-close" id="channel-perms-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="modal-body">
-        <div class="field-group" style="margin-bottom:16px">
+        <div class="field-group" style="margin-bottom:10px">
           <label>Channel Mode</label>
           <div class="lock-toggle">
             <label class="toggle-row">
@@ -373,6 +377,17 @@
               <span class="toggle-label">
                 <span class="toggle-title">Locked channel</span>
                 <span class="toggle-hint">Only roles with explicit permission can send messages</span>
+              </span>
+            </label>
+          </div>
+        </div>
+        <div class="field-group" style="margin-bottom:16px">
+          <div class="lock-toggle">
+            <label class="toggle-row">
+              <input type="checkbox" id="channel-private-toggle" />
+              <span class="toggle-label">
+                <span class="toggle-title">Private channel</span>
+                <span class="toggle-hint">Only roles with view permission can see this channel</span>
               </span>
             </label>
           </div>
