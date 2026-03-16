@@ -184,6 +184,39 @@
     renderAvatar(el, currentUser);
   }
 
+  // ---- Mobile sidebar ----
+  function isMobile() { return window.innerWidth <= 680; }
+
+  function openMobileSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const backdrop = $('sidebar-backdrop');
+    if (sidebar) sidebar.classList.add('open');
+    if (backdrop) backdrop.classList.add('active');
+  }
+
+  function closeMobileSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const backdrop = $('sidebar-backdrop');
+    if (sidebar) sidebar.classList.remove('open');
+    if (backdrop) backdrop.classList.remove('active');
+  }
+
+  $('mobile-menu-btn').addEventListener('click', () => {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar && sidebar.classList.contains('open')) {
+      closeMobileSidebar();
+    } else {
+      openMobileSidebar();
+    }
+  });
+
+  $('sidebar-backdrop').addEventListener('click', closeMobileSidebar);
+
+  function setMobileTitle(title) {
+    const el = $('mobile-topbar-title');
+    if (el) el.textContent = title;
+  }
+
   // ---- Navigation ----
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -402,6 +435,8 @@
     });
     $('channel-name-header').textContent = channel.name;
     $('channel-message-input').placeholder = 'Message #' + channel.name + '…';
+    setMobileTitle('#' + channel.name);
+    if (isMobile()) closeMobileSidebar();
     $('channel-placeholder').style.display = 'none';
     $('channel-container').style.display = 'flex';
     loadChannelMessages(channel.id);
@@ -798,12 +833,13 @@
   window.railSelect = function(id) {
     document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
     if (id === 'dms') {
-      $('rail-dms').classList.add('active');
+      $('rail-dms') && $('rail-dms').classList.add('active');
       $('sidebar-dms').style.display = 'flex';
       $('sidebar-server').style.display = 'none';
       activeServerId = null;
       activeChannelId = null;
       switchView('friends');
+      setMobileTitle('Nexus');
     } else {
       const btn = document.querySelector(`.rail-btn[data-server-id="${id}"]`);
       if (btn) btn.classList.add('active');
@@ -812,6 +848,7 @@
       loadServerSidebar(id);
       switchView('channel');
     }
+    if (isMobile()) closeMobileSidebar();
   };
 
   // ---- Friends Tab ----
@@ -1046,6 +1083,8 @@
     const statusDot = $('chat-peer-status');
     statusDot.className = `status-dot ${user.status === 'online' ? 'online' : ''}`;
 
+    setMobileTitle(user.displayName);
+    if (isMobile()) closeMobileSidebar();
     // Reset pagination lock and load messages
     dmLoadingOlder = false;
     await loadMessages(user.id);
