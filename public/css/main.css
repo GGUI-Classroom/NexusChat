@@ -1924,11 +1924,13 @@ html, body {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 2px 5px;
   border-radius: 3px;
-  margin-left: 6px;
   transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
   vertical-align: middle;
+  margin-top: 2px;
 }
 .msg-delete-btn:hover { color: var(--red); background: rgba(240,84,84,0.15); }
 .message:hover .msg-delete-btn { opacity: 1; }
