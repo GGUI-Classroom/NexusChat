@@ -59,6 +59,9 @@
         const old = oldWrap.querySelector('.avatar-deco');
         if (old) old.remove();
         delete oldWrap.dataset.deco;
+        stopStormCanvas(oldWrap);
+        const oldCrown = oldWrap.querySelector('.admin-crown');
+        if (oldCrown) oldCrown.remove();
       }
       return;
     }
@@ -82,17 +85,229 @@
     wrap.appendChild(decoEl);
     wrap.dataset.deco = deco;
 
-    // Admin deco gets a floating crown
+    // Admin deco: floating crown
     if (deco === 'nexus_admin' && !wrap.querySelector('.admin-crown')) {
       const crown = document.createElement('span');
       crown.className = 'admin-crown';
       crown.textContent = '\u{1F451}';
       wrap.appendChild(crown);
     }
-    // Remove crown if switching away from admin deco
     if (deco !== 'nexus_admin') {
       const oldCrown = wrap.querySelector('.admin-crown');
       if (oldCrown) oldCrown.remove();
+    }
+
+    // Storm deco: start canvas engine
+    if (deco === 'storm') {
+      // Small delay so the avatar has rendered and has a size
+      setTimeout(() => startStormCanvas(wrap), 50);
+    } else {
+      stopStormCanvas(wrap);
+    }
+  }
+
+  // ---- Storm Canvas Engine ----
+  // Map of wrap element -> { canvas, ctx, animId, phase, t, sparks }
+  const stormCanvases = new WeakMap();
+
+  function startStormCanvas(wrap) {
+    if (stormCanvases.has(wrap)) return; // already running
+    const avatarEl = wrap.querySelector('.avatar');
+    const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
+    const canvasSize = size + 40; // extra space for sparks outside ring
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'storm-canvas';
+    canvas.width = canvasSize;
+    canvas.height = canvasSize;
+    canvas.style.width = canvasSize + 'px';
+    canvas.style.height = canvasSize + 'px';
+    wrap.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+    const cx = canvasSize / 2;
+    const cy = canvasSize / 2;
+    const r = size / 2 + 3; // ring radius just outside avatar
+
+    // Spark particles
+    const sparks = [];
+    function spawnSpark(fromRing) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = fromRing ? (0.5 + Math.random() * 1.5) : (1 + Math.random() * 3);
+      const ox = cx + Math.cos(angle) * r;
+      const oy = cy + Math.sin(angle) * r;
+      sparks.push({
+        x: ox, y: oy,
+        vx: Math.cos(angle) * speed * (0.5 + Math.random()),
+        vy: Math.sin(angle) * speed * (0.5 + Math.random()),
+        life: 1, decay: 0.03 + Math.random() * 0.05,
+        size: 0.8 + Math.random() * 1.4,
+        bright: fromRing
+      });
+    }
+
+    // Lightning bolt path generator — jagged polyline from top to bottom
+    function makeLightning(x1, y1, x2, y2, roughness, depth) {
+      if (depth === 0) return [[x1,y1],[x2,y2]];
+      const mx = (x1+x2)/2 + (Math.random()-0.5)*roughness;
+      const my = (y1+y2)/2 + (Math.random()-0.5)*roughness;
+      const a = makeLightning(x1,y1,mx,my, roughness*0.6, depth-1);
+      const b = makeLightning(mx,my,x2,y2, roughness*0.6, depth-1);
+      return [...a, ...b];
+    }
+
+    let phase = 0; // 0=sparks, 1=intensify, 2=strike, 3=afterglow
+    let phaseT = 0;
+    let ringAngle = 0;
+    let ringAngle2 = 0;
+    let lightningPath = null;
+    let lightningAlpha = 0;
+    let flashAlpha = 0;
+    let lastTime = null;
+    let animId;
+
+    function draw(ts) {
+      if (!lastTime) lastTime = ts;
+      const dt = Math.min((ts - lastTime) / 1000, 0.05);
+      lastTime = ts;
+      phaseT += dt;
+
+      ctx.clearRect(0, 0, canvasSize, canvasSize);
+
+      // Phase transitions
+      if (phase === 0 && phaseT > 3.0) { phase = 1; phaseT = 0; }
+      else if (phase === 1 && phaseT > 0.6) { phase = 2; phaseT = 0;
+        lightningPath = makeLightning(cx - 4 + Math.random()*8, cy - r - 4, cx - 6 + Math.random()*12, cy + r + 4, 12, 5);
+        lightningAlpha = 1; flashAlpha = 1;
+        // Burst of sparks on strike
+        for (let i = 0; i < 20; i++) spawnSpark(false);
+      }
+      else if (phase === 2 && phaseT > 0.5) { phase = 3; phaseT = 0; lightningPath = null; }
+      else if (phase === 3 && phaseT > 1.2) { phase = 0; phaseT = 0; }
+
+      // Ring rotation
+      ringAngle += dt * 2.8;
+      ringAngle2 -= dt * 2.2;
+
+      const intensity = phase === 1 ? (phaseT/0.6) : (phase === 2 ? 1 : phase === 3 ? Math.max(0, 1-phaseT/1.2) : 0.4);
+
+      // Draw outer ring 1
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 5, 0, Math.PI*2);
+      ctx.strokeStyle = `rgba(100,180,255,${0.15 + intensity*0.25})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Draw orbiting arc 1
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ringAngle);
+      ctx.beginPath();
+      ctx.arc(0, 0, r + 3, 0, Math.PI * 1.2);
+      const g1 = ctx.createLinearGradient(-r, 0, r, 0);
+      g1.addColorStop(0, `rgba(180,220,255,${0.9 + intensity*0.1})`);
+      g1.addColorStop(0.5, `rgba(120,190,255,${0.6})`);
+      g1.addColorStop(1, 'rgba(100,180,255,0)');
+      ctx.strokeStyle = g1;
+      ctx.lineWidth = 1.5 + intensity;
+      ctx.shadowColor = '#88ccff';
+      ctx.shadowBlur = 4 + intensity * 8;
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw orbiting arc 2 (opposite direction, outer)
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ringAngle2);
+      ctx.beginPath();
+      ctx.arc(0, 0, r + 7, 0, Math.PI * 1.5);
+      const g2 = ctx.createLinearGradient(-r, 0, r, 0);
+      g2.addColorStop(0, `rgba(200,230,255,${0.7 + intensity*0.2})`);
+      g2.addColorStop(1, 'rgba(160,210,255,0)');
+      ctx.strokeStyle = g2;
+      ctx.lineWidth = 1 + intensity * 0.5;
+      ctx.shadowColor = '#aaddff';
+      ctx.shadowBlur = 3 + intensity * 6;
+      ctx.stroke();
+      ctx.restore();
+
+      // Spawn sparks from ring
+      const spawnRate = phase === 0 ? 0.15 : phase === 1 ? 0.05 : 0.08;
+      if (Math.random() < spawnRate + intensity * 0.2) spawnSpark(true);
+
+      // Update and draw sparks
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i];
+        s.x += s.vx * (1 + intensity * 1.5);
+        s.y += s.vy * (1 + intensity * 1.5);
+        s.life -= s.decay + (phase === 2 ? 0.02 : 0);
+        if (s.life <= 0) { sparks.splice(i, 1); continue; }
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size * s.life, 0, Math.PI*2);
+        const alpha = s.life * (s.bright ? 0.9 : 0.7);
+        ctx.fillStyle = s.bright
+          ? `rgba(200,230,255,${alpha})`
+          : `rgba(255,255,255,${alpha})`;
+        ctx.shadowColor = '#88ccff';
+        ctx.shadowBlur = s.bright ? 4 : 6;
+        ctx.fill();
+      }
+
+      // Full-avatar flash on strike
+      if (phase === 2 && flashAlpha > 0) {
+        flashAlpha = Math.max(0, 1 - phaseT / 0.5);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 1, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(180,220,255,${flashAlpha * 0.85})`;
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 20;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Draw lightning bolt
+      if (lightningPath && phase === 2) {
+        lightningAlpha = Math.max(0, 1 - phaseT / 0.45);
+        if (lightningAlpha > 0) {
+          // Glow pass
+          ctx.beginPath();
+          ctx.moveTo(lightningPath[0][0], lightningPath[0][1]);
+          for (let i = 1; i < lightningPath.length; i++) {
+            ctx.lineTo(lightningPath[i][0], lightningPath[i][1]);
+          }
+          ctx.strokeStyle = `rgba(180,220,255,${lightningAlpha * 0.5})`;
+          ctx.lineWidth = 6;
+          ctx.shadowColor = '#88ccff';
+          ctx.shadowBlur = 20;
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+          // Core pass
+          ctx.beginPath();
+          ctx.moveTo(lightningPath[0][0], lightningPath[0][1]);
+          for (let i = 1; i < lightningPath.length; i++) {
+            ctx.lineTo(lightningPath[i][0], lightningPath[i][1]);
+          }
+          ctx.strokeStyle = `rgba(255,255,255,${lightningAlpha})`;
+          ctx.lineWidth = 1.5;
+          ctx.shadowBlur = 8;
+          ctx.stroke();
+        }
+      }
+
+      animId = requestAnimationFrame(draw);
+    }
+
+    animId = requestAnimationFrame(draw);
+    stormCanvases.set(wrap, { canvas, animId });
+  }
+
+  function stopStormCanvas(wrap) {
+    const data = stormCanvases.get(wrap);
+    if (data) {
+      cancelAnimationFrame(data.animId);
+      data.canvas.remove();
+      stormCanvases.delete(wrap);
     }
   }
 
