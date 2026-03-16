@@ -81,6 +81,19 @@
     decoEl.className = 'avatar-deco deco-' + deco;
     wrap.appendChild(decoEl);
     wrap.dataset.deco = deco;
+
+    // Admin deco gets a floating crown
+    if (deco === 'nexus_admin' && !wrap.querySelector('.admin-crown')) {
+      const crown = document.createElement('span');
+      crown.className = 'admin-crown';
+      crown.textContent = '\u{1F451}';
+      wrap.appendChild(crown);
+    }
+    // Remove crown if switching away from admin deco
+    if (deco !== 'nexus_admin') {
+      const oldCrown = wrap.querySelector('.admin-crown');
+      if (oldCrown) oldCrown.remove();
+    }
   }
 
   function toast(msg, type = 'info', duration = 3500) {
