@@ -239,7 +239,6 @@
         <div class="view" id="view-shop">
           <div class="view-header" style="padding:20px 20px 0">
             <h1>🛍 Decoration Shop</h1>
-            <h3>Get codes in the G.GUI server (8PTDLSDK)</h3>
           </div>
           <div class="shop-redeem-area">
             <div class="field-group">
@@ -337,6 +336,17 @@
             <div style="display:flex;gap:10px;margin-bottom:12px">
               <div class="field-group" style="flex:1;margin:0"><label>Color</label><input type="color" id="new-role-color" value="#5b6ef5" style="width:100%;height:36px;padding:2px;border-radius:6px;border:1px solid var(--border-bright);background:var(--bg-void);cursor:pointer" /></div>
               <div class="field-group" style="flex:1;margin:0"><label>Permissions</label><select id="new-role-admin" style="width:100%;padding:9px 10px;background:var(--bg-void);border:1px solid var(--border-bright);border-radius:6px;color:var(--text-primary);font-family:Syne,sans-serif;font-size:13px"><option value="false">Member</option><option value="true">Admin</option></select></div>
+            </div>
+            <div class="lock-toggle" style="margin-bottom:12px">
+              <label class="toggle-row">
+                <input type="checkbox" id="new-role-can-delete" />
+                <span class="toggle-label">
+                  <span class="toggle-title">Can delete messages</span>
+                  <span class="toggle-hint">Members with this role can delete any message</span>
+                </span>
+              </label>
+            </div>
+            <div style="display:none">
             </div>
             <button class="btn-primary" id="create-role-btn" style="width:100%">Create Role</button>
           </div>
