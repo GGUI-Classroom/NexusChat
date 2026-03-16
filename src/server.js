@@ -140,7 +140,7 @@ io.on('connection', (socket) => {
       `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color,
         sr.is_admin,
         u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration,
-        ch.id as ch_id, ch.locked,
+        ch.id as ch_id, ch.locked, ch.private as ch_private,
         (SELECT allow_send FROM channel_permissions cp
          WHERE cp.channel_id=$2 AND (cp.role_id=sm.role_id OR cp.role_id IS NULL)
          ORDER BY cp.role_id NULLS LAST LIMIT 1) as perm_allow
@@ -154,6 +154,17 @@ io.on('connection', (socket) => {
     if (!check.rows.length) return; // not a member or channel doesn't belong to server
     const row = check.rows[0];
 
+    // Check private channel visibility
+    if (row.ch_private && !row.is_admin && row.member_role !== 'admin') {
+      const viewPerm = await pool.query(
+        `SELECT allow_view FROM channel_permissions WHERE channel_id=$1 AND role_id=$2`,
+        [channelId, row.role_id]
+      );
+      if (!viewPerm.rows.length || !viewPerm.rows[0].allow_view) {
+        socket.emit('channel_error', { channelId, error: 'You cannot access this channel' });
+        return;
+      }
+    }
     // Check channel lock: if locked, only admins/roles with explicit allow_send=true can post
     if (row.locked && !row.is_admin && row.member_role !== 'admin') {
       const perm = await pool.query(
@@ -178,6 +189,41 @@ io.on('connection', (socket) => {
         activeDecoration: row.active_decoration || null
       }
     };
+    // Resolve mentions for notification
+    const userMentionMatches = [...trimmed.matchAll(/<@user:([a-f0-9-]+)>/g)];
+    const roleMentionMatches = [...trimmed.matchAll(/<@role:([a-f0-9-]+)>/g)];
+
+    // Notify mentioned users
+    userMentionMatches.forEach(m => {
+      const mentionedId = m[1];
+      if (mentionedId !== userId) {
+        io.to(`user:${mentionedId}`).emit('mentioned', {
+          type: 'channel', serverId, channelId,
+          fromUser: { displayName: row.display_name, username: row.username },
+          preview: trimmed.replace(/<@(user|role):[a-f0-9-]+>/g, '@...').slice(0, 80)
+        });
+      }
+    });
+
+    // Notify mentioned role members
+    if (roleMentionMatches.length) {
+      const roleIds = roleMentionMatches.map(m => m[1]);
+      pool.query(
+        `SELECT user_id FROM server_members WHERE server_id=$1 AND role_id = ANY($2)`,
+        [serverId, roleIds]
+      ).then(r => {
+        r.rows.forEach(({ user_id }) => {
+          if (user_id !== userId) {
+            io.to(`user:${user_id}`).emit('mentioned', {
+              type: 'channel', serverId, channelId,
+              fromUser: { displayName: row.display_name, username: row.username },
+              preview: trimmed.replace(/<@(user|role):[a-f0-9-]+>/g, '@...').slice(0, 80)
+            });
+          }
+        });
+      });
+    }
+
     // Emit to sender immediately, then rest of server room
     socket.emit('new_channel_message', msg);
     socket.to(`server:${serverId}`).emit('new_channel_message', msg);
