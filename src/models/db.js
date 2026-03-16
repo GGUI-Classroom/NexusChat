@@ -127,6 +127,16 @@ async function initDb() {
 
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT FALSE`, 'alter_channels_locked');
 
+  await runSql(`CREATE TABLE IF NOT EXISTS user_decorations (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    decoration_id TEXT NOT NULL,
+    unlocked_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(user_id, decoration_id)
+  )`, 'user_decorations');
+
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_decoration TEXT DEFAULT NULL`, 'alter_users_decoration');
+
   console.log('Database initialized');
 }
 
