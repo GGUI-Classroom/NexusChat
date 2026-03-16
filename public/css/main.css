@@ -1721,64 +1721,43 @@ html, body {
   }
 }
 
-/* -- GALAXY -- */
+/* -- GALAXY / FIRE / RAINBOW --
+   Use CSS mask to punch a transparent hole in the center
+   so the avatar underneath shows through instead of being covered */
+.avatar-deco.deco-galaxy,
+.avatar-deco.deco-fire,
+.avatar-deco.deco-rainbow {
+  border-radius: 50%;
+  /* Mask: show only a ring around the edge, transparent in the middle */
+  -webkit-mask: radial-gradient(circle, transparent 62%, black 63%);
+          mask: radial-gradient(circle, transparent 62%, black 63%);
+}
+
 .avatar-deco.deco-galaxy {
   background: conic-gradient(
     from 0deg,
     #5b6ef5, #8b3cf7, #ff2d8e, #f5c842, #3dd68c, #5b6ef5
   );
-  border-radius: 50%;
-  padding: 3px;
   animation: deco-spin 3s linear infinite;
 }
-.avatar-deco.deco-galaxy::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: var(--bg-base);
-  z-index: 1;
-}
 
-/* -- FIRE -- */
 .avatar-deco.deco-fire {
   background: conic-gradient(
     from 0deg,
     #ff4500, #ff8c00, #ffd700, #ff4500, #ff6347, #ff4500
   );
-  border-radius: 50%;
-  padding: 3px;
   animation: deco-spin 1s linear infinite, deco-fire-pulse 0.5s ease-in-out infinite alternate;
 }
-.avatar-deco.deco-fire::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: var(--bg-base);
-  z-index: 1;
-}
 @keyframes deco-fire-pulse {
-  from { filter: brightness(1) blur(0px); }
-  to   { filter: brightness(1.3) blur(0.5px); }
+  from { filter: brightness(1); }
+  to   { filter: brightness(1.4); }
 }
 
-/* -- RAINBOW -- */
 .avatar-deco.deco-rainbow {
   background: conic-gradient(
     red, orange, yellow, green, cyan, blue, violet, red
   );
-  border-radius: 50%;
-  padding: 3px;
   animation: deco-spin 2s linear infinite;
-}
-.avatar-deco.deco-rainbow::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: var(--bg-base);
-  z-index: 1;
 }
 
 /* -- FROST -- */
