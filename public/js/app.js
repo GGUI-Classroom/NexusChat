@@ -792,21 +792,23 @@
             <div class="role-dot" style="background:${r.color}"></div>
             <span class="role-name" style="color:${r.color}">${esc(r.name)}</span>
             <span class="role-badge">${r.isAdmin ? 'Admin' : 'Member'}</span>
+            ${r.canDeleteMessages ? '<span class="role-badge" style="background:rgba(240,84,84,0.15);color:var(--red)">Can Delete</span>' : ''}
             <div class="role-actions">
-              <button class="role-edit-btn" onclick="editRole('${r.id}','${esc(r.name)}','${r.color}',${r.isAdmin})">Edit</button>
+              <button class="role-edit-btn" onclick="editRole('${r.id}','${esc(r.name)}','${r.color}',${r.isAdmin},${!!r.canDeleteMessages})">Edit</button>
               <button class="role-del-btn" onclick="deleteRole('${r.id}','${esc(r.name)}')">Delete</button>
             </div>
           </div>`).join('')
       : '<p style="font-size:13px;color:var(--text-muted);padding:8px 0">No custom roles yet. Create one below.</p>';
   }
 
-  window.editRole = async function(roleId, currentName, currentColor, currentIsAdmin) {
+  window.editRole = async function(roleId, currentName, currentColor, currentIsAdmin, currentCanDelete) {
     const name = prompt('Role name:', currentName);
     if (!name || !name.trim()) return;
     const color = prompt('Color (hex, e.g. #ff5555):', currentColor);
     const isAdminChoice = confirm('Should this role have admin permissions?');
+    const canDeleteChoice = confirm('Should this role be able to delete messages?');
     const r = await api('PATCH', `/api/servers/${activeServerId}/roles/${roleId}`, {
-      name: name.trim(), color: color || currentColor, isAdmin: isAdminChoice
+      name: name.trim(), color: color || currentColor, isAdmin: isAdminChoice, canDeleteMessages: canDeleteChoice
     });
     if (r.error) return toast(r.error, 'error');
     const s = await api('GET', `/api/servers/${activeServerId}`);
@@ -831,8 +833,9 @@
     const name = $('new-role-name').value.trim();
     const color = $('new-role-color').value;
     const isAdmin = $('new-role-admin').value === 'true';
+    const canDeleteMessages = $('new-role-can-delete') && $('new-role-can-delete').checked;
     if (!name) return toast('Enter a role name', 'error');
-    const r = await api('POST', `/api/servers/${activeServerId}/roles`, { name, color, isAdmin });
+    const r = await api('POST', `/api/servers/${activeServerId}/roles`, { name, color, isAdmin, canDeleteMessages });
     if (r.error) return toast(r.error, 'error');
     $('new-role-name').value = '';
     const s = await api('GET', `/api/servers/${activeServerId}`);
@@ -1325,12 +1328,22 @@
     const roleClass = roleColor ? 'msg-author has-role' : 'msg-author';
     const roleTip = author.roleName ? `title="${esc(author.roleName)}"` : '';
 
+    // Check if current user can delete this message
+    const isOwnMsg = msg.fromId === currentUser.id;
+    const meInServer = activeServerData && activeServerData.members && activeServerData.members.find(m => m.id === currentUser.id);
+    const myRole = meInServer && activeServerData.roles && activeServerData.roles.find(r => r.id === meInServer.roleId);
+    const canDeleteThisMsg = isOwnMsg || (meInServer && (meInServer.role === 'admin' || meInServer.isAdmin)) || (myRole && myRole.canDeleteMessages);
+    const isChannelMsg = !!msg.channelId;
+
     el.innerHTML = `
       <div class="avatar-wrap" style="flex-shrink:0;align-self:flex-start;margin-top:2px"><div class="avatar" id="mav-${msg.id}"></div></div>
       <div class="msg-body">
         <div class="msg-header">
           <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>
           <span class="msg-time">${formatTime(msg.createdAt)}</span>
+          ${(isChannelMsg && canDeleteThisMsg) ? `<button class="msg-delete-btn" onclick="deleteChannelMessage('${msg.id}','${msg.channelId}',this)" title="Delete message">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>` : ''}
         </div>
         <div class="msg-content">${renderContent(msg.content, msg.mentions)}</div>
       </div>
@@ -1536,6 +1549,10 @@
 
     socket.on('channel_user_stop_typing', ({ channelId }) => {
       if (channelId === activeChannelId) $('channel-typing-indicator').style.display = 'none';
+    });
+
+    socket.on('channel_message_deleted', ({ channelId, messageId }) => {
+      if (channelId === activeChannelId) removeMessageFromDOM(messageId);
     });
 
     socket.on('channel_error', ({ channelId, error }) => {
@@ -2168,6 +2185,22 @@
 
   // Handle channel_error from server (permission denied)
   // Added in connectSocket below
+
+  // ---- Delete Channel Message ----
+  window.deleteChannelMessage = async function(msgId, channelId, btn) {
+    if (!confirm('Delete this message?')) return;
+    btn.disabled = true;
+    const r = await api('DELETE', `/api/servers/${activeServerId}/channels/${channelId}/messages/${msgId}`);
+    if (r.error) { toast(r.error, 'error'); btn.disabled = false; return; }
+    // Notify server via socket so others see it removed too
+    if (socket) socket.emit('channel_message_deleted', { serverId: activeServerId, channelId, messageId: msgId });
+    removeMessageFromDOM(msgId);
+  };
+
+  function removeMessageFromDOM(msgId) {
+    const el = document.querySelector(`[data-id="${msgId}"]`);
+    if (el) el.remove();
+  }
 
   // ---- Escape helper ----
   function esc(str) {
