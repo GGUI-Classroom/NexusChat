@@ -36,7 +36,9 @@
 
   function renderAvatar(el, user, showDeco = true) {
     const url = user && user.avatarDataUrl;
-    const deco = showDeco && user && user.activeDecoration;
+    // Don't show deco on grouped messages (avatar is hidden anyway)
+    const isGrouped = el.closest && el.closest('.message.grouped');
+    const deco = showDeco && !isGrouped && user && user.activeDecoration;
 
     // Fill the avatar element
     if (url) {
