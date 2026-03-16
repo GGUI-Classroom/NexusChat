@@ -2222,6 +2222,9 @@
   function renderShop(decorations, active) {
     const grid = $('shop-grid');
     if (!grid) return;
+    // Stop any existing storm canvases in the shop before re-rendering
+    grid.querySelectorAll('.avatar-wrap').forEach(w => stopStormCanvas(w));
+
     grid.innerHTML = decorations.map(d => {
       const isEquipped = active === d.id;
       const isOwned = d.owned;
@@ -2245,6 +2248,13 @@
           </button>
         </div>`;
     }).join('');
+
+    // Start canvas engine for storm preview card if owned
+    const stormCard = decorations.find(d => d.id === 'storm' && d.owned);
+    if (stormCard) {
+      const wrap = document.querySelector('#shopcard-storm .avatar-wrap');
+      if (wrap) setTimeout(() => startStormCanvas(wrap), 50);
+    }
   }
 
   window.shopAction = async function(decoId, action) {
