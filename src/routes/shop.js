@@ -98,7 +98,6 @@ const DECORATIONS = [
 function getCodeMap() {
   return {
     [process.env.DECO_CODE_NEXUS2026 || 'NEXUS2026']:       'orbit_white',
-    [process.env.DECO_CODE_FIRSTYEAR || 'FIRSTYEAR']:       'halo_gold',
     [process.env.DECO_CODE_FIRSTDEP  || 'FIRSTDEP']:        'galaxy',
     [process.env.DECO_CODE_GLOWYMOON || 'GLOWYMOON']:       'glow_green',
     [process.env.DECO_CODE_NEONWAVE  || 'NEONWAVE']:        'neon_pink',
@@ -107,7 +106,7 @@ function getCodeMap() {
     [process.env.DECO_CODE_FROSTBITE || 'FROSTBITE']:       'frost',
     [process.env.DECO_CODE_GOLDRING  || 'GOLDRING']:        'orbit_gold',
     [process.env.DECO_CODE_BLUEGLOW      || 'BLUEGLOW']:      'glow_blue',
-    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSADMIN']:    'nexus_admin',
+    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSETRALX']:    'nexus_admin',
     [process.env.DECO_CODE_STORMBRINGER  || 'STORMBRINGER']:  'storm',
   };
 }
