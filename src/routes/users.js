@@ -52,4 +52,21 @@ router.patch('/profile', requireAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+router.post('/change-password', requireAuth, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) return res.status(400).json({ error: 'All fields required' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+
+  const bcrypt = require('bcryptjs');
+  const r = await pool.query('SELECT password_hash FROM users WHERE id=$1', [req.session.userId]);
+  if (!r.rows.length) return res.status(404).json({ error: 'User not found' });
+
+  const match = await bcrypt.compare(oldPassword, r.rows[0].password_hash);
+  if (!match) return res.status(401).json({ error: 'Current password is incorrect' });
+
+  const newHash = await bcrypt.hash(newPassword, 12);
+  await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [newHash, req.session.userId]);
+  res.json({ success: true });
+});
+
 module.exports = router;
