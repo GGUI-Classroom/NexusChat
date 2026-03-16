@@ -1937,6 +1937,25 @@
     toast('Avatar updated!', 'success');
   });
 
+  $('change-password-btn').addEventListener('click', async () => {
+    showError('password-error', '');
+    const oldPwd = $('profile-old-password').value;
+    const newPwd = $('profile-new-password').value;
+    const confirmPwd = $('profile-confirm-password').value;
+    if (!oldPwd || !newPwd || !confirmPwd) return showError('password-error', 'All password fields required');
+    if (newPwd !== confirmPwd) return showError('password-error', 'New passwords do not match');
+    if (newPwd.length < 6) return showError('password-error', 'New password must be at least 6 characters');
+    const btn = $('change-password-btn');
+    btn.disabled = true; btn.textContent = 'Changing…';
+    const r = await api('POST', '/api/users/change-password', { oldPassword: oldPwd, newPassword: newPwd });
+    btn.disabled = false; btn.textContent = 'Change Password';
+    if (r.error) return showError('password-error', r.error);
+    $('profile-old-password').value = '';
+    $('profile-new-password').value = '';
+    $('profile-confirm-password').value = '';
+    toast('Password changed!', 'success');
+  });
+
   $('save-profile-btn').addEventListener('click', async () => {
     const name = $('profile-display-name').value.trim();
     if (!name) return showError('profile-error', 'Display name required');
