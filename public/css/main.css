@@ -2024,3 +2024,162 @@ html, body {
   z-index: 4;
   border-radius: 50%;
 }
+
+/* ===== MYTHICAL RARITY ===== */
+.rarity-mythical {
+  background: linear-gradient(135deg, rgba(255,200,50,0.25), rgba(180,80,255,0.25));
+  color: #ffd700;
+  border: 1px solid rgba(255,200,50,0.4);
+  animation: mythical-badge-shimmer 3s ease-in-out infinite;
+}
+@keyframes mythical-badge-shimmer {
+  0%,100% { color: #ffd700; border-color: rgba(255,200,50,0.4); }
+  50%      { color: #e040fb; border-color: rgba(180,80,255,0.5); }
+}
+
+/* ===== MYSTERY CARD (hidden mythical) ===== */
+.shop-card.mystery {
+  background: linear-gradient(135deg, var(--bg-elevated) 0%, rgba(30,20,50,0.9) 100%);
+  border: 1px solid rgba(255,200,50,0.15);
+  cursor: default;
+  position: relative;
+  overflow: hidden;
+}
+.shop-card.mystery::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg,
+    transparent 0%, rgba(255,200,50,0.03) 40%,
+    rgba(180,80,255,0.05) 60%, transparent 100%);
+  animation: mystery-sweep 4s ease-in-out infinite;
+}
+@keyframes mystery-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+.mystery-preview {
+  width: 64px; height: 64px;
+  display: flex; align-items: center; justify-content: center;
+}
+.mystery-silhouette {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,200,50,0.08) 0%, rgba(180,80,255,0.05) 100%);
+  border: 1px solid rgba(255,200,50,0.15);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  animation: mystery-pulse 2s ease-in-out infinite;
+}
+@keyframes mystery-pulse {
+  0%,100% { opacity: 0.5; transform: scale(1); }
+  50%     { opacity: 0.9; transform: scale(1.05); }
+}
+.mystery-name {
+  font-size: 14px; font-weight: 800;
+  color: rgba(255,200,50,0.4);
+  letter-spacing: 3px;
+}
+.mystery-hint {
+  font-size: 10px; color: var(--text-muted);
+  text-align: center; line-height: 1.4;
+}
+
+/* ===== CLAIM ANIMATION OVERLAY ===== */
+#claim-overlay {
+  position: fixed; inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.96);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+#claim-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+#claim-card {
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 14px;
+  text-align: center;
+  animation: claim-card-rise 0.8s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+@keyframes claim-card-rise {
+  from { opacity: 0; transform: translateY(60px) scale(0.85); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+#claim-rarity-badge {
+  font-size: 11px; font-weight: 800; letter-spacing: 3px;
+  padding: 4px 14px; border-radius: 99px;
+  background: linear-gradient(135deg, rgba(255,200,50,0.2), rgba(180,80,255,0.2));
+  border: 1px solid rgba(255,200,50,0.5);
+  color: #ffd700;
+  animation: claim-badge-in 0.4s 0.5s both;
+}
+@keyframes claim-badge-in {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1); }
+}
+#claim-deco-preview {
+  width: 120px; height: 120px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  animation: claim-deco-in 0.6s 0.6s cubic-bezier(0.22,1,0.36,1) both;
+}
+@keyframes claim-deco-in {
+  from { opacity: 0; transform: scale(0.5) rotate(-20deg); }
+  to   { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+#claim-deco-preview .avatar-wrap {
+  width: 80px !important; height: 80px !important;
+}
+#claim-deco-preview .avatar {
+  width: 80px !important; height: 80px !important;
+  font-size: 32px !important;
+}
+#claim-name {
+  font-size: 28px; font-weight: 800;
+  background: linear-gradient(135deg, #ffd700, #e040fb, #ffd700);
+  background-size: 200% auto;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: claim-name-in 0.5s 1.0s both, claim-name-shine 3s 1.5s linear infinite;
+}
+@keyframes claim-name-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes claim-name-shine {
+  from { background-position: 0% center; }
+  to   { background-position: 200% center; }
+}
+#claim-desc {
+  font-size: 13px; color: var(--text-secondary);
+  max-width: 260px; line-height: 1.5;
+  animation: claim-desc-in 0.4s 1.3s both;
+}
+@keyframes claim-desc-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+#claim-stamp {
+  font-size: 13px; font-weight: 800; letter-spacing: 4px;
+  color: #ffd700;
+  opacity: 0;
+  animation: claim-stamp-in 0.6s 1.6s cubic-bezier(0.22,1,0.36,1) forwards;
+  text-shadow: 0 0 20px rgba(255,215,0,0.8);
+}
+@keyframes claim-stamp-in {
+  0%   { opacity: 0; transform: scale(2); filter: blur(8px); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+#claim-dismiss {
+  font-size: 11px; color: var(--text-muted);
+  letter-spacing: 1px;
+  opacity: 0;
+  animation: claim-dismiss-in 0.4s 2.5s both;
+}
+@keyframes claim-dismiss-in {
+  from { opacity: 0; }
+  to   { opacity: 0.6; }
+}
