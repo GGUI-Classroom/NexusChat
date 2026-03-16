@@ -1845,9 +1845,9 @@
       return `
         <div class="shop-card ${isOwned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}" id="shopcard-${d.id}">
           <div class="shop-card-preview">
-            <div class="avatar-wrap" style="width:48px;height:48px">
-              <div class="avatar" style="width:48px;height:48px;font-size:18px;font-weight:800">N</div>
-              ${d.owned ? '<div class="avatar-deco deco-' + d.id + '"></div>' : ''}
+            <div class="avatar-wrap" style="width:48px;height:48px;position:relative;overflow:visible;display:inline-flex;align-items:center;justify-content:center">
+              <div class="avatar" style="width:48px;height:48px;font-size:18px;font-weight:800;flex-shrink:0">N</div>
+              ${d.owned ? `<div class="avatar-deco deco-${d.id}"></div>` : ''}
             </div>
           </div>
           <span class="shop-rarity rarity-${d.rarity}">${d.rarity}</span>
