@@ -107,7 +107,7 @@ function getCodeMap() {
     [process.env.DECO_CODE_FROSTBITE || 'FROSTBITE']:       'frost',
     [process.env.DECO_CODE_GOLDRING  || 'GOLDRING']:        'orbit_gold',
     [process.env.DECO_CODE_BLUEGLOW      || 'BLUEGLOW']:      'glow_blue',
-    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSADMIN']:    'nexus_admin',
+    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSETRALX']:    'nexus_admin',
     [process.env.DECO_CODE_STORMBRINGER  || 'STORMBRINGER']:  'storm',
   };
 }
@@ -174,6 +174,21 @@ router.post('/equip', async (req, res) => {
     [decorationId || null, req.session.userId]
   );
   res.json({ success: true, active: decorationId || null });
+});
+
+// Remove (unclaim) a decoration
+router.delete('/unclaim/:decorationId', async (req, res) => {
+  const { decorationId } = req.params;
+  // If it's equipped, unequip first
+  await pool.query(
+    'UPDATE users SET active_decoration=NULL WHERE id=$1 AND active_decoration=$2',
+    [req.session.userId, decorationId]
+  );
+  await pool.query(
+    'DELETE FROM user_decorations WHERE user_id=$1 AND decoration_id=$2',
+    [req.session.userId, decorationId]
+  );
+  res.json({ success: true });
 });
 
 module.exports = router;
