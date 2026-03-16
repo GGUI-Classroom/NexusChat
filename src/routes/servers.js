@@ -210,7 +210,7 @@ router.get('/:id', async (req, res) => {
       roleName: m.role_name, roleColor: m.role_color, isAdmin: m.is_admin,
       activeDecoration: m.active_decoration || null
     })),
-    roles: roleRes.rows.map(r => ({ id: r.id, name: r.name, color: r.color, isAdmin: r.is_admin, position: r.position }))
+    roles: roleRes.rows.map(r => ({ id: r.id, name: r.name, color: r.color, isAdmin: r.is_admin, position: r.position, canDeleteMessages: !!r.can_delete_messages }))
   });
 });
 
@@ -258,7 +258,7 @@ router.get('/:id/roles', async (req, res) => {
   const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
   const r = await pool.query('SELECT * FROM server_roles WHERE server_id=$1 ORDER BY position ASC', [id]);
-  res.json({ roles: r.rows.map(r => ({ id: r.id, name: r.name, color: r.color, isAdmin: r.is_admin, position: r.position })) });
+  res.json({ roles: r.rows.map(r => ({ id: r.id, name: r.name, color: r.color, isAdmin: r.is_admin, position: r.position, canDeleteMessages: !!r.can_delete_messages })) });
 });
 
 // Create role
@@ -269,11 +269,12 @@ router.post('/:id/roles', async (req, res) => {
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
   const pos = await pool.query('SELECT COUNT(*) FROM server_roles WHERE server_id=$1', [id]);
   const roleId = uuidv4();
+  const canDelete = req.body.canDeleteMessages || false;
   await pool.query(
-    'INSERT INTO server_roles (id, server_id, name, color, is_admin, position) VALUES ($1,$2,$3,$4,$5,$6)',
-    [roleId, id, name.trim(), color || '#8892a4', !!roleIsAdmin, parseInt(pos.rows[0].count)]
+    'INSERT INTO server_roles (id, server_id, name, color, is_admin, position, can_delete_messages) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+    [roleId, id, name.trim(), color || '#8892a4', !!roleIsAdmin, parseInt(pos.rows[0].count), !!canDelete]
   );
-  res.json({ role: { id: roleId, name: name.trim(), color: color || '#8892a4', isAdmin: !!roleIsAdmin } });
+  res.json({ role: { id: roleId, name: name.trim(), color: color || '#8892a4', isAdmin: !!roleIsAdmin, canDeleteMessages: !!canDelete } });
 });
 
 // Update role
@@ -281,12 +282,21 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
   const { id, roleId } = req.params;
   if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
   const { name, color, isAdmin: roleIsAdmin } = req.body;
+  const { canDeleteMessages } = req.body;
   await pool.query(
-    'UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin) WHERE id=$4 AND server_id=$5',
-    [name || null, color || null, roleIsAdmin != null ? !!roleIsAdmin : null, roleId, id]
+    `UPDATE server_roles SET
+      name=COALESCE($1,name),
+      color=COALESCE($2,color),
+      is_admin=COALESCE($3,is_admin),
+      can_delete_messages=COALESCE($4,can_delete_messages)
+     WHERE id=$5 AND server_id=$6`,
+    [name || null, color || null,
+     roleIsAdmin != null ? !!roleIsAdmin : null,
+     canDeleteMessages != null ? !!canDeleteMessages : null,
+     roleId, id]
   );
   const r = await pool.query('SELECT * FROM server_roles WHERE id=$1', [roleId]);
-  res.json({ role: r.rows[0] });
+  res.json({ role: { id: r.rows[0].id, name: r.rows[0].name, color: r.rows[0].color, isAdmin: r.rows[0].is_admin, canDeleteMessages: !!r.rows[0].can_delete_messages } });
 });
 
 // Delete role
@@ -530,6 +540,40 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
       activeDecoration: m.active_decoration || null
     }
   }))});
+});
+
+// Delete a channel message
+router.delete('/:id/channels/:chId/messages/:msgId', async (req, res) => {
+  const { id, chId, msgId } = req.params;
+
+  // Check membership
+  const member = await pool.query(
+    `SELECT sm.role, sm.role_id, sr.is_admin, sr.can_delete_messages
+     FROM server_members sm
+     LEFT JOIN server_roles sr ON sr.id = sm.role_id
+     WHERE sm.server_id=$1 AND sm.user_id=$2`,
+    [id, req.session.userId]
+  );
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  const m = member.rows[0];
+
+  // Check the message exists and get its author
+  const msg = await pool.query(
+    'SELECT id, from_id FROM channel_messages WHERE id=$1 AND channel_id=$2',
+    [msgId, chId]
+  );
+  if (!msg.rows.length) return res.status(404).json({ error: 'Message not found' });
+
+  const isOwn = msg.rows[0].from_id === req.session.userId;
+  const isAdmin = m.role === 'admin' || m.is_admin;
+  const canDelete = m.can_delete_messages;
+
+  if (!isOwn && !isAdmin && !canDelete) {
+    return res.status(403).json({ error: 'No permission to delete this message' });
+  }
+
+  await pool.query('DELETE FROM channel_messages WHERE id=$1', [msgId]);
+  res.json({ success: true });
 });
 
 module.exports = router;
