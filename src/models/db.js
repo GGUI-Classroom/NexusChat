@@ -139,6 +139,17 @@ async function initDb() {
   )`, 'user_decorations');
 
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_decoration TEXT DEFAULT NULL`, 'alter_users_decoration');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS nexals INTEGER DEFAULT 0`, 'alter_users_nexals');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS user_achievements (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    achievement_id TEXT NOT NULL,
+    progress INTEGER DEFAULT 0,
+    completed_at BIGINT DEFAULT NULL,
+    claimed_at BIGINT DEFAULT NULL,
+    UNIQUE(user_id, achievement_id)
+  )`, 'user_achievements');
 
   console.log('Database initialized');
 }
