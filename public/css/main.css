@@ -2213,27 +2213,33 @@ html, body {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 14px;
+  padding: 14px 14px 16px;
   display: flex; gap: 12px; align-items: flex-start;
   transition: var(--transition);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  height: auto;
+  min-height: 0;
 }
 .ach-card.completed { border-color: rgba(61,214,140,0.3); }
 .ach-card.claimed   { border-color: var(--border); opacity: 0.6; }
 .ach-card::before {
   content: '';
   position: absolute; inset: 0;
+  border-radius: var(--radius-md);
   background: linear-gradient(135deg, rgba(61,214,140,0.04), transparent);
   opacity: 0; transition: opacity 0.2s;
+  pointer-events: none;
+  z-index: 0;
 }
+.ach-icon, .ach-body { position: relative; z-index: 1; }
 .ach-card.completed:not(.claimed)::before { opacity: 1; }
 
 .ach-icon {
   font-size: 24px; line-height: 1;
   flex-shrink: 0; margin-top: 2px;
 }
-.ach-body { flex: 1; min-width: 0; }
+.ach-body { flex: 1; min-width: 0; overflow: visible; }
 .ach-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
 .ach-desc  { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4; }
 
@@ -2256,7 +2262,8 @@ html, body {
 
 .ach-footer {
   display: flex; align-items: center; justify-content: space-between;
-  margin-top: 8px;
+  margin-top: 10px;
+  min-height: 28px;
 }
 .ach-reward {
   font-size: 12px; font-weight: 700;
