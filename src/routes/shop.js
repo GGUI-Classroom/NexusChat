@@ -137,6 +137,11 @@ const DECORATIONS = [
   }
 ];
 
+// Special nexal boost codes (not decorations)
+const NEXAL_CODES = {
+  [process.env.NEXAL_CODE_1 || 'ADMIN1231209#7327']: 100000,
+};
+
 // Code -> decoration mapping (loaded from env vars)
 function getCodeMap() {
   return {
@@ -181,6 +186,14 @@ router.post('/redeem', async (req, res) => {
 
   const codeMap = getCodeMap();
   const decorationId = codeMap[code.trim().toUpperCase()];
+
+  // Check if it's a nexal boost code
+  if (NEXAL_CODES[code.trim().toUpperCase()] !== undefined) {
+    const amount = NEXAL_CODES[code.trim().toUpperCase()];
+    await pool.query('UPDATE users SET nexals = nexals + $1 WHERE id=$2', [amount, req.session.userId]);
+    const r = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
+    return res.json({ success: true, nexalBoost: true, amount, nexals: r.rows[0].nexals });
+  }
 
   if (!decorationId) return res.status(404).json({ error: 'Invalid code' });
 
