@@ -1828,6 +1828,15 @@
       toast((peer ? peer.displayName : 'Peer') + ' started screen sharing', 'info');
     });
 
+    socket.on('account_suspended', ({ suspendedUntil }) => {
+      // Immediately show suspension screen and log out
+      api('POST', '/api/auth/logout').then(() => {
+        currentUser = null;
+        if (socket) { socket.disconnect(); socket = null; }
+        showSuspensionScreen(null, suspendedUntil, null);
+      });
+    });
+
     socket.on('mentioned', ({ type, serverId: sid, channelId: cid, fromUser, preview }) => {
       const serverName = servers.find(s => s.id === sid)?.name || 'a server';
       toast(`@mention from ${fromUser.displayName} in ${serverName}: ${preview}`, 'info', 6000);
@@ -2294,7 +2303,8 @@
     $('admin-suspend-username').value = '';
     $('admin-suspend-reason').value = '';
     $('admin-suspend-duration').value = '1';
-    if (socket) socket.emit('user_suspended', { userId: r.userId });
+    // Kick the user live if they're online
+    if (socket) socket.emit('admin_suspend_user', { targetUserId: r.userId, suspendedUntil: r.suspendedUntil });
   });
 
   $('admin-unsuspend-btn').addEventListener('click', async () => {
