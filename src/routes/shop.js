@@ -56,14 +56,6 @@ const DECORATIONS = [
     preview: 'orbit_white'
   },
   {
-    id: 'halo_gold',
-    nexalPrice: 1500,
-    name: 'Golden Halo',
-    description: 'A golden halo floating above',
-    rarity: 'rare',
-    preview: 'halo_gold'
-  },
-  {
     id: 'neon_pink',
     nexalPrice: 3500,
     name: 'Neon Pink',
@@ -141,6 +133,7 @@ const DECORATIONS = [
 // Set amount to negative to mark as infinite-use
 const NEXAL_CODES = {
   [process.env.NEXAL_CODE_1 || 'ADMIN1231209#7327']: { amount: 100000, infinite: true },
+  [process.env.NEXAL_CODE_1 || 'STARTER']: { amount: 1000}
 };
 
 // Code -> decoration mapping (loaded from env vars)
