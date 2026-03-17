@@ -2381,7 +2381,7 @@
               <div class="ach-footer">
                 <div class="ach-reward">✦ ${a.nexals.toLocaleString()} Nexals</div>
                 ${canClaim
-                  ? `<button class="ach-claim-btn" onclick="claimAchievement('${a.id}')">Claim!</button>`
+                  ? `<button class="ach-claim-btn" data-ach-id="${a.id}">Claim!</button>`
                   : a.claimed
                     ? `<span class="ach-claimed-badge">✓ Claimed</span>`
                     : ''}
@@ -2391,6 +2391,11 @@
       });
     }
     grid.innerHTML = html;
+
+    // Use event delegation instead of inline onclick to avoid quote escaping issues
+    grid.querySelectorAll('.ach-claim-btn[data-ach-id]').forEach(btn => {
+      btn.addEventListener('click', () => claimAchievement(btn.dataset.achId));
+    });
   }
 
   window.claimAchievement = async function(achId) {
