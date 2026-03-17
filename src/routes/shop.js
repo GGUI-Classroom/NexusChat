@@ -138,16 +138,16 @@ const DECORATIONS = [
 ];
 
 // Special nexal boost codes (not decorations)
+// Set amount to negative to mark as infinite-use
 const NEXAL_CODES = {
-  [process.env.NEXAL_CODE_1 || 'ADMIN1231209#7327']: 100000,
-  [process.env.NEXAL_CODE_1 || 'Starter']: 100
+  [process.env.NEXAL_CODE_1 || 'ADMIN1231209#7327']: { amount: 100000, infinite: true },
 };
 
 // Code -> decoration mapping (loaded from env vars)
 function getCodeMap() {
   return {
     [process.env.DECO_CODE_NEXUS2026 || 'NEXUS2026']:       'orbit_white',
-
+    [process.env.DECO_CODE_FIRSTYEAR || 'FIRSTYEAR']:       'halo_gold',
     [process.env.DECO_CODE_FIRSTDEP  || 'FIRSTDEP']:        'galaxy',
     [process.env.DECO_CODE_GLOWYMOON || 'GLOWYMOON']:       'glow_green',
     [process.env.DECO_CODE_NEONWAVE  || 'NEONWAVE']:        'neon_pink',
@@ -156,7 +156,7 @@ function getCodeMap() {
     [process.env.DECO_CODE_FROSTBITE || 'FROSTBITE']:       'frost',
     [process.env.DECO_CODE_GOLDRING  || 'GOLDRING']:        'orbit_gold',
     [process.env.DECO_CODE_BLUEGLOW      || 'BLUEGLOW']:      'glow_blue',
-    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSETRALX']:    'nexus_admin',
+    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSADMIN']:    'nexus_admin',
     [process.env.DECO_CODE_STORMBRINGER  || 'STORMBRINGER']:  'storm',
   };
 }
@@ -189,11 +189,25 @@ router.post('/redeem', async (req, res) => {
   const decorationId = codeMap[code.trim().toUpperCase()];
 
   // Check if it's a nexal boost code
-  if (NEXAL_CODES[code.trim().toUpperCase()] !== undefined) {
-    const amount = NEXAL_CODES[code.trim().toUpperCase()];
-    await pool.query('UPDATE users SET nexals = nexals + $1 WHERE id=$2', [amount, req.session.userId]);
+  const cleanCode = code.trim().toUpperCase();
+  const nexalEntry = NEXAL_CODES[cleanCode] || NEXAL_CODES[code.trim()]; // try both upper and raw
+  if (nexalEntry) {
+    if (!nexalEntry.infinite) {
+      // Check if already redeemed
+      const already = await pool.query(
+        'SELECT id FROM code_redemptions WHERE user_id=$1 AND code=$2',
+        [req.session.userId, cleanCode]
+      );
+      if (already.rows.length) return res.status(409).json({ error: 'You have already redeemed this code' });
+      // Record redemption
+      await pool.query(
+        'INSERT INTO code_redemptions (id, user_id, code) VALUES ($1,$2,$3)',
+        [require('uuid').v4(), req.session.userId, cleanCode]
+      );
+    }
+    await pool.query('UPDATE users SET nexals = nexals + $1 WHERE id=$2', [nexalEntry.amount, req.session.userId]);
     const r = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
-    return res.json({ success: true, nexalBoost: true, amount, nexals: r.rows[0].nexals });
+    return res.json({ success: true, nexalBoost: true, amount: nexalEntry.amount, nexals: r.rows[0].nexals });
   }
 
   if (!decorationId) return res.status(404).json({ error: 'Invalid code' });
