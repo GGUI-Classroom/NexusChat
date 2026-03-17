@@ -46,6 +46,7 @@ app.use('/api/messages', require('./routes/messages'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/servers', require('./routes/servers'));
 app.use('/api/shop', require('./routes/shop'));
+app.use('/api/achievements', require('./routes/achievements'));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
@@ -63,6 +64,44 @@ io.use((socket, next) => {
   socket.userId = sess.userId;
   next();
 });
+
+// ---- Achievement auto-tracker ----
+async function trackAchievement(userId, fields) {
+  try {
+    // Just sync — the achievements route handles the logic
+    // We do a lightweight check: count messages/etc and upsert progress
+    const { ACHIEVEMENTS } = require('./routes/achievements');
+    for (const field of fields) {
+      const relevant = ACHIEVEMENTS.filter(a => a.field === field);
+      if (!relevant.length) continue;
+
+      let count = 0;
+      if (field === 'messages_sent' || field === 'dms_sent') {
+        const r = await pool.query('SELECT COUNT(*) FROM messages WHERE from_id=$1', [userId]);
+        count = parseInt(r.rows[0].count);
+      } else if (field === 'channel_msgs') {
+        const r = await pool.query('SELECT COUNT(*) FROM channel_messages WHERE from_id=$1', [userId]);
+        count = parseInt(r.rows[0].count);
+      }
+
+      for (const a of relevant) {
+        const progress = Math.min(count, a.target);
+        const completed = count >= a.target;
+        const now = Math.floor(Date.now() / 1000);
+        const { v4: uuidv4 } = require('uuid');
+        await pool.query(`
+          INSERT INTO user_achievements (id, user_id, achievement_id, progress, completed_at)
+          VALUES ($1,$2,$3,$4,$5)
+          ON CONFLICT (user_id, achievement_id) DO UPDATE
+            SET progress = GREATEST(user_achievements.progress, $4),
+                completed_at = CASE
+                  WHEN user_achievements.completed_at IS NULL AND $6 THEN $5
+                  ELSE user_achievements.completed_at END
+        `, [uuidv4(), userId, a.id, progress, completed ? now : null, completed]);
+      }
+    }
+  } catch(e) { console.error('Achievement track error:', e.message); }
+}
 
 io.on('connection', (socket) => {
   const userId = socket.userId;
@@ -107,6 +146,9 @@ io.on('connection', (socket) => {
     // Persist to DB (non-blocking for perceived speed)
     pool.query('INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
       [msgId, userId, toId, trimmed, now]).catch(e => console.error('DM insert error:', e));
+
+    // Achievement tracking — message count & DM
+    trackAchievement(userId, ['messages_sent', 'dms_sent']);
   });
 
   socket.on('typing_start', async ({ toId }) => {
@@ -232,6 +274,9 @@ io.on('connection', (socket) => {
       'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
       [msgId, channelId, userId, trimmed, now]
     ).catch(e => console.error('Channel msg insert error:', e));
+
+    // Achievement tracking
+    trackAchievement(userId, ['messages_sent', 'channel_msgs']);
   });
 
   socket.on('channel_typing_start', ({ serverId, channelId }) => {
