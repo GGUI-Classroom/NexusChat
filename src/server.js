@@ -297,6 +297,15 @@ io.on('connection', (socket) => {
     io.to(`server:${serverId}`).emit('channel_message_deleted', { channelId, messageId });
   });
 
+  // Admin: force-suspend an active user
+  socket.on('admin_suspend_user', async ({ targetUserId, suspendedUntil }) => {
+    // Verify the requesting socket is an admin
+    const { ADMIN_IDS } = require('./routes/admin');
+    if (!ADMIN_IDS.has(userId)) return;
+    // Emit suspended event to all of that user's sockets
+    io.to(`user:${targetUserId}`).emit('account_suspended', { suspendedUntil });
+  });
+
   socket.on('call_invite', async ({ toId }) => {
     if (userInCall.has(toId)) { socket.emit('call_busy', { userId: toId }); return; }
     const roomId = uuidv4();
