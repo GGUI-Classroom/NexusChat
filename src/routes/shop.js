@@ -140,9 +140,9 @@ const DECORATIONS = [
   { id: 'diamond',      nexalPrice: 8000, name: 'Diamond',        description: 'A diamond-crystal border with a shine sweep every 5s.', rarity: 'legendary', preview: 'diamond' },
   { id: 'goldshine',    nexalPrice: 8000, name: 'Gold Shine',     description: 'A golden border with a warm gleam sweep every 5s.',     rarity: 'legendary', preview: 'goldshine' },
   // Mythicals
-  { id: 'chronicalillness1012',      nexalPrice: null, name: 'Inferno',        description: 'Real animated flames that engulf your avatar.',         rarity: 'mythical',  preview: 'inferno' },
-  { id: 'hydromoma',        nexalPrice: null, name: 'Hydro',          description: 'Shimmering water ripples and bubbles orbit your avatar.',rarity: 'mythical',  preview: 'hydro' },
-  { id: 'yinclol12',      nexalPrice: null, name: 'Yin & Yang',     description: 'Balance of light and dark. Every 5s, the symbol manifests.', rarity: 'mythical', preview: 'yinyang' },
+  { id: 'inferno',      nexalPrice: null, name: 'Inferno',        description: 'Real animated flames that engulf your avatar.',         rarity: 'mythical',  preview: 'inferno' },
+  { id: 'hydro',        nexalPrice: null, name: 'Hydro',          description: 'Shimmering water ripples and bubbles orbit your avatar.',rarity: 'mythical',  preview: 'hydro' },
+  { id: 'yinyang',      nexalPrice: null, name: 'Yin & Yang',     description: 'Balance of light and dark. Every 5s, the symbol manifests.', rarity: 'mythical', preview: 'yinyang' },
 ];
 
 // Special nexal boost codes (not decorations)
@@ -155,6 +155,7 @@ const NEXAL_CODES = {
 function getCodeMap() {
   return {
     [process.env.DECO_CODE_NEXUS2026 || 'NEXUS2026']:       'orbit_white',
+    [process.env.DECO_CODE_FIRSTYEAR || 'FIRSTYEAR']:       'halo_gold',
     [process.env.DECO_CODE_FIRSTDEP  || 'FIRSTDEP']:        'galaxy',
     [process.env.DECO_CODE_GLOWYMOON || 'GLOWYMOON']:       'glow_green',
     [process.env.DECO_CODE_NEONWAVE  || 'NEONWAVE']:        'neon_pink',
@@ -165,9 +166,9 @@ function getCodeMap() {
     [process.env.DECO_CODE_BLUEGLOW      || 'BLUEGLOW']:      'glow_blue',
     [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSADMIN']:    'nexus_admin',
     [process.env.DECO_CODE_STORMBRINGER  || 'STORMBRINGER']:  'storm',
-    [process.env.DECO_CODE_INFERNO       || 'INFERNO']:       'inferno',
-    [process.env.DECO_CODE_HYDRO         || 'HYDRO']:         'hydro',
-    [process.env.DECO_CODE_YINYANG       || 'YINYANG']:       'yinyang',
+    [process.env.DECO_CODE_INFERNO       || 'DEATHFIRES']:       'inferno',
+    [process.env.DECO_CODE_HYDRO         || 'HYDRODROWN67']:         'hydro',
+    [process.env.DECO_CODE_YINYANG       || 'YINCLONE6767']:       'yinyang',
   };
 }
 
