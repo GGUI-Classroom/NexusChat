@@ -445,6 +445,12 @@
   });
 
   // ---- App Entry ----
+  // Hardcoded admin IDs — same as server side
+  const ADMIN_IDS = new Set([
+    '7db80df6-0566-4fa0-bbc2-6cde9775f3a4',
+    '238a8575-224a-40cb-b699-eba0d9ff7384',
+  ]);
+
   function enterApp() {
     try {
       updateSelfCard();
@@ -455,8 +461,12 @@
       loadServers();
       loadServerInvites();
       switchView('friends');
-      // Load shop in background
       if (activeView === 'shop') loadShop();
+      // Show admin button instantly if user is admin
+      if (currentUser && ADMIN_IDS.has(currentUser.id)) {
+        const btn = $('rail-admin-btn');
+        if (btn) btn.style.display = 'flex';
+      }
     } catch(e) {
       console.error('enterApp crash:', e);
       alert('Login succeeded but app failed to load: ' + e.message);
@@ -2235,9 +2245,8 @@
   });
 
   // ---- Admin Panel ----
-  async function checkAdminStatus() {
-    const r = await api('GET', '/api/admin/check');
-    if (!r.error && r.isAdmin) {
+  function checkAdminStatus() {
+    if (currentUser && ADMIN_IDS.has(currentUser.id)) {
       const btn = $('rail-admin-btn');
       if (btn) btn.style.display = 'flex';
     }
