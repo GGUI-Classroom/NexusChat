@@ -126,14 +126,29 @@ const DECORATIONS = [
     description: 'Electric sparks orbit you, then a lightning bolt tears through every 5 seconds.',
     rarity: 'mythical',
     preview: 'storm'
-  }
+  },
+
+  // ---- NEW BATCH ----
+  // Commons
+  { id: 'pulse_teal',   nexalPrice: 500,  name: 'Teal Pulse',     description: 'A soft teal aura that breathes.',                       rarity: 'common',    preview: 'pulse_teal' },
+  { id: 'spark_red',    nexalPrice: 500,  name: 'Red Spark',      description: 'Tiny red sparks pop around the rim.',                   rarity: 'common',    preview: 'spark_red' },
+  { id: 'haze_purple',  nexalPrice: 500,  name: 'Purple Haze',    description: 'A slow drifting purple mist ring.',                     rarity: 'common',    preview: 'haze_purple' },
+  // Rares
+  { id: 'aurora',       nexalPrice: 1500, name: 'Aurora',         description: 'A shifting northern-lights gradient ring.',             rarity: 'rare',      preview: 'aurora' },
+  { id: 'circuit',      nexalPrice: 1500, name: 'Circuit',        description: 'Glowing circuit lines that trace the avatar border.',   rarity: 'rare',      preview: 'circuit' },
+  // Legendaries
+  { id: 'diamond',      nexalPrice: 8000, name: 'Diamond',        description: 'A diamond-crystal border with a shine sweep every 5s.', rarity: 'legendary', preview: 'diamond' },
+  { id: 'goldshine',    nexalPrice: 8000, name: 'Gold Shine',     description: 'A golden border with a warm gleam sweep every 5s.',     rarity: 'legendary', preview: 'goldshine' },
+  // Mythicals
+  { id: 'chronicalillness1012',      nexalPrice: null, name: 'Inferno',        description: 'Real animated flames that engulf your avatar.',         rarity: 'mythical',  preview: 'inferno' },
+  { id: 'hydromoma',        nexalPrice: null, name: 'Hydro',          description: 'Shimmering water ripples and bubbles orbit your avatar.',rarity: 'mythical',  preview: 'hydro' },
+  { id: 'yinclol12',      nexalPrice: null, name: 'Yin & Yang',     description: 'Balance of light and dark. Every 5s, the symbol manifests.', rarity: 'mythical', preview: 'yinyang' },
 ];
 
 // Special nexal boost codes (not decorations)
 // Set amount to negative to mark as infinite-use
 const NEXAL_CODES = {
   [process.env.NEXAL_CODE_1 || 'ADMIN1231209#7327']: { amount: 100000, infinite: true },
-  [process.env.NEXAL_CODE_1 || 'STARTER']: { amount: 1000}
 };
 
 // Code -> decoration mapping (loaded from env vars)
@@ -148,8 +163,11 @@ function getCodeMap() {
     [process.env.DECO_CODE_FROSTBITE || 'FROSTBITE']:       'frost',
     [process.env.DECO_CODE_GOLDRING  || 'GOLDRING']:        'orbit_gold',
     [process.env.DECO_CODE_BLUEGLOW      || 'BLUEGLOW']:      'glow_blue',
-    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSETRALX']:    'nexus_admin',
+    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSADMIN']:    'nexus_admin',
     [process.env.DECO_CODE_STORMBRINGER  || 'STORMBRINGER']:  'storm',
+    [process.env.DECO_CODE_INFERNO       || 'INFERNO']:       'inferno',
+    [process.env.DECO_CODE_HYDRO         || 'HYDRO']:         'hydro',
+    [process.env.DECO_CODE_YINYANG       || 'YINYANG']:       'yinyang',
   };
 }
 
