@@ -6,27 +6,70 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireAuth);
 
-const ACHIEVEMENTS = [
-  { id: 'first_message',       title: 'First Words',        desc: 'Send your first message',                icon: '💬', nexals: 50,   target: 1,    field: 'messages_sent',   category: 'Social' },
-  { id: 'messages_100',        title: 'Chatty',             desc: 'Send 100 messages',                      icon: '🗣️', nexals: 200,  target: 100,  field: 'messages_sent',   category: 'Social' },
-  { id: 'messages_500',        title: 'Big Talker',         desc: 'Send 500 messages',                      icon: '📢', nexals: 500,  target: 500,  field: 'messages_sent',   category: 'Social' },
-  { id: 'messages_1000',       title: 'Legendary Chatter',  desc: 'Send 1,000 messages',                    icon: '🏆', nexals: 1200, target: 1000, field: 'messages_sent',   category: 'Social' },
-  { id: 'first_friend',        title: 'Not Alone',          desc: 'Make your first friend',                 icon: '🤝', nexals: 100,  target: 1,    field: 'friends_count',   category: 'Social' },
-  { id: 'friends_5',           title: 'Social Butterfly',   desc: 'Have 5 friends',                         icon: '🦋', nexals: 350,  target: 5,    field: 'friends_count',   category: 'Social' },
-  { id: 'friends_10',          title: 'Popular',            desc: 'Have 10 friends',                        icon: '⭐', nexals: 800,  target: 10,   field: 'friends_count',   category: 'Social' },
-  { id: 'first_dm',            title: 'Inbox Zero',         desc: 'Send your first DM',                     icon: '📩', nexals: 50,   target: 1,    field: 'dms_sent',        category: 'Social' },
-  { id: 'join_server',         title: 'Community Member',   desc: 'Join a server',                          icon: '🏠', nexals: 150,  target: 1,    field: 'servers_joined',  category: 'Explorer' },
-  { id: 'join_3_servers',      title: 'Explorer',           desc: 'Join 3 servers',                         icon: '🗺️', nexals: 400,  target: 3,    field: 'servers_joined',  category: 'Explorer' },
-  { id: 'create_server',       title: 'Founder',            desc: 'Create your own server',                 icon: '🏗️', nexals: 300,  target: 1,    field: 'servers_created', category: 'Explorer' },
-  { id: 'get_role',            title: 'Ranked Up',          desc: 'Receive a role in a server',             icon: '🎖️', nexals: 250,  target: 1,    field: 'roles_received',  category: 'Explorer' },
-  { id: 'channel_messages_50', title: 'Channel Regular',    desc: 'Send 50 server channel messages',        icon: '📡', nexals: 200,  target: 50,   field: 'channel_msgs',    category: 'Explorer' },
-  { id: 'redeem_code',         title: 'Code Hunter',        desc: 'Redeem an exclusive code',               icon: '🔑', nexals: 600,  target: 1,    field: 'codes_redeemed',  category: 'Collector' },
-  { id: 'equip_deco',          title: 'Looking Fresh',      desc: 'Equip a decoration',                     icon: '✨', nexals: 100,  target: 1,    field: 'decos_equipped',  category: 'Collector' },
-  { id: 'own_3_decos',         title: 'Decorator',          desc: 'Own 3 decorations',                      icon: '🎨', nexals: 500,  target: 3,    field: 'decos_owned',     category: 'Collector' },
-  { id: 'own_5_decos',         title: 'Connoisseur',        desc: 'Own 5 decorations',                      icon: '💎', nexals: 1500, target: 5,    field: 'decos_owned',     category: 'Collector' },
-  { id: 'nexals_1000',         title: 'Thousandaire',       desc: 'Accumulate 1,000 nexals',                icon: '💰', nexals: 200,  target: 1000, field: 'nexals_balance',  category: 'Wealth' },
-  { id: 'nexals_5000',         title: 'Five-Figure Club',   desc: 'Accumulate 5,000 nexals',                icon: '💵', nexals: 500,  target: 5000, field: 'nexals_balance',  category: 'Wealth' },
-];
+// Progressive chains: each entry unlocks after the previous is CLAIMED
+const CHAINS = {
+  messages: [
+    { id: 'msg_1',    title: 'First Words',       desc: 'Send your first message',      icon: '💬', nexals: 50,   target: 1 },
+    { id: 'msg_5',    title: 'Getting Started',   desc: 'Send 5 messages',               icon: '💬', nexals: 75,   target: 5 },
+    { id: 'msg_20',   title: 'Regular',            desc: 'Send 20 messages',              icon: '🗣️', nexals: 100,  target: 20 },
+    { id: 'msg_100',  title: 'Chatty',             desc: 'Send 100 messages',             icon: '🗣️', nexals: 200,  target: 100 },
+    { id: 'msg_500',  title: 'Big Talker',         desc: 'Send 500 messages',             icon: '📢', nexals: 500,  target: 500 },
+    { id: 'msg_1000', title: 'Legendary Chatter', desc: 'Send 1,000 messages',           icon: '🏆', nexals: 1200, target: 1000 },
+  ],
+  friends: [
+    { id: 'fr_1',  title: 'Not Alone',         desc: 'Make your first friend',   icon: '🤝', nexals: 100, target: 1 },
+    { id: 'fr_5',  title: 'Social Butterfly',  desc: 'Have 5 friends',           icon: '🦋', nexals: 350, target: 5 },
+    { id: 'fr_10', title: 'Popular',           desc: 'Have 10 friends',          icon: '⭐', nexals: 800, target: 10 },
+  ],
+  dms: [
+    { id: 'dm_1',   title: 'Inbox Zero',   desc: 'Send your first DM',  icon: '📩', nexals: 50,  target: 1 },
+    { id: 'dm_50',  title: 'DM Veteran',   desc: 'Send 50 DMs',         icon: '📨', nexals: 150, target: 50 },
+    { id: 'dm_200', title: 'DM Champion',  desc: 'Send 200 DMs',        icon: '📬', nexals: 400, target: 200 },
+  ],
+  servers: [
+    { id: 'sv_join1',   title: 'Community Member', desc: 'Join a server',      icon: '🏠', nexals: 150, target: 1 },
+    { id: 'sv_join3',   title: 'Explorer',          desc: 'Join 3 servers',     icon: '🗺️', nexals: 400, target: 3 },
+    { id: 'sv_join10',  title: 'Server Hopper',     desc: 'Join 10 servers',    icon: '🚀', nexals: 900, target: 10 },
+  ],
+  channel_msgs: [
+    { id: 'ch_10',  title: 'Breaking In',      desc: 'Send 10 channel messages',   icon: '📡', nexals: 100, target: 10 },
+    { id: 'ch_50',  title: 'Channel Regular',  desc: 'Send 50 channel messages',   icon: '📡', nexals: 200, target: 50 },
+    { id: 'ch_200', title: 'Channel Legend',   desc: 'Send 200 channel messages',  icon: '📡', nexals: 600, target: 200 },
+  ],
+  create: [
+    { id: 'sv_create', title: 'Founder',    desc: 'Create your own server',     icon: '🏗️', nexals: 300, target: 1 },
+  ],
+  roles: [
+    { id: 'role_1', title: 'Ranked Up',    desc: 'Receive a role in a server',  icon: '🎖️', nexals: 250, target: 1 },
+  ],
+  decos: [
+    { id: 'deco_redeem', title: 'Code Hunter',    desc: 'Redeem an exclusive code',    icon: '🔑', nexals: 600,  target: 1 },
+    { id: 'deco_equip',  title: 'Looking Fresh',  desc: 'Equip a decoration',          icon: '✨', nexals: 100,  target: 1 },
+    { id: 'deco_3',      title: 'Decorator',      desc: 'Own 3 decorations',           icon: '🎨', nexals: 500,  target: 3 },
+    { id: 'deco_5',      title: 'Connoisseur',    desc: 'Own 5 decorations',           icon: '💎', nexals: 1500, target: 5 },
+  ],
+  nexals: [
+    { id: 'nex_1000', title: 'Thousandaire',    desc: 'Accumulate 1,000 nexals',   icon: '💰', nexals: 200,  target: 1000 },
+    { id: 'nex_5000', title: 'Five-Figure Club', desc: 'Accumulate 5,000 nexals',  icon: '💵', nexals: 500,  target: 5000 },
+    { id: 'nex_15000', title: 'Nexal Baron',    desc: 'Accumulate 15,000 nexals',  icon: '👑', nexals: 1000, target: 15000 },
+  ],
+};
+
+// Category display names
+const CHAIN_CATEGORIES = {
+  messages: 'Messaging',
+  friends: 'Friends',
+  dms: 'Direct Messages',
+  servers: 'Servers',
+  channel_msgs: 'Channel Activity',
+  create: 'Server Creation',
+  roles: 'Roles',
+  decos: 'Collector',
+  nexals: 'Wealth',
+};
+
+// Flat list for lookups
+const ALL_ACHIEVEMENTS = Object.values(CHAINS).flat();
 
 async function getUserStats(userId) {
   const [msgRes, friendRes, serverMemberRes, serverOwnerRes, roleRes, chMsgRes, decoRes, equippedRes, nexalsRes] = await Promise.all([
@@ -40,73 +83,60 @@ async function getUserStats(userId) {
     pool.query('SELECT active_decoration FROM users WHERE id=$1', [userId]),
     pool.query('SELECT nexals FROM users WHERE id=$1', [userId]),
   ]);
-
   const decoCount = parseInt(decoRes.rows[0].count);
-  const nexals = nexalsRes.rows[0]?.nexals || 0;
-
   return {
-    messages_sent:   parseInt(msgRes.rows[0].count),
-    dms_sent:        parseInt(msgRes.rows[0].count), // DMs = messages
-    friends_count:   parseInt(friendRes.rows[0].count),
-    servers_joined:  parseInt(serverMemberRes.rows[0].count),
-    servers_created: parseInt(serverOwnerRes.rows[0].count),
-    roles_received:  parseInt(roleRes.rows[0].count) > 0 ? 1 : 0,
-    channel_msgs:    parseInt(chMsgRes.rows[0].count),
-    codes_redeemed:  decoCount, // each deco = at least one code/purchase
-    decos_equipped:  equippedRes.rows[0]?.active_decoration ? 1 : 0,
-    decos_owned:     decoCount,
-    nexals_balance:  nexals,
+    messages:     parseInt(msgRes.rows[0].count),
+    friends:      parseInt(friendRes.rows[0].count),
+    dms:          parseInt(msgRes.rows[0].count), // DMs = messages table
+    servers:      parseInt(serverMemberRes.rows[0].count),
+    channel_msgs: parseInt(chMsgRes.rows[0].count),
+    create:       parseInt(serverOwnerRes.rows[0].count),
+    roles:        parseInt(roleRes.rows[0].count) > 0 ? 1 : 0,
+    decos_owned:  decoCount,
+    decos_equip:  equippedRes.rows[0]?.active_decoration ? 1 : 0,
+    decos_redeem: decoCount,
+    nexals:       nexalsRes.rows[0]?.nexals || 0,
   };
 }
 
-async function upsertProgress(userId, achievementId, progress, target) {
-  const completed = progress >= target;
-  const now = Math.floor(Date.now() / 1000);
-  await pool.query(`
-    INSERT INTO user_achievements (id, user_id, achievement_id, progress, completed_at)
-    VALUES ($1,$2,$3,$4,$5)
-    ON CONFLICT (user_id, achievement_id) DO UPDATE
-      SET progress = GREATEST(user_achievements.progress, $4),
-          completed_at = CASE
-            WHEN user_achievements.completed_at IS NULL AND $6 THEN $5
-            ELSE user_achievements.completed_at
-          END
-  `, [uuidv4(), userId, achievementId, progress, completed ? now : null, completed]);
+// Map achievement id -> stat value
+function getStatForAch(a, stats, chainKey) {
+  if (chainKey === 'messages')     return stats.messages;
+  if (chainKey === 'friends')      return stats.friends;
+  if (chainKey === 'dms')          return stats.dms;
+  if (chainKey === 'servers')      return stats.servers;
+  if (chainKey === 'channel_msgs') return stats.channel_msgs;
+  if (chainKey === 'create')       return stats.create;
+  if (chainKey === 'roles')        return stats.roles;
+  if (chainKey === 'decos') {
+    if (a.id === 'deco_equip')  return stats.decos_equip;
+    if (a.id === 'deco_redeem') return stats.decos_redeem;
+    return stats.decos_owned;
+  }
+  if (chainKey === 'nexals')       return stats.nexals;
+  return 0;
 }
 
-// Sync all achievements for a user
 async function syncAll(userId) {
   const stats = await getUserStats(userId);
-  for (const a of ACHIEVEMENTS) {
-    const progress = Math.min(stats[a.field] || 0, a.target);
-    await upsertProgress(userId, a.id, progress, a.target);
+  const now = Math.floor(Date.now() / 1000);
+  for (const a of ALL_ACHIEVEMENTS) {
+    const chainKey = Object.keys(CHAINS).find(k => CHAINS[k].some(x => x.id === a.id));
+    const progress = Math.min(getStatForAch(a, stats, chainKey), a.target);
+    const completed = progress >= a.target;
+    await pool.query(`
+      INSERT INTO user_achievements (id, user_id, achievement_id, progress, completed_at)
+      VALUES ($1,$2,$3,$4,$5)
+      ON CONFLICT (user_id, achievement_id) DO UPDATE
+        SET progress = GREATEST(user_achievements.progress, $4),
+            completed_at = CASE
+              WHEN user_achievements.completed_at IS NULL AND $6 THEN $5
+              ELSE user_achievements.completed_at END
+    `, [uuidv4(), userId, a.id, progress, completed ? now : null, completed]);
   }
 }
 
-// GET — return achievements with current progress
-router.get('/', async (req, res) => {
-  const userId = req.session.userId;
-  await syncAll(userId); // always sync on load
-  const stats = await getUserStats(userId);
-  const nexalsRes = await pool.query('SELECT nexals FROM users WHERE id=$1', [userId]);
-  const ua = await pool.query('SELECT achievement_id, progress, completed_at, claimed_at FROM user_achievements WHERE user_id=$1', [userId]);
-  const uaMap = {};
-  ua.rows.forEach(r => { uaMap[r.achievement_id] = r; });
-
-  res.json({
-    achievements: ACHIEVEMENTS.map(a => ({
-      ...a,
-      progress: Math.min(stats[a.field] || 0, a.target),
-      completed: (stats[a.field] || 0) >= a.target,
-      claimed: !!uaMap[a.id]?.claimed_at,
-    })),
-    nexals: nexalsRes.rows[0]?.nexals || 0
-  });
-});
-
-// POST /sync — same as GET but called from frontend explicitly
-router.post('/sync', async (req, res) => {
-  const userId = req.session.userId;
+async function buildResponse(userId) {
   await syncAll(userId);
   const stats = await getUserStats(userId);
   const nexalsRes = await pool.query('SELECT nexals FROM users WHERE id=$1', [userId]);
@@ -114,25 +144,44 @@ router.post('/sync', async (req, res) => {
   const uaMap = {};
   ua.rows.forEach(r => { uaMap[r.achievement_id] = r; });
 
-  res.json({
-    achievements: ACHIEVEMENTS.map(a => ({
-      ...a,
-      progress: Math.min(stats[a.field] || 0, a.target),
-      completed: (stats[a.field] || 0) >= a.target,
-      claimed: !!uaMap[a.id]?.claimed_at,
-    })),
-    nexals: nexalsRes.rows[0]?.nexals || 0
+  const categories = Object.entries(CHAINS).map(([chainKey, chain]) => {
+    // Find the first unclaimed+incomplete OR first unclaimed+complete in the chain
+    // Show: all claimed + first unclaimed (whether complete or not)
+    const visible = [];
+    let unclaimedShown = false;
+    for (const a of chain) {
+      const row = uaMap[a.id];
+      const claimed = !!row?.claimed_at;
+      if (claimed) {
+        visible.push({ ...a, claimed: true, completed: true, progress: a.target });
+      } else if (!unclaimedShown) {
+        const chainStat = getStatForAch(a, stats, chainKey);
+        const progress = Math.min(chainStat, a.target);
+        const completed = progress >= a.target;
+        visible.push({ ...a, claimed: false, completed, progress });
+        unclaimedShown = true;
+      }
+    }
+    return { key: chainKey, label: CHAIN_CATEGORIES[chainKey], achievements: visible };
   });
+
+  return { categories, nexals: nexalsRes.rows[0]?.nexals || 0 };
+}
+
+router.get('/', async (req, res) => {
+  res.json(await buildResponse(req.session.userId));
 });
 
-// POST /claim/:id — auto-syncs then claims
+router.post('/sync', async (req, res) => {
+  res.json(await buildResponse(req.session.userId));
+});
+
 router.post('/claim/:achievementId', async (req, res) => {
   const { achievementId } = req.params;
   const userId = req.session.userId;
-  const achievement = ACHIEVEMENTS.find(a => a.id === achievementId);
+  const achievement = ALL_ACHIEVEMENTS.find(a => a.id === achievementId);
   if (!achievement) return res.status(404).json({ error: 'Achievement not found' });
 
-  // Auto-sync to make sure completed_at is set if earned
   await syncAll(userId);
 
   const ua = await pool.query('SELECT * FROM user_achievements WHERE user_id=$1 AND achievement_id=$2', [userId, achievementId]);
@@ -148,5 +197,5 @@ router.post('/claim/:achievementId', async (req, res) => {
 });
 
 module.exports = router;
-module.exports.ACHIEVEMENTS = ACHIEVEMENTS;
-module.exports.upsertProgress = upsertProgress;
+module.exports.ALL_ACHIEVEMENTS = ALL_ACHIEVEMENTS;
+module.exports.syncAll = syncAll;
