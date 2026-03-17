@@ -2196,10 +2196,11 @@ html, body {
 }
 .nexal-balance svg { color: #ffd700; }
 
-.achievements-grid {
+.achievements-grid, #achievements-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 10px;
+  align-content: start;
 }
 .ach-category-label {
   grid-column: 1 / -1;
