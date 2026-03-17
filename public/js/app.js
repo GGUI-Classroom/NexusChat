@@ -386,6 +386,30 @@
     $(id).classList.add('active');
   }
 
+  function showSuspensionScreen(errorMsg, until, reason) {
+    // Parse "suspended until <date>" from error message if no until provided
+    let untilText = 'an unknown time';
+    if (until) {
+      untilText = new Date(until * 1000).toLocaleString();
+    } else if (errorMsg) {
+      const m = errorMsg.match(/until (.+)$/);
+      if (m) untilText = m[1];
+    }
+    $('suspension-until').textContent = 'Suspended until: ' + untilText;
+    if (reason) {
+      $('suspension-reason-text').textContent = reason;
+      $('suspension-reason-box').style.display = 'block';
+    } else {
+      $('suspension-reason-box').style.display = 'none';
+    }
+    showScreen('suspension-screen');
+  }
+
+  window.logoutFromSuspension = async function() {
+    await api('POST', '/api/auth/logout');
+    showScreen('auth-screen');
+  };
+
   // ---- Auth Form Handling ----
   $('login-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -2209,6 +2233,132 @@
     endCallLocal();
     showScreen('auth-screen');
   });
+
+  // ---- Admin Panel ----
+  async function checkAdminStatus() {
+    const r = await api('GET', '/api/admin/check');
+    if (!r.error && r.isAdmin) {
+      const btn = $('rail-admin-btn');
+      if (btn) btn.style.display = 'flex';
+    }
+  }
+
+  window.openAdminPanel = function() {
+    $('admin-overlay').classList.add('active');
+    adminSwitchTab('suspend');
+  };
+  window.closeAdminPanel = function() {
+    $('admin-overlay').classList.remove('active');
+  };
+
+  document.querySelectorAll('.admin-tab').forEach(tab => {
+    tab.addEventListener('click', () => adminSwitchTab(tab.dataset.tab));
+  });
+
+  function adminSwitchTab(tab) {
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.querySelectorAll('.admin-pane').forEach(p => p.classList.remove('active'));
+    const pane = $('admin-pane-' + tab);
+    if (pane) pane.classList.add('active');
+    if (tab === 'servers') adminLoadServers();
+    if (tab === 'history') adminLoadHistory();
+  }
+
+  $('admin-suspend-btn').addEventListener('click', async () => {
+    const username = $('admin-suspend-username').value.trim();
+    const duration = parseInt($('admin-suspend-duration').value);
+    const unit = $('admin-suspend-unit').value;
+    const reason = $('admin-suspend-reason').value.trim();
+    showError('admin-suspend-error', '');
+    $('admin-suspend-success').style.display = 'none';
+    if (!username) return showError('admin-suspend-error', 'Enter a username');
+    if (!duration || duration < 1) return showError('admin-suspend-error', 'Enter a valid duration');
+    const btn = $('admin-suspend-btn');
+    btn.disabled = true; btn.textContent = 'Suspending…';
+    const r = await api('POST', '/api/admin/suspend', { username, duration, unit, reason });
+    btn.disabled = false; btn.textContent = 'Suspend';
+    if (r.error) return showError('admin-suspend-error', r.error);
+    const until = new Date(r.suspendedUntil * 1000);
+    const succ = $('admin-suspend-success');
+    succ.textContent = `✓ @${r.username} suspended until ${until.toLocaleString()}`;
+    succ.style.display = 'block';
+    $('admin-suspend-username').value = '';
+    $('admin-suspend-reason').value = '';
+    $('admin-suspend-duration').value = '1';
+    if (socket) socket.emit('user_suspended', { userId: r.userId });
+  });
+
+  $('admin-unsuspend-btn').addEventListener('click', async () => {
+    const username = $('admin-unsuspend-username').value.trim();
+    showError('admin-unsuspend-error', '');
+    if (!username) return showError('admin-unsuspend-error', 'Enter a username');
+    const r = await api('POST', '/api/admin/unsuspend', { username });
+    if (r.error) return showError('admin-unsuspend-error', r.error);
+    $('admin-unsuspend-username').value = '';
+    toast('✓ @' + username + ' unsuspended', 'success');
+  });
+
+  window.adminLoadServers = async function() {
+    const list = $('admin-servers-list');
+    list.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center">Loading…</div>';
+    const r = await api('GET', '/api/admin/servers');
+    if (r.error) { list.innerHTML = '<div style="padding:20px;color:var(--red)">' + esc(r.error) + '</div>'; return; }
+    if (!r.servers.length) { list.innerHTML = '<div style="padding:20px;color:var(--text-muted)">No servers found</div>'; return; }
+    list.innerHTML = r.servers.map(s => {
+      const isMember = servers.some(sv => sv.id === s.id);
+      const icon = s.iconDataUrl
+        ? `<img src="${s.iconDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<span>${esc(s.name[0].toUpperCase())}</span>`;
+      return `<div class="admin-server-row">
+        <div class="admin-server-icon">${icon}</div>
+        <div class="admin-server-info">
+          <div class="admin-server-name">${esc(s.name)}</div>
+          <div class="admin-server-meta">${s.memberCount} members · Owner: @${esc(s.ownerUsername)}</div>
+        </div>
+        <div class="admin-server-actions">
+          ${!isMember ? `<button class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="adminJoinServer('${s.id}')">Join</button>` : `<span style="font-size:11px;color:var(--green)">✓ Joined</span>`}
+          <button class="action-btn danger" style="font-size:11px;padding:5px 10px" onclick="adminDeleteServer('${s.id}','${esc(s.name)}')">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+  };
+
+  window.adminJoinServer = async function(serverId) {
+    const r = await api('POST', '/api/admin/servers/' + serverId + '/join');
+    if (r.error) return toast(r.error, 'error');
+    toast('Joined server!', 'success');
+    await loadServers();
+    adminLoadServers();
+  };
+
+  window.adminDeleteServer = async function(serverId, name) {
+    if (!confirm('Permanently delete server "' + name + '"? This cannot be undone.')) return;
+    const r = await api('DELETE', '/api/admin/servers/' + serverId);
+    if (r.error) return toast(r.error, 'error');
+    toast('Server deleted', 'info');
+    await loadServers();
+    adminLoadServers();
+  };
+
+  async function adminLoadHistory() {
+    const list = $('admin-history-list');
+    list.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center">Loading…</div>';
+    const r = await api('GET', '/api/admin/suspensions');
+    if (r.error) { list.innerHTML = '<div style="color:var(--red)">' + esc(r.error) + '</div>'; return; }
+    if (!r.suspensions.length) { list.innerHTML = '<div style="color:var(--text-muted)">No suspensions yet</div>'; return; }
+    const now = Math.floor(Date.now() / 1000);
+    list.innerHTML = r.suspensions.map(s => {
+      const until = new Date(s.suspendedUntil * 1000);
+      const isActive = s.active && s.suspendedUntil > now;
+      return `<div class="admin-history-row">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="admin-history-user">@${esc(s.username)}</span>
+          <span class="${isActive ? 'susp-active' : 'susp-expired'}">${isActive ? '● Active' : '○ Expired'}</span>
+        </div>
+        <div class="admin-history-meta">Until: ${until.toLocaleString()} · By: @${esc(s.adminUsername)}${s.reason ? ' · "' + esc(s.reason) + '"' : ''}</div>
+      </div>`;
+    }).join('');
+  }
 
   // ---- Shop ----
   let shopData = null;
