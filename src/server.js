@@ -47,6 +47,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/servers', require('./routes/servers'));
 app.use('/api/shop', require('./routes/shop'));
 app.use('/api/achievements', require('./routes/achievements'));
+app.use('/api/admin', require('./routes/admin'));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
