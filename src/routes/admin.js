@@ -67,7 +67,7 @@ router.post('/suspend', async (req, res) => {
     [uuidv4(), user.rows[0].id, req.session.userId, reason || null, until]
   );
 
-  res.json({ success: true, username: user.rows[0].username, suspendedUntil: until });
+  res.json({ success: true, username: user.rows[0].username, userId: user.rows[0].id, suspendedUntil: until });
 });
 
 // Unsuspend a user
