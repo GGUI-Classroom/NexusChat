@@ -39,6 +39,21 @@ router.post('/login', async (req, res) => {
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+    // Check suspension
+    const susp = await pool.query(
+      `SELECT suspended_until FROM suspensions WHERE user_id=$1 AND active=TRUE AND suspended_until > EXTRACT(EPOCH FROM NOW())::BIGINT ORDER BY created_at DESC LIMIT 1`,
+      [user.id]
+    );
+    if (susp.rows.length) {
+      const until = parseInt(susp.rows[0].suspended_until);
+      const untilDate = new Date(until * 1000);
+      return res.status(403).json({
+        error: `Your account is suspended until ${untilDate.toUTCString()}`,
+        suspended: true,
+        suspendedUntil: until
+      });
+    }
+
     req.session.userId = user.id;
     return res.json({ success: true, user: {
       id: user.id, username: user.username, displayName: user.display_name,
