@@ -2361,7 +2361,8 @@
       categories[a.category].push(a);
     });
 
-    let html = '<div class="achievements-grid">';
+    grid.className = 'achievements-grid';
+    let html = '';
     for (const [cat, achs] of Object.entries(categories)) {
       html += `<div class="ach-category-label">${cat}</div>`;
       achs.forEach(a => {
@@ -2389,17 +2390,21 @@
           </div>`;
       });
     }
-    html += '</div>';
     grid.innerHTML = html;
   }
 
   window.claimAchievement = async function(achId) {
+    const btn = document.querySelector('.ach-claim-btn[onclick*="' + achId + '"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Claiming…'; }
     const r = await api('POST', '/api/achievements/claim/' + achId);
-    if (r.error) return toast(r.error, 'error');
+    if (r.error) {
+      toast(r.error, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Claim!'; }
+      return;
+    }
     toast('+' + r.earned.toLocaleString() + ' Nexals! 🎉', 'success', 4000);
     updateNexalDisplay(r.nexals);
     if (achData) achData.nexals = r.nexals;
-    // Refresh achievements
     await loadAchievements();
   };
 
