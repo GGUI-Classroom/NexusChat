@@ -2332,8 +2332,13 @@
     btn.disabled = false; btn.textContent = 'Redeem';
     if (r.error) return showError('shop-error', r.error);
     $('shop-code-input').value = '';
+    if (r.nexalBoost) {
+      updateNexalDisplay(r.nexals);
+      toast('💰 +' + r.amount.toLocaleString() + ' Nexals added!', 'success', 5000);
+      await loadShop();
+      return;
+    }
     if (r.decoration.rarity === 'mythical') {
-      // Show dramatic claim animation first, then refresh shop
       await showClaimAnimation(r.decoration);
     } else {
       toast('🎉 Unlocked: ' + r.decoration.name + '!', 'success', 5000);
