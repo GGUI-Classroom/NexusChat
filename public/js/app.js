@@ -1202,6 +1202,7 @@
     const el = $('view-' + view);
     if (el) el.classList.add('active');
     if (view === 'shop') loadShop();
+    if (view === 'achievements') loadAchievements();
   }
 
   // Rail selection: 'dms' or a server id
@@ -2216,7 +2217,16 @@
     const r = await api('GET', '/api/shop');
     if (r.error) return;
     shopData = r;
+    updateNexalDisplay(r.nexals || 0);
     renderShop(r.decorations, r.active);
+  }
+
+  function updateNexalDisplay(nexals) {
+    const fmt = nexals.toLocaleString();
+    const el1 = $('shop-nexal-count');
+    const el2 = $('ach-nexal-count');
+    if (el1) el1.textContent = fmt;
+    if (el2) el2.textContent = fmt;
   }
 
   function renderShop(decorations, active) {
@@ -2243,9 +2253,14 @@
           </div>`;
       }
 
-      let btnClass = 'locked', btnText = '🔒 Locked';
+      const myNexals = (shopData && shopData.nexals) || 0;
+      const canBuy = !isOwned && d.nexalPrice && myNexals >= d.nexalPrice;
+      const priceLabel = d.nexalPrice ? d.nexalPrice.toLocaleString() + ' Nexals' : null;
+      let btnClass = 'locked', btnText = '🔒 Code Only';
       if (isEquipped) { btnClass = 'unequip'; btnText = '✓ Equipped'; }
       else if (isOwned) { btnClass = 'equip'; btnText = 'Equip'; }
+      else if (canBuy) { btnClass = 'buy'; btnText = 'Buy'; }
+      else if (d.nexalPrice) { btnClass = 'locked'; btnText = '🔒 ' + priceLabel; }
 
       return `
         <div class="shop-card ${isOwned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}" id="shopcard-${d.id}">
@@ -2258,7 +2273,8 @@
           <span class="shop-rarity rarity-${d.rarity}">${d.rarity}</span>
           <div class="shop-card-name">${esc(d.name)}</div>
           <div class="shop-card-desc">${esc(d.description)}</div>
-          <button class="shop-card-btn ${btnClass}" onclick="shopAction('${d.id}','${isEquipped ? 'unequip' : isOwned ? 'equip' : 'locked'}')">
+          ${(!isOwned && priceLabel) ? `<div class="shop-card-price">${priceLabel}</div>` : ''}
+          <button class="shop-card-btn ${btnClass}" onclick="shopAction('${d.id}','${isEquipped ? 'unequip' : isOwned ? 'equip' : canBuy ? 'buy' : 'locked'}')">
             ${btnText}
           </button>
           ${isOwned ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="unclaimDeco('${d.id}','${esc(d.name)}')">Remove</button>` : ''}
@@ -2275,7 +2291,20 @@
 
   window.shopAction = async function(decoId, action) {
     if (action === 'locked') {
-      toast('Redeem a code to unlock this decoration!', 'info');
+      const d = shopData && shopData.decorations.find(x => x.id === decoId);
+      if (d && d.nexalPrice) toast('Not enough Nexals! Need ' + d.nexalPrice.toLocaleString(), 'error');
+      else toast('Redeem an exclusive code to unlock this decoration!', 'info');
+      return;
+    }
+    if (action === 'buy') {
+      const d = shopData && shopData.decorations.find(x => x.id === decoId);
+      if (!confirm('Buy "' + (d ? d.name : decoId) + '" for ' + (d ? d.nexalPrice.toLocaleString() : '?') + ' Nexals?')) return;
+      const r = await api('POST', '/api/shop/buy', { decorationId: decoId });
+      if (r.error) return toast(r.error, 'error');
+      toast('Purchased! ✨', 'success');
+      shopData.nexals = r.nexals;
+      updateNexalDisplay(r.nexals);
+      await loadShop();
       return;
     }
     const equipId = action === 'equip' ? decoId : null;
@@ -2308,6 +2337,71 @@
     }
     await loadShop();
   });
+
+  // ---- Achievements ----
+  let achData = null;
+
+  async function loadAchievements() {
+    // First sync progress
+    const sync = await api('POST', '/api/achievements/sync');
+    if (sync.error) return;
+    achData = sync;
+    updateNexalDisplay(sync.nexals || 0);
+    renderAchievements(sync.achievements, sync.nexals);
+  }
+
+  function renderAchievements(achievements, nexals) {
+    const grid = $('achievements-grid');
+    if (!grid) return;
+
+    // Group by category
+    const categories = {};
+    achievements.forEach(a => {
+      if (!categories[a.category]) categories[a.category] = [];
+      categories[a.category].push(a);
+    });
+
+    let html = '<div class="achievements-grid">';
+    for (const [cat, achs] of Object.entries(categories)) {
+      html += `<div class="ach-category-label">${cat}</div>`;
+      achs.forEach(a => {
+        const pct = Math.round((a.progress / a.target) * 100);
+        const canClaim = a.completed && !a.claimed;
+        html += `
+          <div class="ach-card ${a.completed ? 'completed' : ''} ${a.claimed ? 'claimed' : ''}">
+            <div class="ach-icon">${a.icon}</div>
+            <div class="ach-body">
+              <div class="ach-title">${esc(a.title)}</div>
+              <div class="ach-desc">${esc(a.desc)}</div>
+              <div class="ach-progress-bar">
+                <div class="ach-progress-fill" style="width:${pct}%"></div>
+              </div>
+              <div class="ach-progress-text">${a.progress.toLocaleString()} / ${a.target.toLocaleString()}</div>
+              <div class="ach-footer">
+                <div class="ach-reward">✦ ${a.nexals.toLocaleString()} Nexals</div>
+                ${canClaim
+                  ? `<button class="ach-claim-btn" onclick="claimAchievement('${a.id}')">Claim!</button>`
+                  : a.claimed
+                    ? `<span class="ach-claimed-badge">✓ Claimed</span>`
+                    : ''}
+              </div>
+            </div>
+          </div>`;
+      });
+    }
+    html += '</div>';
+    grid.innerHTML = html;
+  }
+
+  window.claimAchievement = async function(achId) {
+    const r = await api('POST', '/api/achievements/claim/' + achId);
+    if (r.error) return toast(r.error, 'error');
+    toast('+' + r.earned.toLocaleString() + ' Nexals! 🎉', 'success', 4000);
+    updateNexalDisplay(r.nexals);
+    if (achData) achData.nexals = r.nexals;
+    // Refresh achievements
+    await loadAchievements();
+  };
 
   window.unclaimDeco = async function(decoId, name) {
     if (!confirm('Remove "' + name + '" from your collection? You will need the code to reclaim it.')) return;
