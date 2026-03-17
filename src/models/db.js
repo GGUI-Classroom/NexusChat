@@ -140,6 +140,13 @@ async function initDb() {
 
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_decoration TEXT DEFAULT NULL`, 'alter_users_decoration');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS nexals INTEGER DEFAULT 0`, 'alter_users_nexals');
+  await runSql(`CREATE TABLE IF NOT EXISTS code_redemptions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code TEXT NOT NULL,
+    redeemed_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(user_id, code)
+  )`, 'code_redemptions');
 
   await runSql(`CREATE TABLE IF NOT EXISTS user_achievements (
     id TEXT PRIMARY KEY,
