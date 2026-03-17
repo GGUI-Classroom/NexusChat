@@ -2240,8 +2240,11 @@
       const isOwned = d.owned;
       const isMythical = d.rarity === 'mythical';
 
-      // Mythical unowned = mystery card
-      if (isMythical && !isOwned) {
+      // Mythical unowned: show mystery OR buyable card
+      const myNexalsMythical = (shopData && shopData.nexals) || 0;
+      const canAffordMythical = d.nexalPrice && myNexalsMythical >= d.nexalPrice;
+      if (isMythical && !isOwned && !canAffordMythical) {
+        const priceHint = d.nexalPrice ? d.nexalPrice.toLocaleString() + ' Nexals to unlock' : 'Exclusive code only';
         return `
           <div class="shop-card mystery" id="shopcard-${d.id}">
             <div class="mystery-preview">
@@ -2249,7 +2252,7 @@
             </div>
             <span class="shop-rarity rarity-mythical">MYTHICAL</span>
             <div class="shop-card-name mystery-name">? ? ?</div>
-            <div class="mystery-hint">Redeem an exclusive code<br>to reveal this decoration</div>
+            <div class="mystery-hint">${d.nexalPrice ? `<span style="color:#ffd700;font-weight:700">${priceHint}</span>` : 'Redeem an exclusive code<br>to reveal this decoration'}</div>
           </div>`;
       }
 
@@ -2342,57 +2345,54 @@
   let achData = null;
 
   async function loadAchievements() {
-    // First sync progress
     const sync = await api('POST', '/api/achievements/sync');
     if (sync.error) return;
     achData = sync;
     updateNexalDisplay(sync.nexals || 0);
-    renderAchievements(sync.achievements, sync.nexals);
+    renderAchievements(sync);
   }
 
-  function renderAchievements(achievements, nexals) {
+  function renderAchievements(data) {
     const grid = $('achievements-grid');
     if (!grid) return;
+    const { categories } = data;
 
-    // Group by category
-    const categories = {};
-    achievements.forEach(a => {
-      if (!categories[a.category]) categories[a.category] = [];
-      categories[a.category].push(a);
-    });
-
-    grid.className = 'achievements-grid';
     let html = '';
-    for (const [cat, achs] of Object.entries(categories)) {
-      html += `<div class="ach-category-label">${cat}</div>`;
-      achs.forEach(a => {
-        const pct = Math.round((a.progress / a.target) * 100);
+    categories.forEach(cat => {
+      if (!cat.achievements.length) return;
+      html += `<div class="ach-category-section">`;
+      html += `<div class="ach-category-label">${esc(cat.label)}</div>`;
+      html += `<div class="ach-cards-row">`;
+      cat.achievements.forEach(a => {
+        const pct = Math.min(100, Math.round((a.progress / a.target) * 100));
         const canClaim = a.completed && !a.claimed;
         html += `
           <div class="ach-card ${a.completed ? 'completed' : ''} ${a.claimed ? 'claimed' : ''}">
-            <div class="ach-icon">${a.icon}</div>
-            <div class="ach-body">
-              <div class="ach-title">${esc(a.title)}</div>
-              <div class="ach-desc">${esc(a.desc)}</div>
-              <div class="ach-progress-bar">
-                <div class="ach-progress-fill" style="width:${pct}%"></div>
+            <div class="ach-card-top">
+              <div class="ach-icon">${a.icon}</div>
+              <div class="ach-body">
+                <div class="ach-title">${esc(a.title)}</div>
+                <div class="ach-desc">${esc(a.desc)}</div>
               </div>
-              <div class="ach-progress-text">${a.progress.toLocaleString()} / ${a.target.toLocaleString()}</div>
-              <div class="ach-footer">
-                <div class="ach-reward">✦ ${a.nexals.toLocaleString()} Nexals</div>
-                ${canClaim
-                  ? `<button class="ach-claim-btn" data-ach-id="${a.id}">Claim!</button>`
-                  : a.claimed
-                    ? `<span class="ach-claimed-badge">✓ Claimed</span>`
-                    : ''}
-              </div>
+            </div>
+            <div class="ach-progress-bar">
+              <div class="ach-progress-fill" style="width:${pct}%"></div>
+            </div>
+            <div class="ach-progress-text">${a.progress.toLocaleString()} / ${a.target.toLocaleString()}</div>
+            <div class="ach-footer">
+              <div class="ach-reward">✦ ${a.nexals.toLocaleString()} Nexals</div>
+              ${canClaim
+                ? `<button class="ach-claim-btn" data-ach-id="${a.id}">Claim!</button>`
+                : a.claimed
+                  ? `<span class="ach-claimed-badge">✓ Claimed</span>`
+                  : ''}
             </div>
           </div>`;
       });
-    }
+      html += `</div></div>`;
+    });
     grid.innerHTML = html;
 
-    // Use event delegation instead of inline onclick to avoid quote escaping issues
     grid.querySelectorAll('.ach-claim-btn[data-ach-id]').forEach(btn => {
       btn.addEventListener('click', () => claimAchievement(btn.dataset.achId));
     });
