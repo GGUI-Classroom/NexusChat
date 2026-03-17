@@ -2304,9 +2304,13 @@
       if (!confirm('Buy "' + (d ? d.name : decoId) + '" for ' + (d ? d.nexalPrice.toLocaleString() : '?') + ' Nexals?')) return;
       const r = await api('POST', '/api/shop/buy', { decorationId: decoId });
       if (r.error) return toast(r.error, 'error');
-      toast('Purchased! ✨', 'success');
       shopData.nexals = r.nexals;
       updateNexalDisplay(r.nexals);
+      if (d && d.rarity === 'mythical') {
+        await showClaimAnimation(r.decoration);
+      } else {
+        toast('Purchased! ✨', 'success');
+      }
       await loadShop();
       return;
     }
