@@ -129,7 +129,7 @@ const DECORATIONS = [
   },
   {
     id: 'storm',
-    nexalPrice: 20000,
+    nexalPrice: 10000,
     name: 'Storm',
     description: 'Electric sparks orbit you, then a lightning bolt tears through every 5 seconds.',
     rarity: 'mythical',
