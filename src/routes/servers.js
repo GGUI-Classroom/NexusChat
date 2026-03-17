@@ -323,6 +323,7 @@ router.patch('/:id/members/:userId/role', async (req, res) => {
   } else {
     await pool.query('UPDATE server_members SET role_id=NULL, role=\'member\' WHERE server_id=$1 AND user_id=$2', [id, userId]);
   }
+  await syncAch(userId, ['roles_received']);
   res.json({ success: true });
 });
 
@@ -337,6 +338,7 @@ router.post('/join/:code', async (req, res) => {
   const already = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [server.id, req.session.userId]);
   if (already.rows.length) return res.json({ server: fmtServer(server), alreadyMember: true });
   await pool.query('INSERT INTO server_members (id, server_id, user_id) VALUES ($1,$2,$3)', [uuidv4(), server.id, req.session.userId]);
+  await syncAch(req.session.userId, ['servers_joined']);
   res.json({ server: fmtServer(server) });
 });
 
