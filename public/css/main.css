@@ -2183,3 +2183,109 @@ html, body {
   from { opacity: 0; }
   to   { opacity: 0.6; }
 }
+
+/* ===== NEXALS & ACHIEVEMENTS ===== */
+.nexal-balance {
+  display: flex; align-items: center; gap: 6px;
+  background: linear-gradient(135deg, rgba(255,200,50,0.12), rgba(180,80,255,0.08));
+  border: 1px solid rgba(255,200,50,0.3);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font-size: 13px; font-weight: 700;
+  color: #ffd700;
+}
+.nexal-balance svg { color: #ffd700; }
+
+.achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+.ach-category-label {
+  grid-column: 1 / -1;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 8px; margin-bottom: 2px;
+}
+.ach-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex; gap: 12px; align-items: flex-start;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+.ach-card.completed { border-color: rgba(61,214,140,0.3); }
+.ach-card.claimed   { border-color: var(--border); opacity: 0.6; }
+.ach-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(61,214,140,0.04), transparent);
+  opacity: 0; transition: opacity 0.2s;
+}
+.ach-card.completed:not(.claimed)::before { opacity: 1; }
+
+.ach-icon {
+  font-size: 24px; line-height: 1;
+  flex-shrink: 0; margin-top: 2px;
+}
+.ach-body { flex: 1; min-width: 0; }
+.ach-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.ach-desc  { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4; }
+
+.ach-progress-bar {
+  height: 4px; border-radius: 99px;
+  background: var(--bg-hover);
+  margin-bottom: 6px; overflow: hidden;
+}
+.ach-progress-fill {
+  height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  transition: width 0.5s ease;
+}
+.ach-card.completed .ach-progress-fill { background: var(--green); }
+
+.ach-progress-text {
+  font-size: 10px; color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.ach-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 8px;
+}
+.ach-reward {
+  font-size: 12px; font-weight: 700;
+  color: #ffd700;
+  display: flex; align-items: center; gap: 4px;
+}
+.ach-claim-btn {
+  padding: 5px 12px;
+  background: var(--green);
+  border: none; border-radius: var(--radius-sm);
+  color: var(--bg-void);
+  font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: var(--transition);
+}
+.ach-claim-btn:hover { transform: scale(1.05); }
+.ach-claimed-badge {
+  font-size: 11px; color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Buy button in shop */
+.shop-card-btn.buy {
+  background: linear-gradient(135deg, rgba(255,200,50,0.2), rgba(180,80,255,0.15));
+  color: #ffd700;
+  border: 1px solid rgba(255,200,50,0.3);
+}
+.shop-card-btn.buy:hover {
+  background: linear-gradient(135deg, rgba(255,200,50,0.35), rgba(180,80,255,0.25));
+}
+.shop-card-price {
+  font-size: 11px; color: #ffd700; font-weight: 700;
+  margin-bottom: 4px; text-align: center;
+}
