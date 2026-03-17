@@ -9,7 +9,7 @@ router.use(requireAuth);
 // Progressive chains: each entry unlocks after the previous is CLAIMED
 const CHAINS = {
   messages: [
-    { id: 'msg_1',    title: 'First Words',       desc: 'Send your first message',      icon: '💬', nexals: 100000,   target: 1 },
+    { id: 'msg_1',    title: 'First Words',       desc: 'Send your first message',      icon: '💬', nexals: 50,   target: 1 },
     { id: 'msg_5',    title: 'Getting Started',   desc: 'Send 5 messages',               icon: '💬', nexals: 75,   target: 5 },
     { id: 'msg_20',   title: 'Regular',            desc: 'Send 20 messages',              icon: '🗣️', nexals: 100,  target: 20 },
     { id: 'msg_100',  title: 'Chatty',             desc: 'Send 100 messages',             icon: '🗣️', nexals: 200,  target: 100 },
