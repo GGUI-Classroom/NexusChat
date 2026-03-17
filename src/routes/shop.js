@@ -121,7 +121,7 @@ const DECORATIONS = [
   },
   {
     id: 'nexus_admin',
-    nexalPrice: None,
+    nexalPrice: null,
     name: 'Nexus Admin',
     description: 'A red power surge that consumes your avatar. For those who run the grid.',
     rarity: 'mythical',
