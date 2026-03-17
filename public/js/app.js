@@ -60,8 +60,9 @@
         if (old) old.remove();
         delete oldWrap.dataset.deco;
         stopStormCanvas(oldWrap);
-        const oldCrown = oldWrap.querySelector('.admin-crown');
-        if (oldCrown) oldCrown.remove();
+        stopInfernoCanvas(oldWrap);
+        stopYinYangCanvas(oldWrap);
+        oldWrap.querySelectorAll('.admin-crown,.deco-shine-overlay').forEach(e=>e.remove());
       }
       return;
     }
@@ -97,12 +98,27 @@
       if (oldCrown) oldCrown.remove();
     }
 
-    // Storm deco: start canvas engine
+    // Canvas engines
     if (deco === 'storm') {
-      // Small delay so the avatar has rendered and has a size
       setTimeout(() => startStormCanvas(wrap), 50);
-    } else {
-      stopStormCanvas(wrap);
+    } else { stopStormCanvas(wrap); }
+
+    if (deco === 'inferno') {
+      setTimeout(() => startInfernoCanvas(wrap), 50);
+    } else { stopInfernoCanvas(wrap); }
+
+    if (deco === 'yinyang') {
+      setTimeout(() => startYinYangCanvas(wrap), 50);
+    } else { stopYinYangCanvas(wrap); }
+
+    // Shine overlay decos (diamond, goldshine)
+    const shineDecos = ['diamond', 'goldshine'];
+    const existingShine = wrap.querySelector('.deco-shine-overlay');
+    if (existingShine) existingShine.remove();
+    if (shineDecos.includes(deco)) {
+      const shine = document.createElement('div');
+      shine.className = `deco-shine-overlay deco-${deco}-shine`;
+      wrap.appendChild(shine);
     }
   }
 
@@ -309,6 +325,174 @@
       data.canvas.remove();
       stormCanvases.delete(wrap);
     }
+  }
+
+  // ---- Inferno Canvas ----
+  const infernoCanvases = new WeakMap();
+
+  function startInfernoCanvas(wrap) {
+    if (infernoCanvases.has(wrap)) return;
+    const avatarEl = wrap.querySelector('.avatar');
+    const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
+    const pad = 18;
+    const W = size + pad * 2, H = size + pad * 2 + 10;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'storm-canvas';
+    canvas.width = W; canvas.height = H;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    canvas.style.top = '50%'; canvas.style.left = '50%';
+    canvas.style.transform = 'translate(-50%,-46%)';
+    wrap.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const cx = W / 2, cy = H / 2 + 4;
+    const r = size / 2;
+
+    // Flame particles
+    const flames = [];
+    function spawnFlame() {
+      const angle = -Math.PI + Math.random() * Math.PI * 2;
+      const ox = cx + Math.cos(angle) * (r - 2);
+      const oy = cy + Math.sin(angle) * (r - 2);
+      flames.push({
+        x: ox, y: oy,
+        vx: Math.cos(angle) * (0.3 + Math.random() * 0.6) + (Math.random()-0.5)*0.4,
+        vy: -1.5 - Math.random() * 1.5,
+        life: 1, decay: 0.025 + Math.random() * 0.02,
+        size: 3 + Math.random() * 4,
+        hue: 10 + Math.random() * 40,
+      });
+    }
+
+    let animId, lastTime = null;
+    function draw(ts) {
+      if (!lastTime) lastTime = ts;
+      lastTime = ts;
+      ctx.clearRect(0, 0, W, H);
+
+      // Base glow ring
+      const grd = ctx.createRadialGradient(cx, cy, r-2, cx, cy, r+6);
+      grd.addColorStop(0, 'rgba(255,80,0,0.7)');
+      grd.addColorStop(0.5, 'rgba(255,40,0,0.3)');
+      grd.addColorStop(1, 'transparent');
+      ctx.beginPath(); ctx.arc(cx, cy, r+6, 0, Math.PI*2);
+      ctx.fillStyle = grd; ctx.fill();
+
+      // Spawn flames around ring
+      for (let i = 0; i < 3; i++) spawnFlame();
+
+      // Draw flames
+      for (let i = flames.length-1; i >= 0; i--) {
+        const f = flames[i];
+        f.x += f.vx; f.y += f.vy;
+        f.vy -= 0.04; // rise
+        f.vx *= 0.97;
+        f.life -= f.decay;
+        f.size *= 0.975;
+        if (f.life <= 0 || f.size < 0.5) { flames.splice(i,1); continue; }
+        const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size);
+        g.addColorStop(0, `hsla(${f.hue+20},100%,80%,${f.life})`);
+        g.addColorStop(0.4, `hsla(${f.hue},100%,55%,${f.life*0.8})`);
+        g.addColorStop(1, `hsla(${f.hue-10},100%,30%,0)`);
+        ctx.beginPath(); ctx.arc(f.x, f.y, f.size, 0, Math.PI*2);
+        ctx.fillStyle = g; ctx.fill();
+      }
+      animId = requestAnimationFrame(draw);
+    }
+    animId = requestAnimationFrame(draw);
+    infernoCanvases.set(wrap, { canvas, animId });
+  }
+
+  function stopInfernoCanvas(wrap) {
+    const d = infernoCanvases.get(wrap);
+    if (d) { cancelAnimationFrame(d.animId); d.canvas.remove(); infernoCanvases.delete(wrap); }
+  }
+
+  // ---- Yin Yang Canvas ----
+  const yinYangCanvases = new WeakMap();
+
+  function startYinYangCanvas(wrap) {
+    if (yinYangCanvases.has(wrap)) return;
+    const avatarEl = wrap.querySelector('.avatar');
+    const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
+    const W = size + 16, H = size + 16;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'storm-canvas';
+    canvas.width = W; canvas.height = H;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    wrap.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const cx = W/2, cy = H/2, r = size/2 + 3;
+
+    let phase = 0, phaseT = 0, lastTime = null, animId;
+    // phase 0 = split ring, phase 1 = symbol cover
+
+    function draw(ts) {
+      if (!lastTime) lastTime = ts;
+      const dt = Math.min((ts-lastTime)/1000, 0.05); lastTime = ts;
+      phaseT += dt;
+      if (phase === 0 && phaseT > 5)  { phase = 1; phaseT = 0; }
+      if (phase === 1 && phaseT > 1.5) { phase = 0; phaseT = 0; }
+      ctx.clearRect(0, 0, W, H);
+
+      if (phase === 0) {
+        // Left half white ring, right half black ring
+        // Left arc
+        ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI/2, -Math.PI/2, false);
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 2.5;
+        ctx.shadowColor = 'rgba(255,255,255,0.8)'; ctx.shadowBlur = 6;
+        ctx.stroke();
+        // Right arc
+        ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2, Math.PI/2, false);
+        ctx.strokeStyle = 'rgba(30,30,30,0.95)'; ctx.lineWidth = 2.5;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 6;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      } else {
+        // Yin yang symbol covers avatar
+        const t = Math.min(phaseT / 0.3, 1); // fade in 0.3s
+        const fo = Math.min(Math.max((1.5-phaseT)/0.3, 0), 1); // fade out
+        const alpha = phase===1 && phaseT < 1.2 ? t : fo;
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.92;
+        const sr = r * 0.95;
+        // Full circle background split
+        ctx.beginPath(); ctx.arc(cx, cy, sr, -Math.PI/2, Math.PI/2);
+        ctx.fillStyle = '#111'; ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy, sr, Math.PI/2, -Math.PI/2);
+        ctx.fillStyle = '#eee'; ctx.fill();
+        // Two small semicircles
+        ctx.beginPath(); ctx.arc(cx, cy-sr/2, sr/2, 0, Math.PI*2);
+        ctx.fillStyle = '#111'; ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy+sr/2, sr/2, 0, Math.PI*2);
+        ctx.fillStyle = '#eee'; ctx.fill();
+        // Two dots
+        ctx.beginPath(); ctx.arc(cx, cy-sr/2, sr/6, 0, Math.PI*2);
+        ctx.fillStyle = '#eee'; ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy+sr/2, sr/6, 0, Math.PI*2);
+        ctx.fillStyle = '#111'; ctx.fill();
+        // Outer ring
+        ctx.beginPath(); ctx.arc(cx, cy, sr, 0, Math.PI*2);
+        ctx.strokeStyle = 'rgba(200,200,200,0.5)'; ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+
+        // Ring outline while showing symbol
+        ctx.save(); ctx.globalAlpha = 0.4;
+        ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI/2, -Math.PI/2, false);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2, Math.PI/2, false);
+        ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.restore();
+      }
+      animId = requestAnimationFrame(draw);
+    }
+    animId = requestAnimationFrame(draw);
+    yinYangCanvases.set(wrap, { canvas, animId });
+  }
+
+  function stopYinYangCanvas(wrap) {
+    const d = yinYangCanvases.get(wrap);
+    if (d) { cancelAnimationFrame(d.animId); d.canvas.remove(); yinYangCanvases.delete(wrap); }
   }
 
   function toast(msg, type = 'info', duration = 3500) {
@@ -2453,12 +2637,25 @@
         </div>`;
     }).join('');
 
-    // Start canvas engine for storm preview card if owned
-    const stormCard = decorations.find(d => d.id === 'storm' && d.owned);
-    if (stormCard) {
-      const wrap = document.querySelector('#shopcard-storm .avatar-wrap');
-      if (wrap) setTimeout(() => startStormCanvas(wrap), 50);
-    }
+    // Start canvas engines for owned canvas-based decos
+    const canvasDecos = { storm: startStormCanvas, inferno: startInfernoCanvas, yinyang: startYinYangCanvas };
+    Object.entries(canvasDecos).forEach(([id, fn]) => {
+      if (decorations.find(d => d.id === id && d.owned)) {
+        const wrap = document.querySelector(`#shopcard-${id} .avatar-wrap`);
+        if (wrap) setTimeout(() => fn(wrap), 50);
+      }
+    });
+    // Shine overlays for owned legendaries
+    ['diamond','goldshine'].forEach(id => {
+      if (decorations.find(d => d.id === id && d.owned)) {
+        const wrap = document.querySelector(`#shopcard-${id} .avatar-wrap`);
+        if (wrap) {
+          const shine = document.createElement('div');
+          shine.className = `deco-shine-overlay deco-${id}-shine`;
+          wrap.appendChild(shine);
+        }
+      }
+    });
   }
 
   window.shopAction = async function(decoId, action) {
