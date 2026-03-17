@@ -2196,57 +2196,68 @@ html, body {
 }
 .nexal-balance svg { color: #ffd700; }
 
-.achievements-grid, #achievements-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 10px;
-  align-content: start;
+/* Achievements container */
+#achievements-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: 40px;
+}
+.ach-category-section {
+  margin-bottom: 8px;
 }
 .ach-category-label {
-  grid-column: 1 / -1;
   font-size: 11px; font-weight: 700;
   letter-spacing: 1.5px; text-transform: uppercase;
   color: var(--text-muted);
-  margin-top: 8px; margin-bottom: 2px;
+  padding: 12px 0 6px;
+}
+.ach-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
 }
 .ach-card {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 14px 14px 16px;
-  display: flex; gap: 12px; align-items: flex-start;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   transition: var(--transition);
   position: relative;
-  overflow: visible;
-  height: auto;
-  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
-.ach-card.completed { border-color: rgba(61,214,140,0.3); }
-.ach-card.claimed   { border-color: var(--border); opacity: 0.6; }
+.ach-card-top {
+  display: flex; gap: 12px; align-items: flex-start;
+  margin-bottom: 10px;
+}
+.ach-card.completed { border-color: rgba(61,214,140,0.35); }
+.ach-card.claimed   { border-color: var(--border); opacity: 0.55; }
 .ach-card::before {
   content: '';
   position: absolute; inset: 0;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, rgba(61,214,140,0.04), transparent);
+  background: linear-gradient(135deg, rgba(61,214,140,0.05), transparent);
   opacity: 0; transition: opacity 0.2s;
   pointer-events: none;
-  z-index: 0;
 }
-.ach-icon, .ach-body { position: relative; z-index: 1; }
 .ach-card.completed:not(.claimed)::before { opacity: 1; }
 
 .ach-icon {
-  font-size: 24px; line-height: 1;
-  flex-shrink: 0; margin-top: 2px;
+  font-size: 22px; line-height: 1;
+  flex-shrink: 0; margin-top: 1px;
 }
-.ach-body { flex: 1; min-width: 0; overflow: visible; }
+.ach-body { flex: 1; min-width: 0; }
 .ach-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
-.ach-desc  { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4; }
+.ach-desc  { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
 
 .ach-progress-bar {
   height: 4px; border-radius: 99px;
   background: var(--bg-hover);
-  margin-bottom: 6px; overflow: hidden;
+  margin-bottom: 5px; overflow: hidden;
+  flex-shrink: 0;
 }
 .ach-progress-fill {
   height: 100%; border-radius: 99px;
@@ -2257,28 +2268,28 @@ html, body {
 
 .ach-progress-text {
   font-size: 10px; color: var(--text-muted);
-  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 10px;
 }
 
 .ach-footer {
   display: flex; align-items: center; justify-content: space-between;
-  margin-top: 10px;
-  min-height: 28px;
+  margin-top: auto;
+  padding-top: 2px;
 }
 .ach-reward {
   font-size: 12px; font-weight: 700;
   color: #ffd700;
-  display: flex; align-items: center; gap: 4px;
 }
 .ach-claim-btn {
-  padding: 5px 12px;
+  padding: 5px 14px;
   background: var(--green);
   border: none; border-radius: var(--radius-sm);
   color: var(--bg-void);
   font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700;
   cursor: pointer; transition: var(--transition);
+  flex-shrink: 0;
 }
-.ach-claim-btn:hover { transform: scale(1.05); }
+.ach-claim-btn:hover { filter: brightness(1.15); }
 .ach-claimed-badge {
   font-size: 11px; color: var(--text-muted);
   font-weight: 600;
