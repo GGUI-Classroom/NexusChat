@@ -1778,11 +1778,7 @@ html, body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 14px;
-  padding: 20px 20px 40px;
-  overflow-y: auto;
-  flex: 1;
-  align-content: start;
-  -webkit-overflow-scrolling: touch;
+  padding: 20px;
 }
 .shop-card {
   background: var(--bg-elevated);
@@ -1793,7 +1789,6 @@ html, body {
   transition: var(--transition);
   position: relative;
   overflow: hidden;
-  min-height: 0;
 }
 .shop-card:hover { border-color: var(--border-bright); transform: translateY(-2px); }
 .shop-card.owned { border-color: var(--accent); }
