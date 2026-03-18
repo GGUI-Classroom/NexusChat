@@ -121,7 +121,7 @@ io.on('connection', (socket) => {
     if (!trimmed) return;
     // Single query: check friendship AND get sender info at once
     const check = await pool.query(
-      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color,
+      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
         (SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1) as friend_id
        FROM users u WHERE u.id=$1`,
       [userId, toId]
@@ -137,7 +137,8 @@ io.on('connection', (socket) => {
         username: s.username, displayName: s.display_name,
         avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null,
         activeDecoration: s.active_decoration || null,
-        activeColor: s.active_color || null
+        activeColor: s.active_color || null,
+        activeFont: s.active_font || null
       }
     };
     // Emit to sender immediately (no await before this)
@@ -232,7 +233,8 @@ io.on('connection', (socket) => {
         avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null,
         roleColor: row.role_color || null, roleName: row.role_name || null,
         activeDecoration: row.active_decoration || null,
-        activeColor: row.active_color || null
+        activeColor: row.active_color || null,
+        activeFont: row.active_font || null
       }
     };
     // Resolve mentions for notification
