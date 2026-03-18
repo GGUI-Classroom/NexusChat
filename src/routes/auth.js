@@ -59,7 +59,8 @@ router.post('/login', async (req, res) => {
       id: user.id, username: user.username, displayName: user.display_name,
       avatarDataUrl: user.avatar_data ? `data:${user.avatar_mime};base64,${user.avatar_data}` : null,
       bio: user.bio || null,
-      activeDecoration: user.active_decoration || null
+      activeDecoration: user.active_decoration || null,
+      activeColor: user.active_color || null
     }});
   } catch (e) {
     console.error(e);
@@ -84,7 +85,9 @@ router.get('/me', async (req, res) => {
       id: user.id, username: user.username, displayName: user.display_name,
       avatarDataUrl: user.avatar_data ? `data:${user.avatar_mime};base64,${user.avatar_data}` : null,
       bio: user.bio || null,
-      activeDecoration: user.active_decoration || null
+      activeDecoration: user.active_decoration || null,
+      activeColor: user.active_color || null,
+      activeColor: user.active_color || null
     }});
   } catch (e) {
     return res.status(500).json({ error: 'Server error' });
