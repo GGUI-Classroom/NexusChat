@@ -56,6 +56,14 @@ const DECORATIONS = [
     preview: 'orbit_white'
   },
   {
+    id: 'halo_gold',
+    nexalPrice: 1500,
+    name: 'Golden Halo',
+    description: 'A golden halo floating above',
+    rarity: 'rare',
+    preview: 'halo_gold'
+  },
+  {
     id: 'neon_pink',
     nexalPrice: 3500,
     name: 'Neon Pink',
@@ -140,16 +148,16 @@ const DECORATIONS = [
   { id: 'diamond',      nexalPrice: 8000, name: 'Diamond',        description: 'A diamond-crystal border with a shine sweep every 5s.', rarity: 'legendary', preview: 'diamond' },
   { id: 'goldshine',    nexalPrice: 8000, name: 'Gold Shine',     description: 'A golden border with a warm gleam sweep every 5s.',     rarity: 'legendary', preview: 'goldshine' },
   // Mythicals
-  { id: 'inferno',      nexalPrice: 10000, name: 'Inferno',        description: 'Real animated flames that engulf your avatar.',         rarity: 'mythical',  preview: 'inferno' },
-  { id: 'hydro',        nexalPrice: 10000, name: 'Hydro',          description: 'Shimmering water ripples and bubbles orbit your avatar.',rarity: 'mythical',  preview: 'hydro' },
-  { id: 'yinyang',      nexalPrice: 10000, name: 'Yin & Yang',     description: 'Balance of light and dark. Every 5s, the symbol manifests.', rarity: 'mythical', preview: 'yinyang' },
+  { id: 'inferno',      nexalPrice: null, name: 'Inferno',        description: 'Real animated flames that engulf your avatar.',         rarity: 'mythical',  preview: 'inferno' },
+  { id: 'hydro',        nexalPrice: null, name: 'Hydro',          description: 'Shimmering water ripples and bubbles orbit your avatar.',rarity: 'mythical',  preview: 'hydro' },
+  { id: 'yinyang',      nexalPrice: null, name: 'Yin & Yang',     description: 'Balance of light and dark. Every 5s, the symbol manifests.', rarity: 'mythical', preview: 'yinyang' },
+  { id: 'shatter',      nexalPrice: null, name: 'Shatter',         description: 'Glass forms over your avatar then dramatically shatters. Reforms every 5s.', rarity: 'mythical', preview: 'shatter' },
 ];
 
 // Special nexal boost codes (not decorations)
 // Set amount to negative to mark as infinite-use
 const NEXAL_CODES = {
   [process.env.NEXAL_CODE_1 || 'ADMIN1231209#7327']: { amount: 100000, infinite: true },
-  [process.env.NEXAL_CODE_1 || 'STARTER']: { amount: 1000, infinite: false }
 };
 
 // Code -> decoration mapping (loaded from env vars)
@@ -167,9 +175,10 @@ function getCodeMap() {
     [process.env.DECO_CODE_BLUEGLOW      || 'BLUEGLOW']:      'glow_blue',
     [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSADMIN']:    'nexus_admin',
     [process.env.DECO_CODE_STORMBRINGER  || 'STORMBRINGER']:  'storm',
-    [process.env.DECO_CODE_INFERNO       || 'DEATHFIRES']:       'inferno',
-    [process.env.DECO_CODE_HYDRO         || 'HYDRODROWN67']:         'hydro',
-    [process.env.DECO_CODE_YINYANG       || 'YINCLONE6767']:       'yinyang',
+    [process.env.DECO_CODE_INFERNO       || 'INFERNO']:       'inferno',
+    [process.env.DECO_CODE_HYDRO         || 'HYDRO']:         'hydro',
+    [process.env.DECO_CODE_YINYANG       || 'YINYANG']:       'yinyang',
+    [process.env.DECO_CODE_SHATTER       || 'SHATTER']:       'shatter',
   };
 }
 
