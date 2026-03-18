@@ -736,311 +736,245 @@
 
 
   // ---- Shatter Canvas ----
-  // Real glass look: nearly invisible fills, sharp white crack lines,
-  // thick broken edges with dark shadow + bright highlight = glass depth.
-  // One or two shards poke OUT above the avatar circle.
   const shatterCanvases = new WeakMap();
 
   function startShatterCanvas(wrap) {
     if (shatterCanvases.has(wrap)) return;
     const av = wrap.querySelector('.avatar');
-    const S = Math.max(20,(av&&av.offsetWidth)||(av&&parseInt(av.style.width))||36);
-    const R = S/2, CX = R, CY = R;
+    const S  = Math.max(20,(av&&av.offsetWidth)||(av&&parseInt(av.style.width))||36);
+    const R  = S/2, CX = R, CY = R;
+    const PAD = Math.ceil(S*0.5); // room for shards to poke out
 
     const cv = document.createElement('canvas');
-    // Canvas is bigger than avatar so protruding shards are visible
-    const PAD = Math.round(S * 0.4);
     cv.width  = S + PAD*2;
     cv.height = S + PAD*2;
-    cv.style.cssText = `position:absolute;top:${-PAD}px;left:${-PAD}px;width:${S+PAD*2}px;height:${S+PAD*2}px;pointer-events:none;z-index:5;`;
+    cv.style.cssText = `position:absolute;top:${-PAD}px;left:${-PAD}px;`+
+      `width:${S+PAD*2}px;height:${S+PAD*2}px;pointer-events:none;z-index:5;`;
     wrap.style.overflow = 'visible';
     if (getComputedStyle(wrap).position==='static') wrap.style.position='relative';
     wrap.appendChild(cv);
     const g = cv.getContext('2d');
-    // Offset all drawing by PAD so the circle center is still at (CX,CY) in avatar space
-    const OX = PAD, OY = PAD; // origin offset on canvas
+    const OX = PAD, OY = PAD; // avatar center on canvas = (OX+CX, OY+CY)
 
-    /* ---- generate shards ---- */
-    function mkShards() {
-      const arr = [];
-      const N = 11 + Math.floor(Math.random()*6);
-      // Mark 2 random shards as "protruding" — they fly upward out of the circle
-      const protrude = new Set();
-      while (protrude.size < 2) protrude.add(Math.floor(Math.random()*N));
-
+    // ---- generate crack lines (not filled polygons) ----
+    function mkCracks() {
+      // 6-10 jagged lines from a central impact point
+      const lines = [];
+      const ix = CX + (Math.random()-0.5)*R*0.3;
+      const iy = CY + (Math.random()-0.5)*R*0.3;
+      const N  = 6 + Math.floor(Math.random()*5);
       for (let i=0; i<N; i++) {
-        const a0 = (i/N)*Math.PI*2 + (Math.random()-0.5)*0.25;
-        const a1 = ((i+1)/N)*Math.PI*2 + (Math.random()-0.5)*0.25;
-        const am = (a0+a1)/2;
-        const ri = R*(0.03+Math.random()*0.18);
-        const ro = R*(0.78+Math.random()*0.22);
-        // Each shard is a polygon in avatar-space; canvas coords = pt + (OX,OY)
-        const pts = [
+        const baseAngle = (i/N)*Math.PI*2 + (Math.random()-0.5)*0.4;
+        const length    = R*(0.5 + Math.random()*0.55);
+        const pts = [[ix, iy]];
+        let x=ix, y=iy;
+        const segs = 4 + Math.floor(Math.random()*3);
+        for (let s=0; s<segs; s++) {
+          const jitter = (Math.random()-0.5)*0.5;
+          const segLen = (length/segs)*(0.7+Math.random()*0.6);
+          x += Math.cos(baseAngle+jitter)*segLen;
+          y += Math.sin(baseAngle+jitter)*segLen;
+          // clip to circle
+          const dist = Math.sqrt((x-CX)**2+(y-CY)**2);
+          if (dist > R*0.98) {
+            const clip = R*0.98/dist;
+            x = CX+(x-CX)*clip; y = CY+(y-CY)*clip;
+            pts.push([x,y]); break;
+          }
+          pts.push([x,y]);
+          // random branch
+          if (Math.random()<0.4 && s===Math.floor(segs/2)) {
+            const bAngle = baseAngle+(Math.random()-0.5)*1.2;
+            const bLen   = length*0.35;
+            let bx=x, by=y;
+            const bPts = [[x,y]];
+            for (let b=0;b<3;b++){
+              bx+=Math.cos(bAngle+(Math.random()-0.5)*0.3)*bLen/3;
+              by+=Math.sin(bAngle+(Math.random()-0.5)*0.3)*bLen/3;
+              const bd=Math.sqrt((bx-CX)**2+(by-CY)**2);
+              if(bd>R*0.97){break;}
+              bPts.push([bx,by]);
+            }
+            lines.push({pts:bPts, branch:true});
+          }
+        }
+        lines.push({pts, branch:false});
+      }
+      return {lines, ix, iy};
+    }
+
+    // ---- generate shards for explosion phase only ----
+    function mkShards(crackData) {
+      const arr=[];
+      const N=10+Math.floor(Math.random()*5);
+      const protrude = new Set();
+      // Pick top shards to protrude upward
+      while(protrude.size<2) protrude.add(Math.floor(Math.random()*N));
+      for(let i=0;i<N;i++){
+        const a0=(i/N)*Math.PI*2+(Math.random()-0.5)*0.25;
+        const a1=((i+1)/N)*Math.PI*2+(Math.random()-0.5)*0.25;
+        const am=(a0+a1)/2;
+        const ri=R*(0.03+Math.random()*0.15);
+        const ro=R*(0.78+Math.random()*0.22);
+        const pts=[
           [CX+Math.cos(a0)*ri, CY+Math.sin(a0)*ri],
-          [CX+Math.cos(am)*ri*0.4, CY+Math.sin(am)*ri*0.4],
+          [CX+Math.cos(am)*ri*0.35, CY+Math.sin(am)*ri*0.35],
           [CX+Math.cos(a1)*ri, CY+Math.sin(a1)*ri],
           [CX+Math.cos(a1)*ro, CY+Math.sin(a1)*ro],
-          [CX+Math.cos(am)*(ro+R*0.04), CY+Math.sin(am)*(ro+R*0.04)],
+          [CX+Math.cos(am)*(ro+R*0.03), CY+Math.sin(am)*(ro+R*0.03)],
           [CX+Math.cos(a0)*ro, CY+Math.sin(a0)*ro],
         ];
-        const bcx = pts.reduce((s,p)=>s+p[0],0)/pts.length;
-        const bcy = pts.reduce((s,p)=>s+p[1],0)/pts.length;
-        const da  = Math.atan2(bcy-CY, bcx-CX);
-        const isProtrude = protrude.has(i);
-        // Protruding shards bias upward
-        const spd = 0.4 + Math.random()*0.8;
+        const bcx=pts.reduce((s,p)=>s+p[0],0)/pts.length;
+        const bcy=pts.reduce((s,p)=>s+p[1],0)/pts.length;
+        const da=Math.atan2(bcy-CY,bcx-CX);
+        const isP=protrude.has(i);
         arr.push({
           pts, bcx, bcy,
-          vx: isProtrude ? (Math.random()-0.5)*0.3 : Math.cos(da)*spd,
-          vy: isProtrude ? -(1.2+Math.random()*0.8) : Math.sin(da)*spd,
-          vr: (Math.random()-0.5)*(isProtrude?0.18:0.08),
-          dx:0, dy:0, dr:0,
-          protrude: isProtrude,
-          // Glass tint: each shard has a slightly different refraction angle
-          tiltAngle: Math.random()*Math.PI*2,
+          vx: isP?(Math.random()-0.5)*0.4:Math.cos(da)*(0.5+Math.random()*0.8),
+          vy: isP?-(1.0+Math.random()*0.8):Math.sin(da)*(0.5+Math.random()*0.8),
+          vr: (Math.random()-0.5)*0.08,
+          dx:0,dy:0,dr:0, protrude:isP,
         });
       }
       return arr;
     }
 
-    /* ---- draw one shard — THE KEY: no fill, only lines ---- */
-    function drawShard(s, alpha, overrideClip) {
-      if (alpha<=0.01) return;
+    // Draw crack lines: white glow + dark thin core
+    function drawLines(lines, alpha, progress) {
+      if(alpha<=0) return;
       g.save();
-      g.globalAlpha = alpha;
+      g.beginPath(); g.arc(OX+CX,OY+CY,R,0,Math.PI*2); g.clip();
+      lines.forEach(({pts,branch},li)=>{
+        const lineProgress = Math.min(1, progress*(lines.length)-li*0.5);
+        if(lineProgress<=0) return;
+        const end=Math.floor((pts.length-1)*lineProgress)+1;
+        const subPts=pts.slice(0,Math.max(2,end));
+        g.beginPath();
+        g.moveTo(OX+subPts[0][0],OY+subPts[0][1]);
+        for(let k=1;k<subPts.length;k++) g.lineTo(OX+subPts[k][0],OY+subPts[k][1]);
+        // White glow (refraction at crack edge)
+        g.shadowColor='rgba(240,250,255,1)';
+        g.shadowBlur=branch?1.5:2.5;
+        g.strokeStyle=`rgba(245,252,255,${alpha*(branch?0.65:0.9)})`;
+        g.lineWidth=branch?0.5:0.7;
+        g.stroke();
+        // Dark core (the actual gap)
+        g.shadowBlur=0;
+        g.strokeStyle=`rgba(0,10,30,${alpha*0.4})`;
+        g.lineWidth=branch?0.25:0.35;
+        g.stroke();
+      });
+      g.restore();
+    }
 
-      // Transform: translate shard centroid by (dx,dy) then rotate
-      g.translate(OX + s.bcx + s.dx, OY + s.bcy + s.dy);
+    // Draw shard during explosion — NO fill, only edges
+    function drawShard(s, alpha) {
+      if(alpha<=0.01) return;
+      g.save();
+      g.globalAlpha=alpha;
+      g.translate(OX+s.bcx+s.dx, OY+s.bcy+s.dy);
       g.rotate(s.dr);
-      g.translate(-(OX + s.bcx), -(OY + s.bcy));
-
-      // Build path in canvas coords (pts are avatar-space, add OX/OY)
+      g.translate(-(OX+s.bcx),-(OY+s.bcy));
       g.beginPath();
-      g.moveTo(OX+s.pts[0][0], OY+s.pts[0][1]);
-      for (let k=1;k<s.pts.length;k++) g.lineTo(OX+s.pts[k][0], OY+s.pts[k][1]);
+      g.moveTo(OX+s.pts[0][0],OY+s.pts[0][1]);
+      for(let k=1;k<s.pts.length;k++) g.lineTo(OX+s.pts[k][0],OY+s.pts[k][1]);
       g.closePath();
-
-      // ---- GLASS FILL: almost nothing ----
-      // Tiny hint of blue-white with a gradient to simulate light refraction
-      const grad = g.createLinearGradient(
-        OX+s.pts[0][0], OY+s.pts[0][1],
-        OX+s.pts[3][0], OY+s.pts[3][1]
-      );
-      const t = s.tiltAngle;
-      grad.addColorStop(0,   `rgba(230,245,255,${0.04+0.04*Math.sin(t)})`);
-      grad.addColorStop(0.5, `rgba(255,255,255,${0.08})`);
-      grad.addColorStop(1,   `rgba(200,225,255,${0.03+0.04*Math.cos(t)})`);
-      g.fillStyle = grad;
-      g.fill();
-
-      // ---- CRACK EDGES: white glow line (the main visual) ----
-      g.shadowColor = 'rgba(220,240,255,0.95)';
-      g.shadowBlur  = 2.5;
-      g.strokeStyle = 'rgba(235,248,255,0.9)';
-      g.lineWidth   = 0.7;
+      // NO fill — glass is transparent
+      // Only edges: white glow
+      g.shadowColor='rgba(230,245,255,0.9)';
+      g.shadowBlur=2;
+      g.strokeStyle='rgba(240,250,255,0.85)';
+      g.lineWidth=0.6;
       g.stroke();
-
-      // ---- BROKEN EDGE THICKNESS: one or two edges get a dark+light pair ----
-      // This makes them look like a real snapped piece of glass with thickness
-      const edgeIdx = Math.floor(s.tiltAngle / (Math.PI*2) * s.pts.length);
-      const p1 = s.pts[edgeIdx % s.pts.length];
-      const p2 = s.pts[(edgeIdx+1) % s.pts.length];
-      // Dark shadow edge (thickness depth)
-      g.beginPath();
-      g.moveTo(OX+p1[0], OY+p1[1]);
-      g.lineTo(OX+p2[0], OY+p2[1]);
-      g.strokeStyle = 'rgba(0,20,50,0.35)';
-      g.lineWidth   = 1.8;
-      g.shadowBlur  = 0;
-      g.stroke();
-      // Bright highlight on top of dark (the lit face of the broken edge)
-      g.strokeStyle = 'rgba(255,255,255,0.9)';
-      g.lineWidth   = 0.7;
-      g.shadowColor = 'rgba(255,255,255,1)';
-      g.shadowBlur  = 3;
-      g.stroke();
-      g.shadowBlur = 0;
-
+      g.shadowBlur=0;
       g.restore();
     }
 
-    /* ---- draw crack lines radiating from impact point ---- */
-    function drawCracks(alpha, progress) {
-      if (alpha<=0) return;
-      g.save();
-      // Clip cracks to the avatar circle
-      g.beginPath(); g.arc(OX+CX, OY+CY, R, 0, Math.PI*2); g.clip();
-      g.globalAlpha = alpha;
-      // Generate deterministic cracks from a seed
-      const rng = (n) => (Math.sin(n*127.1+31.7)*43758.5453)%1;
-      const numCracks = 8;
-      for (let c=0; c<numCracks; c++) {
-        let x = OX+CX + (rng(c*3)-0.5)*R*0.4;
-        let y = OY+CY + (rng(c*3+1)-0.5)*R*0.4;
-        const angle = rng(c*3+2)*Math.PI*2;
-        const len   = R*(0.4+rng(c*4)*0.6) * Math.min(1, progress*1.5);
-        const segs  = 5;
-        g.beginPath(); g.moveTo(x,y);
-        for (let s=0; s<segs; s++) {
-          const jitter = (rng(c*10+s)-0.5)*0.4;
-          x += Math.cos(angle+jitter)*len/segs;
-          y += Math.sin(angle+jitter)*len/segs;
-          g.lineTo(x,y);
-        }
-        // White glow = refraction at crack edge
-        g.shadowColor = 'rgba(220,240,255,0.9)';
-        g.shadowBlur  = 2;
-        g.strokeStyle = 'rgba(240,250,255,0.85)';
-        g.lineWidth   = 0.6;
-        g.stroke();
-        // Dark core
-        g.shadowBlur  = 0;
-        g.strokeStyle = 'rgba(0,15,40,0.3)';
-        g.lineWidth   = 0.3;
-        g.stroke();
-        // Branch
-        if (rng(c*7) > 0.4 && progress > 0.4) {
-          let bx = OX+CX + (rng(c*3)-0.5)*R*0.6;
-          let by = OY+CY + (rng(c*3+1)-0.5)*R*0.6;
-          const ba = angle + (rng(c*5)-0.5)*1.2;
-          const bl = len*(0.3+rng(c*6)*0.3);
-          g.beginPath(); g.moveTo(bx,by);
-          for (let s=0;s<3;s++){
-            bx+=Math.cos(ba+(rng(c*11+s)-0.5)*0.3)*bl/3;
-            by+=Math.sin(ba+(rng(c*11+s)-0.5)*0.3)*bl/3;
-            g.lineTo(bx,by);
-          }
-          g.shadowColor = 'rgba(220,240,255,0.7)';
-          g.shadowBlur  = 1.5;
-          g.strokeStyle = 'rgba(235,248,255,0.7)';
-          g.lineWidth   = 0.5;
-          g.stroke();
-          g.shadowBlur = 0;
-        }
-      }
-      g.restore();
-    }
+    const ease=t=>1-(1-t)*(1-t);
+    let crackData=mkCracks(), shards=null;
+    let ph=0,pt=0,lt=null,aid,ga=0;
 
-    const ease = t => 1-(1-t)*(1-t);
-    let shards=mkShards(), ph=0, pt=0, lt=null, aid, ga=0;
+    function frame(ts){
+      if(!lt) lt=ts;
+      const dt=Math.min((ts-lt)/1000,0.05); lt=ts; pt+=dt; ga+=dt*0.45;
 
-    function frame(ts) {
-      if (!lt) lt=ts;
-      const dt=Math.min((ts-lt)/1000,0.05); lt=ts; pt+=dt; ga+=dt*0.4;
-
-      if (ph===0&&pt>1.2){ph=1;pt=0;}
-      if (ph===1&&pt>2.0){ph=2;pt=0;}
-      if (ph===2&&pt>0.8){ph=3;pt=0;}
-      if (ph===3&&pt>0.5){ph=4;pt=0;shards=mkShards();}
-      if (ph===4&&pt>5.0){ph=5;pt=0;}
-      if (ph===5&&pt>1.2){ph=0;pt=0;}
+      // phases: 0=cracks form(1.0s) 1=hold cracked(2.5s) 2=shatter(0.7s) 3=settle(0.5s) 4=idle(5s) 5=reform(1.0s)
+      if(ph===0&&pt>1.0){ph=1;pt=0;}
+      if(ph===1&&pt>2.5){ph=2;pt=0;shards=mkShards(crackData);}
+      if(ph===2&&pt>0.7){ph=3;pt=0;}
+      if(ph===3&&pt>0.5){ph=4;pt=0;crackData=mkCracks();shards=null;}
+      if(ph===4&&pt>5.0){ph=5;pt=0;}
+      if(ph===5&&pt>1.0){ph=0;pt=0;}
 
       g.clearRect(0,0,cv.width,cv.height);
 
-      if (ph===0) {
-        // Forming: cracks grow in, then shards materialise over avatar
-        const t = ease(pt/1.2);
-        drawCracks(t, t);
-        // Shards fade in clipped to circle
-        g.save(); g.beginPath(); g.arc(OX+CX,OY+CY,R,0,Math.PI*2); g.clip();
-        shards.forEach((s,i)=>{
-          const st = Math.max(0,Math.min(1,(t*shards.length-i*0.4)));
-          drawShard(s, st*0.85, true);
-        });
-        g.restore();
-        // Ring glow forming
+      if(ph===0){
+        // Cracks grow in progressively — NO shards yet, avatar fully visible
+        drawLines(crackData.lines, ease(pt/1.0), ease(pt/1.0));
+        // Faint ring
         g.beginPath(); g.arc(OX+CX,OY+CY,R,0,Math.PI*2);
-        g.strokeStyle=`rgba(200,230,255,${t*0.5})`; g.lineWidth=1.0;
-        g.shadowColor='rgba(200,230,255,0.7)'; g.shadowBlur=4*t; g.stroke(); g.shadowBlur=0;
+        g.strokeStyle=`rgba(200,230,255,${ease(pt/1.0)*0.35})`; g.lineWidth=0.8; g.stroke();
       }
-      else if (ph===1) {
-        // Hold: cracks + shards visible, glint sweep
-        drawCracks(0.9, 1.0);
-        g.save(); g.beginPath(); g.arc(OX+CX,OY+CY,R,0,Math.PI*2); g.clip();
-        shards.forEach(s=>drawShard(s,0.88,true));
-        // Glint
-        const gx1=OX+CX+Math.cos(ga)*R*1.4, gy1=OY+CY+Math.sin(ga)*R*1.4;
-        const gx2=OX+CX-Math.cos(ga)*R*1.4, gy2=OY+CY-Math.sin(ga)*R*1.4;
+      else if(ph===1){
+        // Cracked glass — just the crack lines and a glint, avatar still visible
+        drawLines(crackData.lines, 0.88, 1.0);
+        // Glint sweep across the cracked surface
+        const gx1=OX+CX+Math.cos(ga)*R*1.3, gy1=OY+CY+Math.sin(ga)*R*1.3;
+        const gx2=OX+CX-Math.cos(ga)*R*1.3, gy2=OY+CY-Math.sin(ga)*R*1.3;
         const gl=g.createLinearGradient(gx1,gy1,gx2,gy2);
         gl.addColorStop(0.44,'transparent');
-        gl.addColorStop(0.50,'rgba(255,255,255,0.55)');
+        gl.addColorStop(0.50,'rgba(255,255,255,0.35)');
         gl.addColorStop(0.56,'transparent');
+        g.save(); g.beginPath(); g.arc(OX+CX,OY+CY,R,0,Math.PI*2); g.clip();
         g.fillStyle=gl; g.fillRect(0,0,cv.width,cv.height);
         g.restore();
-        // Ring
         g.beginPath(); g.arc(OX+CX,OY+CY,R,0,Math.PI*2);
-        g.strokeStyle='rgba(200,230,255,0.45)'; g.lineWidth=1.0;
-        g.shadowColor='rgba(200,230,255,0.6)'; g.shadowBlur=3; g.stroke(); g.shadowBlur=0;
+        g.strokeStyle='rgba(200,230,255,0.4)'; g.lineWidth=0.8; g.stroke();
       }
-      else if (ph===2) {
-        // SHATTER: pieces explode, protruding ones go up and out
-        const t=ease(pt/0.8);
-        // Impact flash
-        if (pt<0.06) {
+      else if(ph===2){
+        // SHATTER: crack lines vanish, shards explode outward
+        const t=ease(pt/0.7);
+        if(pt<0.05){
           g.save(); g.beginPath(); g.arc(OX+CX,OY+CY,R,0,Math.PI*2); g.clip();
-          g.fillStyle=`rgba(245,252,255,${(0.06-pt)/0.06*0.85})`; g.fillRect(0,0,cv.width,cv.height);
+          g.fillStyle=`rgba(245,252,255,${(0.05-pt)/0.05*0.7})`; g.fillRect(0,0,cv.width,cv.height);
           g.restore();
         }
-        shards.forEach(s=>{
-          s.dx += s.vx*(1+t*4)*dt*60;
-          s.dy += s.vy*(1+t*4)*dt*60;
-          s.dr += s.vr*dt*60;
-          if (s.protrude) {
-            // Gravity on protruding pieces
-            s.vy += 0.04;
-            drawShard(s, Math.max(0,1-pt/0.8*0.6));
+        drawLines(crackData.lines, Math.max(0,1-t*3), 1.0);
+        if(shards) shards.forEach(s=>{
+          s.dx+=s.vx*(1+t*4)*dt*60;
+          s.dy+=s.vy*(1+t*4)*dt*60;
+          s.dr+=s.vr*dt*60;
+          if(s.protrude){
+            s.vy+=0.035; // gravity
+            drawShard(s, Math.max(0,1-pt/0.7*0.5));
           } else {
             const d=Math.sqrt(s.dx*s.dx+s.dy*s.dy);
-            drawShard(s, Math.max(0,1-d/(R*0.9)));
+            drawShard(s, Math.max(0,1-d/(R*0.85)));
           }
         });
-        drawCracks(Math.max(0,1-t*2), 1.0);
       }
-      else if (ph===3) {
-        // Settle: protruding pieces still visible falling
+      else if(ph===3){
+        // Settle: protruding shards still falling, others gone
         const fade=1-pt/0.5;
-        shards.forEach(s=>{
-          if (s.protrude) {
-            s.vy += 0.06; // gravity
-            s.dx += s.vx*0.05*dt*60;
-            s.dy += s.vy*0.05*dt*60;
-            drawShard(s, fade);
-          } else {
+        if(shards) shards.forEach(s=>{
+          if(s.protrude){
+            s.vy+=0.05;
             s.dx+=s.vx*0.04*dt*60; s.dy+=s.vy*0.04*dt*60;
-            drawShard(s, fade*0.15);
+            drawShard(s, fade*0.8);
           }
         });
       }
-      else if (ph===4) {
-        // Idle: just a faint ice ring on the avatar border
+      else if(ph===4){
+        // Idle: just a very faint frost ring, avatar fully visible
         g.beginPath(); g.arc(OX+CX,OY+CY,R-0.5,0,Math.PI*2);
-        g.strokeStyle='rgba(160,210,255,0.3)'; g.lineWidth=1.0; g.stroke();
-        for (let i=0;i<8;i++){
-          const a=(i/8)*Math.PI*2;
-          g.beginPath(); g.arc(OX+CX+Math.cos(a)*(R-1),OY+CY+Math.sin(a)*(R-1),0.8,0,Math.PI*2);
-          g.fillStyle='rgba(200,235,255,0.4)'; g.fill();
-        }
+        g.strokeStyle='rgba(160,210,255,0.25)'; g.lineWidth=0.8; g.stroke();
       }
-      else if (ph===5) {
-        // Reform: shards fly back
-        const t=ease(pt/1.2);
-        drawCracks(t*0.9, t);
-        g.save(); g.beginPath(); g.arc(OX+CX,OY+CY,R,0,Math.PI*2); g.clip();
-        shards.forEach(s=>{
-          const ox=s.dx,oy=s.dy,or2=s.dr;
-          s.dx=ox*(1-t); s.dy=oy*(1-t); s.dr=or2*(1-t);
-          drawShard(s, t*0.85, true);
-          s.dx=ox; s.dy=oy; s.dr=or2;
-        });
-        g.restore();
+      else if(ph===5){
+        // Reform: crack lines draw back in
+        const t=ease(pt/1.0);
+        drawLines(crackData.lines, t*0.88, t);
         g.beginPath(); g.arc(OX+CX,OY+CY,R,0,Math.PI*2);
-        g.strokeStyle=`rgba(200,230,255,${t*0.45})`; g.lineWidth=1.0;
-        g.shadowColor='rgba(200,230,255,0.5)'; g.shadowBlur=3*t; g.stroke(); g.shadowBlur=0;
-        if (t>0.88) {
-          g.save(); g.beginPath(); g.arc(OX+CX,OY+CY,R,0,Math.PI*2); g.clip();
-          g.fillStyle=`rgba(220,240,255,${(t-0.88)/0.12*0.18})`; g.fillRect(0,0,cv.width,cv.height);
-          g.restore();
-        }
+        g.strokeStyle=`rgba(200,230,255,${t*0.35})`; g.lineWidth=0.8; g.stroke();
       }
 
       aid=requestAnimationFrame(frame);
