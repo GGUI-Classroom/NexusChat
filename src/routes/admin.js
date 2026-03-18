@@ -96,12 +96,16 @@ router.get('/servers', async (req, res) => {
   }))});
 });
 
-// Join a server as admin (force join)
+// Join a server as admin (force join with admin role)
 router.post('/servers/:serverId/join', async (req, res) => {
   const { serverId } = req.params;
   const already = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, req.session.userId]);
-  if (already.rows.length) return res.status(409).json({ error: 'Already a member' });
-  await pool.query('INSERT INTO server_members (id, server_id, user_id) VALUES ($1,$2,$3)', [uuidv4(), serverId, req.session.userId]);
+  if (already.rows.length) {
+    // Already a member — promote to admin role
+    await pool.query("UPDATE server_members SET role='admin' WHERE server_id=$1 AND user_id=$2", [serverId, req.session.userId]);
+    return res.json({ success: true, promoted: true });
+  }
+  await pool.query("INSERT INTO server_members (id, server_id, user_id, role) VALUES ($1,$2,$3,'admin')", [uuidv4(), serverId, req.session.userId]);
   const s = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId]);
   res.json({ success: true, server: s.rows[0] });
 });
@@ -129,6 +133,51 @@ router.get('/suspensions', async (req, res) => {
     suspendedUntil: parseInt(s.suspended_until),
     createdAt: parseInt(s.created_at), active: s.active,
   }))});
+});
+
+// Get user info (nexals + servers)
+router.get('/users/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const userRes = await pool.query(
+    'SELECT id, username, display_name, nexals FROM users WHERE id=$1', [userId]
+  );
+  if (!userRes.rows.length) return res.status(404).json({ error: 'User not found' });
+  const u = userRes.rows[0];
+
+  const serversRes = await pool.query(`
+    SELECT s.id, s.name, s.icon_data, s.icon_mime, sm.role,
+      (SELECT COUNT(*) FROM server_members sm2 WHERE sm2.server_id=s.id) as member_count
+    FROM server_members sm
+    JOIN servers s ON s.id=sm.server_id
+    WHERE sm.user_id=$1
+    ORDER BY s.name ASC
+  `, [userId]);
+
+  const suspRes = await pool.query(
+    'SELECT suspended_until, reason FROM suspensions WHERE user_id=$1 AND active=TRUE AND suspended_until > EXTRACT(EPOCH FROM NOW())::BIGINT ORDER BY created_at DESC LIMIT 1',
+    [userId]
+  );
+
+  res.json({
+    id: u.id, username: u.username, displayName: u.display_name,
+    nexals: u.nexals,
+    suspendedUntil: suspRes.rows[0] ? parseInt(suspRes.rows[0].suspended_until) : null,
+    suspendReason: suspRes.rows[0]?.reason || null,
+    servers: serversRes.rows.map(s => ({
+      id: s.id, name: s.name, role: s.role, memberCount: parseInt(s.member_count),
+      iconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
+    }))
+  });
+});
+
+// Update user nexals
+router.patch('/users/:userId/nexals', async (req, res) => {
+  const { userId } = req.params;
+  const { nexals } = req.body;
+  if (nexals === undefined || isNaN(parseInt(nexals))) return res.status(400).json({ error: 'Invalid nexals value' });
+  await pool.query('UPDATE users SET nexals=$1 WHERE id=$2', [Math.max(0, parseInt(nexals)), userId]);
+  const r = await pool.query('SELECT nexals FROM users WHERE id=$1', [userId]);
+  res.json({ success: true, nexals: r.rows[0].nexals });
 });
 
 module.exports = router;
