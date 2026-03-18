@@ -2898,7 +2898,7 @@
           <div class="shop-card-preview">
             <div class="avatar-wrap" style="width:48px;height:48px;position:relative;overflow:visible;display:inline-flex;align-items:center;justify-content:center">
               <div class="avatar" style="width:48px;height:48px;font-size:18px;font-weight:800;flex-shrink:0">N</div>
-              ${d.owned ? `<div class="avatar-deco deco-${d.id}"></div>` : ''}
+              <div class="avatar-deco deco-${d.id}"></div>
             </div>
           </div>
           <span class="shop-rarity rarity-${d.rarity}">${d.rarity}</span>
@@ -2912,17 +2912,17 @@
         </div>`;
     }).join('');
 
-    // Start canvas engines for owned canvas-based decos
+    // Start canvas engines for all canvas-based decos (always show preview)
     const canvasDecos = { storm: startStormCanvas, inferno: startInfernoCanvas, yinyang: startYinYangCanvas, hydro: startHydroCanvas };
     Object.entries(canvasDecos).forEach(([id, fn]) => {
-      if (decorations.find(d => d.id === id && d.owned)) {
+      if (decorations.find(d => d.id === id)) {
         const wrap = document.querySelector(`#shopcard-${id} .avatar-wrap`);
         if (wrap) setTimeout(() => fn(wrap), 50);
       }
     });
-    // Shine overlays for owned legendaries
+    // Shine overlays for all legendaries
     ['diamond','goldshine'].forEach(id => {
-      if (decorations.find(d => d.id === id && d.owned)) {
+      if (decorations.find(d => d.id === id)) {
         const wrap = document.querySelector(`#shopcard-${id} .avatar-wrap`);
         if (wrap) {
           const shine = document.createElement('div');
