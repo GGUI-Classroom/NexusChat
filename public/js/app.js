@@ -69,23 +69,36 @@
       return;
     }
 
-    // Find the wrap — either an existing .avatar-wrap, or the direct parent
+    // Find or create a proper wrap for the avatar
     let wrap = el.parentElement;
     if (!wrap) return;
 
-    // If parent isn't position:relative capable, make it so
-    if (!wrap.classList.contains('avatar-wrap') && getComputedStyle(wrap).position === 'static') {
+    // Ensure the wrap has position:relative and overflow:visible for canvas decos
+    const canvasDecoSet = new Set(['storm','inferno','yinyang','hydro','shatter']);
+    if (canvasDecoSet.has(deco)) {
+      if (!wrap.classList.contains('avatar-wrap')) {
+        wrap.style.position = 'relative';
+        wrap.style.overflow = 'visible';
+      } else {
+        wrap.style.overflow = 'visible';
+      }
+    } else if (getComputedStyle(wrap).position === 'static') {
       wrap.style.position = 'relative';
     }
 
-    // Remove stale deco
-    const existing = wrap.querySelector('.avatar-deco');
-    if (existing) existing.remove();
+    // Remove stale deco elements and canvases
+    wrap.querySelectorAll('.avatar-deco, .storm-canvas').forEach(e => e.remove());
+    // Stop any running canvas engines first
+    stopStormCanvas(wrap); stopInfernoCanvas(wrap); stopYinYangCanvas(wrap);
+    stopHydroCanvas(wrap); stopShatterCanvas(wrap);
 
-    // Inject deco as a sibling after the avatar
-    const decoEl = document.createElement('div');
-    decoEl.className = 'avatar-deco deco-' + deco;
-    wrap.appendChild(decoEl);
+    // Canvas-only decos don't need an avatar-deco div — the canvas IS the visual
+    const canvasOnlyDecos = new Set(['storm','inferno','yinyang','hydro','shatter']);
+    if (!canvasOnlyDecos.has(deco)) {
+      const decoEl = document.createElement('div');
+      decoEl.className = 'avatar-deco deco-' + deco;
+      wrap.appendChild(decoEl);
+    }
     wrap.dataset.deco = deco;
 
     // Admin deco: floating crown
@@ -118,7 +131,7 @@
     } else { stopHydroCanvas(wrap); }
 
     if (deco === 'shatter') {
-      setTimeout(() => startShatterCanvas(wrap), 50);
+      setTimeout(() => startShatterCanvas(wrap), 100);
     } else { stopShatterCanvas(wrap); }
 
     // Shine overlay decos (diamond, goldshine)
@@ -139,7 +152,7 @@
   function startStormCanvas(wrap) {
     if (stormCanvases.has(wrap)) return; // already running
     const avatarEl = wrap.querySelector('.avatar');
-    const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
+    const size = Math.max(10, avatarEl ? (avatarEl.offsetWidth || parseInt(avatarEl.style.width) || 36) : 36);
     const canvasSize = size + 40; // extra space for sparks outside ring
 
     const canvas = document.createElement('canvas');
@@ -347,7 +360,7 @@
   function startInfernoCanvas(wrap) {
     if (infernoCanvases.has(wrap)) return;
     const avatarEl = wrap.querySelector('.avatar');
-    const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
+    const size = Math.max(10, avatarEl ? (avatarEl.offsetWidth || parseInt(avatarEl.style.width) || 36) : 36);
     const pad = 22;
     const W = size + pad*2, H = size + pad*2 + 8;
     const canvas = document.createElement('canvas');
@@ -470,7 +483,7 @@
   function startYinYangCanvas(wrap) {
     if (yinYangCanvases.has(wrap)) return;
     const avatarEl = wrap.querySelector('.avatar');
-    const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
+    const size = Math.max(10, avatarEl ? (avatarEl.offsetWidth || parseInt(avatarEl.style.width) || 36) : 36);
     const W = size + 16, H = size + 16;
     const canvas = document.createElement('canvas');
     canvas.className = 'storm-canvas';
@@ -595,7 +608,7 @@
   function startHydroCanvas(wrap) {
     if (hydroCanvases.has(wrap)) return;
     const avatarEl = wrap.querySelector('.avatar');
-    const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
+    const size = Math.max(10, avatarEl ? (avatarEl.offsetWidth || parseInt(avatarEl.style.width) || 36) : 36);
     const pad = 14;
     const W = size + pad*2, H = size + pad*2;
     const canvas = document.createElement('canvas');
@@ -730,16 +743,17 @@
   function startShatterCanvas(wrap) {
     if (shatterCanvases.has(wrap)) return;
     const avatarEl = wrap.querySelector('.avatar');
-    const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
+    // Try offsetWidth, then explicit style width, then default 36
+    let size = avatarEl ? (avatarEl.offsetWidth || parseInt(avatarEl.style.width) || 36) : 36;
+    if (size < 10) size = 36; // safety fallback
     const pad = 26;
     const W = size + pad*2, H = size + pad*2;
     const canvas = document.createElement('canvas');
     canvas.className = 'storm-canvas';
-    canvas.width = W * 2; canvas.height = H * 2; // retina
+    canvas.width = W; canvas.height = H;
     canvas.style.width = W+'px'; canvas.style.height = H+'px';
     wrap.appendChild(canvas);
     const ctx = canvas.getContext('2d');
-    ctx.scale(2, 2); // retina scale
     const cx = W/2, cy = H/2, r = size/2;
 
     // ---- Shard generation: realistic glass crack topology ----
