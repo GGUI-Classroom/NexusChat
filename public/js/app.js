@@ -2261,7 +2261,7 @@
 
     const isMe = msg.fromId === currentUser.id;
     const author = isMe
-      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl }
+      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeColor: currentUser.activeColor || null }
       : msg.author;
 
     const roleColor = author.roleColor || null;
