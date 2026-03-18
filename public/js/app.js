@@ -2261,7 +2261,7 @@
 
     const isMe = msg.fromId === currentUser.id;
     const author = isMe
-      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeColor: currentUser.activeColor || null }
+      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null }
       : msg.author;
 
     const roleColor = author.roleColor || null;
@@ -2283,7 +2283,7 @@
           <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>
           <span class="msg-time">${formatTime(msg.createdAt)}</span>
         </div>
-        <div class="msg-content">${renderContent(msg.content, msg.mentions, author.activeColor || null)}</div>
+        <div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(msg.content, msg.mentions, author.activeColor || null)}</div>
         ${(isChannelMsg && canDeleteThisMsg) ? `<button class="msg-delete-btn" onclick="deleteChannelMessage('${msg.id}','${msg.channelId}',this)" title="Delete message">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
         </button>` : ''}
@@ -3419,13 +3419,15 @@
   let colorsData = null;
 
   async function loadColors() {
-    const r = await api('GET', '/api/colors');
-    if (r.error) return;
-    colorsData = r;
-    updateNexalDisplay(r.nexals || 0);
-    const nc = $('colors-nexal-count');
-    if (nc) nc.textContent = (r.nexals||0).toLocaleString();
-    renderColors(r.colors, r.active, r.nexals);
+    const [r, fr] = await Promise.all([api('GET', '/api/colors'), api('GET', '/api/colors/fonts')]);
+    if (!r.error) {
+      colorsData = r;
+      updateNexalDisplay(r.nexals || 0);
+      const nc = $('colors-nexal-count');
+      if (nc) nc.textContent = (r.nexals||0).toLocaleString();
+      renderColors(r.colors, r.active, r.nexals);
+    }
+    if (!fr.error) renderFonts(fr.fonts, fr.active, fr.nexals);
   }
 
   function previewColorHtml(color) {
@@ -3455,6 +3457,47 @@
       </div>`;
     }).join('');
   }
+
+  function renderFonts(fonts, active, nexals) {
+    const grid = $('fonts-grid');
+    if (!grid) return;
+    const myNexals = nexals || 0;
+    grid.innerHTML = fonts.map(f => {
+      const isEquipped = active === f.id;
+      const isOwned = f.owned;
+      const canBuy = !isOwned && myNexals >= f.price;
+      let btnClass = 'locked', btnText = '🔒 ' + f.price.toLocaleString();
+      if (isEquipped)  { btnClass = 'unequip'; btnText = '✓ Equipped'; }
+      else if (isOwned){ btnClass = 'equip';   btnText = 'Equip'; }
+      else if (canBuy) { btnClass = 'buy';     btnText = 'Buy'; }
+      return `<div class="font-card ${isOwned?'owned':''} ${isEquipped?'equipped':''}">
+        <div class="font-preview-text">Aa Bb</div>
+        <div class="color-card-name">${esc(f.name)}</div>
+        <div class="color-card-price">${f.price.toLocaleString()} Nexals</div>
+        <button class="color-card-btn ${btnClass}" onclick="fontAction('${f.id}','${isEquipped?'unequip':isOwned?'equip':canBuy?'buy':'locked'}')">${btnText}</button>
+      </div>`;
+    }).join('');
+  }
+
+  window.fontAction = async function(fontId, action) {
+    if (action === 'locked') { toast('Not enough Nexals', 'info'); return; }
+    if (action === 'buy') {
+      if (!confirm('Buy Bubble font for 15,000 Nexals?')) return;
+      const r = await api('POST', '/api/colors/fonts/buy', { fontId });
+      if (r.error) return toast(r.error, 'error');
+      currentUser.activeFont = fontId;
+      updateNexalDisplay(r.nexals);
+      toast('Bubble font unlocked! 🔤', 'success');
+      await loadColors();
+      return;
+    }
+    const equipId = action === 'equip' ? fontId : null;
+    const r = await api('POST', '/api/colors/fonts/equip', { fontId: equipId });
+    if (r.error) return toast(r.error, 'error');
+    currentUser.activeFont = equipId;
+    toast(action === 'equip' ? 'Font equipped! 🔤' : 'Font removed', 'success');
+    await loadColors();
+  };
 
   window.colorAction = async function(colorId, action) {
     if (action === 'locked') {
