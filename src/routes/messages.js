@@ -15,7 +15,7 @@ router.get('/:userId', async (req, res) => {
   if (!isFriend.rows.length) return res.status(403).json({ error: 'Not friends' });
 
   let query = `SELECT m.id, m.from_id, m.to_id, m.content, m.created_at,
-    u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color
+    u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font
     FROM messages m JOIN users u ON u.id=m.from_id
     WHERE ((m.from_id=$1 AND m.to_id=$2) OR (m.from_id=$2 AND m.to_id=$1))`;
   const params = [req.session.userId, userId];
@@ -36,7 +36,8 @@ router.get('/:userId', async (req, res) => {
       username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
       activeDecoration: m.active_decoration || null,
-      activeColor: m.active_color || null
+      activeColor: m.active_color || null,
+      activeFont: m.active_font || null
     }
   }))});
 });
