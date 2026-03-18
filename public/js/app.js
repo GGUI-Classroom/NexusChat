@@ -2682,6 +2682,7 @@
     if (pane) pane.classList.add('active');
     if (tab === 'servers') adminLoadServers();
     if (tab === 'history') adminLoadHistory();
+    if (tab === 'userinfo') { $('admin-userinfo-result').innerHTML = ''; }
   }
 
   $('admin-suspend-btn').addEventListener('click', async () => {
@@ -2747,7 +2748,7 @@
   window.adminJoinServer = async function(serverId) {
     const r = await api('POST', '/api/admin/servers/' + serverId + '/join');
     if (r.error) return toast(r.error, 'error');
-    toast('Joined server!', 'success');
+    toast(r.promoted ? 'Promoted to admin in server!' : 'Joined server as admin!', 'success');
     await loadServers();
     adminLoadServers();
   };
@@ -2759,6 +2760,76 @@
     toast('Server deleted', 'info');
     await loadServers();
     adminLoadServers();
+  };
+
+  // User info lookup
+  $('admin-userinfo-search-btn').addEventListener('click', adminLookupUser);
+  $('admin-userinfo-search').addEventListener('keydown', e => { if (e.key==='Enter') adminLookupUser(); });
+
+  async function adminLookupUser() {
+    const query = $('admin-userinfo-search').value.trim();
+    if (!query) return;
+    const result = $('admin-userinfo-result');
+    result.innerHTML = '<div style="color:var(--text-muted);padding:16px">Searching…</div>';
+
+    // First find user by username
+    const search = await api('GET', '/api/admin/users?search=' + encodeURIComponent(query));
+    if (search.error || !search.users.length) {
+      result.innerHTML = '<div style="color:var(--red);padding:16px">User not found</div>'; return;
+    }
+    const u = search.users[0];
+    const data = await api('GET', '/api/admin/users/' + u.id);
+    if (data.error) { result.innerHTML = '<div style="color:var(--red);padding:16px">' + esc(data.error) + '</div>'; return; }
+
+    const suspText = data.suspendedUntil
+      ? `<span style="color:var(--red)">Suspended until ${new Date(data.suspendedUntil*1000).toLocaleString()}</span>`
+      : '<span style="color:var(--green)">Active</span>';
+
+    result.innerHTML = `
+      <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;margin-top:4px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="font-size:28px;width:48px;height:48px;background:var(--bg-surface);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--accent)">${esc(data.displayName[0]||'?')}</div>
+          <div>
+            <div style="font-size:15px;font-weight:800">${esc(data.displayName)}</div>
+            <div style="font-size:12px;color:var(--text-muted)">@${esc(data.username)} · ${suspText}</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px">
+          <div class="field-group" style="margin:0;flex:1">
+            <label>Nexals Balance</label>
+            <input type="number" id="admin-nexal-input" value="${data.nexals}" min="0" style="width:100%" />
+          </div>
+          <button class="btn-primary" style="padding:9px 16px;white-space:nowrap" onclick="adminSetNexals('${data.id}')">Update</button>
+        </div>
+        <div class="form-error" id="admin-nexal-error"></div>
+
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">
+          Servers (${data.servers.length})
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto">
+          ${data.servers.length ? data.servers.map(s => `
+            <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;background:var(--bg-surface);border-radius:6px">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0;overflow:hidden">
+                ${s.iconDataUrl ? `<img src="${s.iconDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : esc(s.name[0]||'?')}
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</div>
+                <div style="font-size:10px;color:var(--text-muted)">${s.memberCount} members · ${s.role || 'member'}</div>
+              </div>
+            </div>`).join('') : '<div style="color:var(--text-muted);font-size:12px">Not in any servers</div>'}
+        </div>
+      </div>`;
+  }
+
+  window.adminSetNexals = async function(userId) {
+    const val = parseInt($('admin-nexal-input').value);
+    if (isNaN(val) || val < 0) return showError('admin-nexal-error', 'Enter a valid amount');
+    const r = await api('PATCH', '/api/admin/users/' + userId + '/nexals', { nexals: val });
+    if (r.error) return showError('admin-nexal-error', r.error);
+    showError('admin-nexal-error', '');
+    toast('✓ Nexals updated to ' + r.nexals.toLocaleString(), 'success');
+    updateNexalDisplay(r.nexals); // update if it's the current user
   };
 
   async function adminLoadHistory() {
