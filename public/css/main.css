@@ -2672,7 +2672,7 @@ html, body {
 /* ===== BUBBLE FONT ===== */
 .msg-font-bubble {
   font-family: 'DynaPuff', cursive !important;
-  font-size: 0.6em;
+  font-size: 0.8em;
   letter-spacing: 0.5px;
 }
 
