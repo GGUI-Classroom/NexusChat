@@ -3060,40 +3060,80 @@
       ? `<span style="color:var(--red)">Suspended until ${new Date(data.suspendedUntil*1000).toLocaleString()}</span>`
       : '<span style="color:var(--green)">Active</span>';
 
+    const rarityColor = {common:'#8a94a8',rare:'var(--accent)',epic:'#8b3cf7',legendary:'#ffd700',mythical:'#e040fb'};
     result.innerHTML = `
-      <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;margin-top:4px">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-          <div style="font-size:28px;width:48px;height:48px;background:var(--bg-surface);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--accent)">${esc(data.displayName[0]||'?')}</div>
+      <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;margin-top:4px;display:flex;flex-direction:column;gap:14px">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="font-size:22px;width:44px;height:44px;background:var(--bg-surface);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--accent);flex-shrink:0">${esc((data.displayName||'?')[0])}</div>
           <div>
             <div style="font-size:15px;font-weight:800">${esc(data.displayName)}</div>
             <div style="font-size:12px;color:var(--text-muted)">@${esc(data.username)} · ${suspText}</div>
           </div>
         </div>
 
-        <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px">
-          <div class="field-group" style="margin:0;flex:1">
-            <label>Nexals Balance</label>
-            <input type="number" id="admin-nexal-input" value="${data.nexals}" min="0" style="width:100%" />
+        <!-- Identity -->
+        <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Identity</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="text" id="admin-edit-username" value="${esc(data.username)}" placeholder="Username" style="flex:1;min-width:100px" />
+            <input type="text" id="admin-edit-displayname" value="${esc(data.displayName)}" placeholder="Display Name" style="flex:1;min-width:100px" />
+            <button class="btn-secondary" style="font-size:11px;padding:6px 12px;white-space:nowrap" onclick="adminSetIdentity('${data.id}')">Save</button>
           </div>
-          <button class="btn-primary" style="padding:9px 16px;white-space:nowrap" onclick="adminSetNexals('${data.id}')">Update</button>
+          <div class="form-error" id="admin-identity-error" style="margin-top:4px"></div>
         </div>
-        <div class="form-error" id="admin-nexal-error"></div>
 
-        <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">
-          Servers (${data.servers.length})
+        <!-- Password -->
+        <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Change Password</div>
+          <div style="display:flex;gap:8px">
+            <input type="password" id="admin-edit-password" placeholder="New password (min 6 chars)" style="flex:1" />
+            <button class="btn-secondary" style="font-size:11px;padding:6px 12px;white-space:nowrap" onclick="adminSetPassword('${data.id}')">Set</button>
+          </div>
+          <div class="form-error" id="admin-password-error" style="margin-top:4px"></div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto">
-          ${data.servers.length ? data.servers.map(s => `
-            <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;background:var(--bg-surface);border-radius:6px">
-              <div style="width:28px;height:28px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0;overflow:hidden">
-                ${s.iconDataUrl ? `<img src="${s.iconDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : esc(s.name[0]||'?')}
-              </div>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</div>
-                <div style="font-size:10px;color:var(--text-muted)">${s.memberCount} members · ${s.role || 'member'}</div>
-              </div>
-            </div>`).join('') : '<div style="color:var(--text-muted);font-size:12px">Not in any servers</div>'}
+
+        <!-- Nexals -->
+        <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Nexals</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" id="admin-nexal-input" value="${data.nexals}" min="0" style="flex:1" />
+            <button class="btn-primary" style="font-size:11px;padding:6px 12px;white-space:nowrap" onclick="adminSetNexals('${data.id}')">Update</button>
+          </div>
+          <div class="form-error" id="admin-nexal-error" style="margin-top:4px"></div>
         </div>
+
+        <!-- Decorations -->
+        <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Decorations</div>
+          <div style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto">
+            ${(data.decorations||[]).map(d=>`
+              <div style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;background:var(--bg-hover)">
+                <span style="font-size:11px;font-weight:700;color:${rarityColor[d.rarity]||'#fff'};flex:1">${esc(d.name)}</span>
+                <span style="font-size:10px;color:var(--text-muted)">${d.rarity}</span>
+                ${d.owned
+                  ? `<button class="action-btn danger" style="font-size:10px;padding:3px 8px" onclick="adminRemoveDeco('${data.id}','${d.id}')">Remove</button>`
+                  : `<button class="action-btn ghost" style="font-size:10px;padding:3px 8px" onclick="adminGiveDeco('${data.id}','${d.id}')">Give</button>`}
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- Servers -->
+        <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Servers (${data.servers.length})</div>
+          <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto">
+            ${data.servers.length ? data.servers.map(s=>`
+              <div style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px">
+                <div style="width:24px;height:24px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">
+                  ${s.iconDataUrl?`<img src="${s.iconDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:esc((s.name||'?')[0])}
+                </div>
+                <div style="flex:1;min-width:0;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</div>
+                <div style="font-size:10px;color:var(--text-muted)">${s.role||'member'}</div>
+              </div>`).join('') : '<div style="font-size:12px;color:var(--text-muted)">Not in any servers</div>'}
+          </div>
+        </div>
+
       </div>`;
   }
 
@@ -3105,6 +3145,42 @@
     showError('admin-nexal-error', '');
     toast('✓ Nexals updated to ' + r.nexals.toLocaleString(), 'success');
     updateNexalDisplay(r.nexals); // update if it's the current user
+  };
+
+  window.adminSetIdentity = async function(userId) {
+    const username = $('admin-edit-username').value.trim();
+    const displayName = $('admin-edit-displayname').value.trim();
+    showError('admin-identity-error', '');
+    if (!username && !displayName) return;
+    const r = await api('PATCH', '/api/admin/users/' + userId + '/identity', { username, displayName });
+    if (r.error) return showError('admin-identity-error', r.error);
+    toast('✓ Identity updated', 'success');
+  };
+
+  window.adminSetPassword = async function(userId) {
+    const pw = $('admin-edit-password').value;
+    showError('admin-password-error', '');
+    if (!pw) return showError('admin-password-error', 'Enter a password');
+    if (pw.length < 6) return showError('admin-password-error', 'Min 6 characters');
+    const r = await api('PATCH', '/api/admin/users/' + userId + '/password', { password: pw });
+    if (r.error) return showError('admin-password-error', r.error);
+    $('admin-edit-password').value = '';
+    toast('✓ Password changed', 'success');
+  };
+
+  window.adminGiveDeco = async function(userId, decoId) {
+    const r = await api('POST', '/api/admin/users/' + userId + '/decorations', { decorationId: decoId });
+    if (r.error) return toast(r.error, 'error');
+    toast('✓ Decoration given', 'success');
+    await adminLookupUser();
+  };
+
+  window.adminRemoveDeco = async function(userId, decoId) {
+    if (!confirm('Remove this decoration from user?')) return;
+    const r = await api('DELETE', '/api/admin/users/' + userId + '/decorations/' + decoId);
+    if (r.error) return toast(r.error, 'error');
+    toast('Decoration removed', 'info');
+    await adminLookupUser();
   };
 
   async function adminLoadHistory() {
