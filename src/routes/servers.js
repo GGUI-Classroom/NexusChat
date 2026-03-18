@@ -210,7 +210,8 @@ router.get('/:id', async (req, res) => {
       roleName: m.role_name, roleColor: m.role_color, isAdmin: m.is_admin,
       activeDecoration: m.active_decoration || null,
       activeColor: m.active_color || null,
-      activeColor: m.active_color || null
+      activeColor: m.active_color || null,
+      activeFont: m.active_font || null
     })),
     roles: roleRes.rows.map(r => ({ id: r.id, name: r.name, color: r.color, isAdmin: r.is_admin, position: r.position, canDeleteMessages: !!r.can_delete_messages }))
   });
@@ -517,7 +518,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
   let q = `SELECT cm.id, cm.channel_id, cm.from_id, cm.content, cm.created_at,
-    u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color,
+    u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
     sm.role_id, sr.name as role_name, sr.color as role_color
     FROM channel_messages cm
     JOIN users u ON u.id=cm.from_id
@@ -543,7 +544,8 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
       roleColor: m.role_color || null, roleName: m.role_name || null,
       activeDecoration: m.active_decoration || null,
       activeColor: m.active_color || null,
-      activeColor: m.active_color || null
+      activeColor: m.active_color || null,
+      activeFont: m.active_font || null
     }
   }))});
 });
