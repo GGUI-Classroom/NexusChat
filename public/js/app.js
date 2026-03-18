@@ -62,6 +62,7 @@
         stopStormCanvas(oldWrap);
         stopInfernoCanvas(oldWrap);
         stopYinYangCanvas(oldWrap);
+        stopHydroCanvas(oldWrap);
         oldWrap.querySelectorAll('.admin-crown,.deco-shine-overlay').forEach(e=>e.remove());
       }
       return;
@@ -110,6 +111,10 @@
     if (deco === 'yinyang') {
       setTimeout(() => startYinYangCanvas(wrap), 50);
     } else { stopYinYangCanvas(wrap); }
+
+    if (deco === 'hydro') {
+      setTimeout(() => startHydroCanvas(wrap), 50);
+    } else { stopHydroCanvas(wrap); }
 
     // Shine overlay decos (diamond, goldshine)
     const shineDecos = ['diamond', 'goldshine'];
@@ -328,73 +333,116 @@
   }
 
   // ---- Inferno Canvas ----
+  // Phase 0 (4s): flames orbit the avatar ring only, never touch center
+  // Phase 1 (0.8s transition): flames spread inward, filling the avatar
+  // Phase 2 (1.5s): full fire engulfs avatar
+  // Phase 3 (0.6s): flames recede back to ring
   const infernoCanvases = new WeakMap();
 
   function startInfernoCanvas(wrap) {
     if (infernoCanvases.has(wrap)) return;
     const avatarEl = wrap.querySelector('.avatar');
     const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
-    const pad = 18;
-    const W = size + pad * 2, H = size + pad * 2 + 10;
+    const pad = 22;
+    const W = size + pad*2, H = size + pad*2 + 8;
     const canvas = document.createElement('canvas');
     canvas.className = 'storm-canvas';
     canvas.width = W; canvas.height = H;
-    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
     canvas.style.top = '50%'; canvas.style.left = '50%';
-    canvas.style.transform = 'translate(-50%,-46%)';
+    canvas.style.transform = 'translate(-50%,-48%)';
     wrap.appendChild(canvas);
     const ctx = canvas.getContext('2d');
-    const cx = W / 2, cy = H / 2 + 4;
-    const r = size / 2;
+    const cx = W/2, cy = H/2+3, r = size/2;
 
-    // Flame particles
+    // phase: 0=ring only, 1=spreading in, 2=full engulf, 3=receding
+    let phase=0, phaseT=0, lastTime=null, animId;
+    // spread: 0 = flames only at ring, 1 = flames fill whole avatar
+    let spread = 0;
+
     const flames = [];
-    function spawnFlame() {
-      const angle = -Math.PI + Math.random() * Math.PI * 2;
-      const ox = cx + Math.cos(angle) * (r - 2);
-      const oy = cy + Math.sin(angle) * (r - 2);
+    function spawnFlame(forced) {
+      // In phase 0, spawn only near ring edge
+      // In phase 1/2, also spawn inside
+      const p = spread;
+      const angle = Math.random() * Math.PI * 2;
+      // Origin: between (r - p*r*0.9) and (r + 4)
+      const originR = (r - p * r * 0.85) + Math.random() * 6;
+      const ox = cx + Math.cos(angle) * originR;
+      const oy = cy + Math.sin(angle) * originR;
+      // Velocity: outward when ring-only, more upward when spreading
+      const outward = Math.cos(angle) * (0.2 + Math.random()*0.4) * (1-p*0.7);
+      const upward  = -(0.8 + Math.random()*1.4) * (0.5 + p*0.8);
       flames.push({
         x: ox, y: oy,
-        vx: Math.cos(angle) * (0.3 + Math.random() * 0.6) + (Math.random()-0.5)*0.4,
-        vy: -1.5 - Math.random() * 1.5,
-        life: 1, decay: 0.025 + Math.random() * 0.02,
-        size: 3 + Math.random() * 4,
-        hue: 10 + Math.random() * 40,
+        vx: outward + (Math.random()-0.5)*0.3,
+        vy: upward,
+        life: 1,
+        decay: 0.02 + Math.random()*0.02,
+        size: (2 + Math.random()*4) * (0.7 + p*0.8),
+        hue: 5 + Math.random()*45,
       });
     }
 
-    let animId, lastTime = null;
     function draw(ts) {
       if (!lastTime) lastTime = ts;
-      lastTime = ts;
+      const dt = Math.min((ts-lastTime)/1000, 0.05); lastTime = ts;
+      phaseT += dt;
+
+      // Phase transitions
+      if (phase===0 && phaseT>4)   { phase=1; phaseT=0; }
+      if (phase===1 && phaseT>0.8) { phase=2; phaseT=0; }
+      if (phase===2 && phaseT>1.5) { phase=3; phaseT=0; }
+      if (phase===3 && phaseT>0.6) { phase=0; phaseT=0; }
+
+      // Compute spread (0=ring only, 1=full cover)
+      if (phase===0) spread = Math.max(0, spread - dt*2);
+      if (phase===1) spread = Math.min(1, phaseT/0.8);
+      if (phase===2) spread = 1;
+      if (phase===3) spread = Math.max(0, 1 - phaseT/0.6);
+
       ctx.clearRect(0, 0, W, H);
 
-      // Base glow ring
-      const grd = ctx.createRadialGradient(cx, cy, r-2, cx, cy, r+6);
-      grd.addColorStop(0, 'rgba(255,80,0,0.7)');
-      grd.addColorStop(0.5, 'rgba(255,40,0,0.3)');
+      // Base glow ring (always present)
+      const glowR = r + 4 + spread * 4;
+      const grd = ctx.createRadialGradient(cx,cy,r-3,cx,cy,glowR+4);
+      grd.addColorStop(0, `rgba(255,100,0,${0.4+spread*0.4})`);
+      grd.addColorStop(0.5, `rgba(255,40,0,${0.2+spread*0.3})`);
       grd.addColorStop(1, 'transparent');
-      ctx.beginPath(); ctx.arc(cx, cy, r+6, 0, Math.PI*2);
-      ctx.fillStyle = grd; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx,cy,glowR+4,0,Math.PI*2);
+      ctx.fillStyle=grd; ctx.fill();
 
-      // Spawn flames around ring
-      for (let i = 0; i < 3; i++) spawnFlame();
+      // When engulfing, also fill center with translucent fire glow
+      if (spread > 0.1) {
+        const inner = ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+        inner.addColorStop(0, `rgba(255,200,50,${spread*0.55})`);
+        inner.addColorStop(0.5, `rgba(255,80,0,${spread*0.45})`);
+        inner.addColorStop(1, `rgba(255,40,0,${spread*0.1})`);
+        ctx.save();
+        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+        ctx.fillStyle=inner; ctx.fill();
+        ctx.restore();
+      }
+
+      // Spawn flames
+      const spawnCount = 2 + Math.round(spread * 4);
+      for (let i=0; i<spawnCount; i++) spawnFlame();
 
       // Draw flames
-      for (let i = flames.length-1; i >= 0; i--) {
+      for (let i=flames.length-1; i>=0; i--) {
         const f = flames[i];
         f.x += f.vx; f.y += f.vy;
-        f.vy -= 0.04; // rise
+        f.vy -= 0.035;
         f.vx *= 0.97;
         f.life -= f.decay;
-        f.size *= 0.975;
-        if (f.life <= 0 || f.size < 0.5) { flames.splice(i,1); continue; }
-        const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size);
-        g.addColorStop(0, `hsla(${f.hue+20},100%,80%,${f.life})`);
-        g.addColorStop(0.4, `hsla(${f.hue},100%,55%,${f.life*0.8})`);
-        g.addColorStop(1, `hsla(${f.hue-10},100%,30%,0)`);
-        ctx.beginPath(); ctx.arc(f.x, f.y, f.size, 0, Math.PI*2);
-        ctx.fillStyle = g; ctx.fill();
+        f.size *= 0.974;
+        if (f.life<=0||f.size<0.4) { flames.splice(i,1); continue; }
+        const g = ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,f.size);
+        g.addColorStop(0, `hsla(${f.hue+30},100%,90%,${f.life})`);
+        g.addColorStop(0.35,`hsla(${f.hue+10},100%,60%,${f.life*0.85})`);
+        g.addColorStop(1,   `hsla(${f.hue-5},100%,25%,0)`);
+        ctx.beginPath(); ctx.arc(f.x,f.y,f.size,0,Math.PI*2);
+        ctx.fillStyle=g; ctx.fill();
       }
       animId = requestAnimationFrame(draw);
     }
@@ -408,6 +456,10 @@
   }
 
   // ---- Yin Yang Canvas ----
+  // Phase 0 (5s): split ring — left white, right dark, slowly rotating
+  // Phase 1 (0.8s): arcs begin spinning inward, blending/mixing
+  // Phase 2 (1.5s): full yin-yang symbol, slowly rotating
+  // Phase 3 (0.7s): symbol dissolves back out to split ring
   const yinYangCanvases = new WeakMap();
 
   function startYinYangCanvas(wrap) {
@@ -418,72 +470,107 @@
     const canvas = document.createElement('canvas');
     canvas.className = 'storm-canvas';
     canvas.width = W; canvas.height = H;
-    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
     wrap.appendChild(canvas);
     const ctx = canvas.getContext('2d');
     const cx = W/2, cy = H/2, r = size/2 + 3;
 
-    let phase = 0, phaseT = 0, lastTime = null, animId;
-    // phase 0 = split ring, phase 1 = symbol cover
+    let phase=0, phaseT=0, lastTime=null, animId;
+    let spinAngle = 0; // rotation for mixing animation
+
+    // Ease in/out helper
+    const easeInOut = t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+
+    function drawSplitRing(alpha, rotation) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(cx, cy);
+      ctx.rotate(rotation);
+      // White half
+      ctx.beginPath(); ctx.arc(0,0,r, Math.PI/2, -Math.PI/2, false);
+      ctx.strokeStyle='rgba(255,255,255,0.95)'; ctx.lineWidth=2.5;
+      ctx.shadowColor='rgba(255,255,255,0.7)'; ctx.shadowBlur=5;
+      ctx.stroke();
+      // Dark half
+      ctx.beginPath(); ctx.arc(0,0,r,-Math.PI/2,Math.PI/2,false);
+      ctx.strokeStyle='rgba(40,40,40,0.95)'; ctx.lineWidth=2.5;
+      ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=5;
+      ctx.stroke();
+      ctx.shadowBlur=0;
+      ctx.restore();
+    }
+
+    function drawYinYang(alpha, rotation, scale) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(cx, cy);
+      ctx.rotate(rotation);
+      ctx.scale(scale, scale);
+      const sr = r * 0.96;
+      // Clip to circle
+      ctx.beginPath(); ctx.arc(0,0,sr,0,Math.PI*2); ctx.clip();
+      // Dark half (right)
+      ctx.beginPath(); ctx.arc(0,0,sr,-Math.PI/2,Math.PI/2); ctx.fillStyle='#111'; ctx.fill();
+      // Light half (left)
+      ctx.beginPath(); ctx.arc(0,0,sr,Math.PI/2,-Math.PI/2); ctx.fillStyle='#eee'; ctx.fill();
+      // Top small dark semicircle
+      ctx.beginPath(); ctx.arc(0,-sr/2,sr/2,0,Math.PI*2); ctx.fillStyle='#111'; ctx.fill();
+      // Bottom small light semicircle
+      ctx.beginPath(); ctx.arc(0,sr/2,sr/2,0,Math.PI*2); ctx.fillStyle='#eee'; ctx.fill();
+      // Dots
+      ctx.beginPath(); ctx.arc(0,-sr/2,sr/6,0,Math.PI*2); ctx.fillStyle='#eee'; ctx.fill();
+      ctx.beginPath(); ctx.arc(0,sr/2,sr/6,0,Math.PI*2); ctx.fillStyle='#111'; ctx.fill();
+      ctx.restore();
+      // Outer ring glow
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.strokeStyle='rgba(180,180,180,0.6)'; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.restore();
+    }
 
     function draw(ts) {
       if (!lastTime) lastTime = ts;
       const dt = Math.min((ts-lastTime)/1000, 0.05); lastTime = ts;
       phaseT += dt;
-      if (phase === 0 && phaseT > 5)  { phase = 1; phaseT = 0; }
-      if (phase === 1 && phaseT > 1.5) { phase = 0; phaseT = 0; }
-      ctx.clearRect(0, 0, W, H);
 
-      if (phase === 0) {
-        // Left half white ring, right half black ring
-        // Left arc
-        ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI/2, -Math.PI/2, false);
-        ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 2.5;
-        ctx.shadowColor = 'rgba(255,255,255,0.8)'; ctx.shadowBlur = 6;
-        ctx.stroke();
-        // Right arc
-        ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2, Math.PI/2, false);
-        ctx.strokeStyle = 'rgba(30,30,30,0.95)'; ctx.lineWidth = 2.5;
-        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 6;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-      } else {
-        // Yin yang symbol covers avatar
-        const t = Math.min(phaseT / 0.3, 1); // fade in 0.3s
-        const fo = Math.min(Math.max((1.5-phaseT)/0.3, 0), 1); // fade out
-        const alpha = phase===1 && phaseT < 1.2 ? t : fo;
-        ctx.save();
-        ctx.globalAlpha = alpha * 0.92;
-        const sr = r * 0.95;
-        // Full circle background split
-        ctx.beginPath(); ctx.arc(cx, cy, sr, -Math.PI/2, Math.PI/2);
-        ctx.fillStyle = '#111'; ctx.fill();
-        ctx.beginPath(); ctx.arc(cx, cy, sr, Math.PI/2, -Math.PI/2);
-        ctx.fillStyle = '#eee'; ctx.fill();
-        // Two small semicircles
-        ctx.beginPath(); ctx.arc(cx, cy-sr/2, sr/2, 0, Math.PI*2);
-        ctx.fillStyle = '#111'; ctx.fill();
-        ctx.beginPath(); ctx.arc(cx, cy+sr/2, sr/2, 0, Math.PI*2);
-        ctx.fillStyle = '#eee'; ctx.fill();
-        // Two dots
-        ctx.beginPath(); ctx.arc(cx, cy-sr/2, sr/6, 0, Math.PI*2);
-        ctx.fillStyle = '#eee'; ctx.fill();
-        ctx.beginPath(); ctx.arc(cx, cy+sr/2, sr/6, 0, Math.PI*2);
-        ctx.fillStyle = '#111'; ctx.fill();
-        // Outer ring
-        ctx.beginPath(); ctx.arc(cx, cy, sr, 0, Math.PI*2);
-        ctx.strokeStyle = 'rgba(200,200,200,0.5)'; ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.restore();
+      if (phase===0 && phaseT>5)   { phase=1; phaseT=0; spinAngle=0; }
+      if (phase===1 && phaseT>0.8) { phase=2; phaseT=0; }
+      if (phase===2 && phaseT>1.5) { phase=3; phaseT=0; }
+      if (phase===3 && phaseT>0.7) { phase=0; phaseT=0; spinAngle=0; }
 
-        // Ring outline while showing symbol
-        ctx.save(); ctx.globalAlpha = 0.4;
-        ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI/2, -Math.PI/2, false);
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-        ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI/2, Math.PI/2, false);
-        ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.stroke();
-        ctx.restore();
+      ctx.clearRect(0,0,W,H);
+
+      if (phase===0) {
+        // Idle: static split ring
+        drawSplitRing(1, 0);
       }
+      else if (phase===1) {
+        // Mixing: arcs spin faster and faster, fading into symbol
+        const t = easeInOut(phaseT/0.8);
+        spinAngle += dt * (2 + t * 12); // accelerate spin
+        const ringAlpha = 1 - t * 0.3;
+        const symAlpha  = t;
+        const symScale  = 0.4 + t * 0.6;
+        drawSplitRing(ringAlpha, spinAngle);
+        drawYinYang(symAlpha, spinAngle * 0.3, symScale);
+      }
+      else if (phase===2) {
+        // Full symbol, slowly rotating
+        spinAngle += dt * 0.4;
+        drawYinYang(1, spinAngle, 1);
+      }
+      else if (phase===3) {
+        // Dissolve back: symbol shrinks and splits back to ring
+        const t = easeInOut(phaseT/0.7);
+        spinAngle += dt * (0.4 + t * 8); // spin up again before breaking
+        const symAlpha  = 1 - t;
+        const symScale  = 1 - t * 0.3;
+        const ringAlpha = t;
+        drawYinYang(symAlpha, spinAngle, symScale);
+        drawSplitRing(ringAlpha, spinAngle);
+      }
+
       animId = requestAnimationFrame(draw);
     }
     animId = requestAnimationFrame(draw);
@@ -493,6 +580,137 @@
   function stopYinYangCanvas(wrap) {
     const d = yinYangCanvases.get(wrap);
     if (d) { cancelAnimationFrame(d.animId); d.canvas.remove(); yinYangCanvases.delete(wrap); }
+  }
+
+  // ---- Hydro Canvas ----
+  // Idle: two water rings orbit + small bubble particles
+  // Every 6s: a water ripple wave sweeps across the avatar
+  const hydroCanvases = new WeakMap();
+
+  function startHydroCanvas(wrap) {
+    if (hydroCanvases.has(wrap)) return;
+    const avatarEl = wrap.querySelector('.avatar');
+    const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
+    const pad = 14;
+    const W = size + pad*2, H = size + pad*2;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'storm-canvas';
+    canvas.width = W; canvas.height = H;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    wrap.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const cx = W/2, cy = H/2, r = size/2;
+
+    let phase=0, phaseT=0, lastTime=null, animId;
+    let angle1=0, angle2=0;
+    // Ripple state
+    let rippleR=0, rippleAlpha=0;
+
+    const bubbles = [];
+    function spawnBubble() {
+      const a = Math.random()*Math.PI*2;
+      const or = r + 2 + Math.random()*6;
+      bubbles.push({
+        x: cx + Math.cos(a)*or, y: cy + Math.sin(a)*or,
+        vx: (Math.random()-0.5)*0.3, vy: -(0.2+Math.random()*0.4),
+        r: 1+Math.random()*2, life:1, decay:0.015+Math.random()*0.015
+      });
+    }
+
+    function draw(ts) {
+      if (!lastTime) lastTime = ts;
+      const dt = Math.min((ts-lastTime)/1000, 0.05); lastTime = ts;
+      phaseT += dt;
+      angle1 += dt*1.8; angle2 -= dt*1.2;
+
+      // Phase: 0=idle (6s), 1=ripple swell in (0.5s), 2=hold (1s), 3=recede (0.8s)
+      if (phase===0 && phaseT>6)   { phase=1; phaseT=0; rippleR=r*0.1; }
+      if (phase===1 && phaseT>0.5) { phase=2; phaseT=0; }
+      if (phase===2 && phaseT>1.0) { phase=3; phaseT=0; }
+      if (phase===3 && phaseT>0.8) { phase=0; phaseT=0; }
+
+      ctx.clearRect(0,0,W,H);
+
+      // Idle ring glow
+      const g = ctx.createRadialGradient(cx,cy,r-2,cx,cy,r+8);
+      g.addColorStop(0,'rgba(0,160,220,0.5)');
+      g.addColorStop(0.6,'rgba(0,120,200,0.2)');
+      g.addColorStop(1,'transparent');
+      ctx.beginPath(); ctx.arc(cx,cy,r+8,0,Math.PI*2);
+      ctx.fillStyle=g; ctx.fill();
+
+      // Orbiting arcs
+      ctx.save(); ctx.translate(cx,cy); ctx.rotate(angle1);
+      ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*1.3);
+      const ga1=ctx.createLinearGradient(-r,0,r,0);
+      ga1.addColorStop(0,'rgba(0,200,255,0.9)'); ga1.addColorStop(1,'rgba(0,200,255,0)');
+      ctx.strokeStyle=ga1; ctx.lineWidth=2; ctx.shadowColor='#00ccff'; ctx.shadowBlur=6; ctx.stroke();
+      ctx.restore();
+
+      ctx.save(); ctx.translate(cx,cy); ctx.rotate(angle2);
+      ctx.beginPath(); ctx.arc(0,0,r+7,0,Math.PI*1.6);
+      const ga2=ctx.createLinearGradient(-r,0,r,0);
+      ga2.addColorStop(0,'rgba(100,220,255,0.7)'); ga2.addColorStop(1,'rgba(100,220,255,0)');
+      ctx.strokeStyle=ga2; ctx.lineWidth=1.5; ctx.shadowColor='#66ddff'; ctx.shadowBlur=4; ctx.stroke();
+      ctx.restore();
+      ctx.shadowBlur=0;
+
+      // Bubbles
+      if (Math.random()<0.12) spawnBubble();
+      for (let i=bubbles.length-1; i>=0; i--) {
+        const b=bubbles[i];
+        b.x+=b.vx; b.y+=b.vy; b.life-=b.decay;
+        if (b.life<=0) { bubbles.splice(i,1); continue; }
+        ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(160,230,255,${b.life*0.8})`; ctx.lineWidth=0.8; ctx.stroke();
+      }
+
+      // Ripple wave
+      if (phase===1) {
+        rippleR = r * (phaseT/0.5);
+        rippleAlpha = phaseT/0.5;
+      } else if (phase===2) {
+        rippleR = r;
+        rippleAlpha = 1;
+        // Draw water-cover effect — translucent blue fill + shimmer
+        ctx.save();
+        const cover = ctx.createRadialGradient(cx,cy-r*0.3,0,cx,cy,r);
+        cover.addColorStop(0,'rgba(120,210,255,0.55)');
+        cover.addColorStop(0.5,'rgba(0,160,220,0.45)');
+        cover.addColorStop(1,'rgba(0,100,180,0.3)');
+        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+        ctx.fillStyle=cover; ctx.fill();
+        // Shimmer lines
+        const shimmerT = (phaseT/1.0);
+        for (let i=0; i<3; i++) {
+          const y = cy - r + (2*r) * ((shimmerT*0.8 + i*0.33) % 1);
+          const hw = Math.sqrt(Math.max(0, r*r - (y-cy)*(y-cy)));
+          ctx.beginPath(); ctx.moveTo(cx-hw, y); ctx.lineTo(cx+hw, y);
+          ctx.strokeStyle=`rgba(200,240,255,${0.25*(1-(i*0.3))})`;
+          ctx.lineWidth=1.5; ctx.stroke();
+        }
+        ctx.restore();
+      } else if (phase===3) {
+        rippleR = r * (1 + phaseT/0.8 * 0.5);
+        rippleAlpha = 1 - phaseT/0.8;
+      }
+
+      if (phase>0) {
+        ctx.beginPath(); ctx.arc(cx,cy,rippleR,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(0,200,255,${rippleAlpha*0.7})`;
+        ctx.lineWidth=2; ctx.shadowColor='#00ccff'; ctx.shadowBlur=8; ctx.stroke();
+        ctx.shadowBlur=0;
+      }
+
+      animId = requestAnimationFrame(draw);
+    }
+    animId = requestAnimationFrame(draw);
+    hydroCanvases.set(wrap, { canvas, animId });
+  }
+
+  function stopHydroCanvas(wrap) {
+    const d = hydroCanvases.get(wrap);
+    if (d) { cancelAnimationFrame(d.animId); d.canvas.remove(); hydroCanvases.delete(wrap); }
   }
 
   function toast(msg, type = 'info', duration = 3500) {
@@ -2638,7 +2856,7 @@
     }).join('');
 
     // Start canvas engines for owned canvas-based decos
-    const canvasDecos = { storm: startStormCanvas, inferno: startInfernoCanvas, yinyang: startYinYangCanvas };
+    const canvasDecos = { storm: startStormCanvas, inferno: startInfernoCanvas, yinyang: startYinYangCanvas, hydro: startHydroCanvas };
     Object.entries(canvasDecos).forEach(([id, fn]) => {
       if (decorations.find(d => d.id === id && d.owned)) {
         const wrap = document.querySelector(`#shopcard-${id} .avatar-wrap`);
