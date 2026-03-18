@@ -63,6 +63,7 @@
         stopInfernoCanvas(oldWrap);
         stopYinYangCanvas(oldWrap);
         stopHydroCanvas(oldWrap);
+        stopShatterCanvas(oldWrap);
         oldWrap.querySelectorAll('.admin-crown,.deco-shine-overlay').forEach(e=>e.remove());
       }
       return;
@@ -115,6 +116,10 @@
     if (deco === 'hydro') {
       setTimeout(() => startHydroCanvas(wrap), 50);
     } else { stopHydroCanvas(wrap); }
+
+    if (deco === 'shatter') {
+      setTimeout(() => startShatterCanvas(wrap), 50);
+    } else { stopShatterCanvas(wrap); }
 
     // Shine overlay decos (diamond, goldshine)
     const shineDecos = ['diamond', 'goldshine'];
@@ -711,6 +716,277 @@
   function stopHydroCanvas(wrap) {
     const d = hydroCanvases.get(wrap);
     if (d) { cancelAnimationFrame(d.animId); d.canvas.remove(); hydroCanvases.delete(wrap); }
+  }
+
+  // ---- Shatter Canvas ----
+  // Phase 0 (1.2s): Glass forms — frost/ice crystallises over avatar from center out
+  // Phase 1 (2.0s): Glass sits — transparent glass pane with reflections, glint sweeps
+  // Phase 2 (0.8s): SHATTER — pieces explode outward with spin and fade
+  // Phase 3 (0.6s): dark pause
+  // Phase 4 (5.0s): idle — faint glass ring
+  // Phase 5 (1.0s): glass reforms — shards fly back in and fuse
+  const shatterCanvases = new WeakMap();
+
+  function startShatterCanvas(wrap) {
+    if (shatterCanvases.has(wrap)) return;
+    const avatarEl = wrap.querySelector('.avatar');
+    const size = avatarEl ? avatarEl.offsetWidth || 36 : 36;
+    const pad = 20;
+    const W = size + pad*2, H = size + pad*2;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'storm-canvas';
+    canvas.width = W; canvas.height = H;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    wrap.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const cx = W/2, cy = H/2, r = size/2;
+
+    // ---- Generate Voronoi-style shards ----
+    // Random crack points that subdivide the circle into polygonal shards
+    function generateShards() {
+      const shards = [];
+      const numPoints = 14 + Math.floor(Math.random()*6);
+      // Points inside the circle
+      const pts = [];
+      for (let i=0; i<numPoints; i++) {
+        const a = Math.random()*Math.PI*2;
+        const d = Math.random()*r*0.92;
+        pts.push([cx+Math.cos(a)*d, cy+Math.sin(a)*d]);
+      }
+      // Add ring points for edge shards
+      for (let i=0; i<10; i++) {
+        const a = (i/10)*Math.PI*2;
+        pts.push([cx+Math.cos(a)*r*0.98, cy+Math.sin(a)*r*0.98]);
+      }
+      // Simple Delaunay-like: for each interior point build a polygon from its nearest neighbours
+      // We'll use a simpler approach: radial sector division + random offsets
+      const sectors = 10 + Math.floor(Math.random()*6);
+      for (let s=0; s<sectors; s++) {
+        const a1 = (s/sectors)*Math.PI*2;
+        const a2 = ((s+1)/sectors)*Math.PI*2;
+        const midA = (a1+a2)/2;
+        // Inner radius varies per shard
+        const innerR = r*(0.1 + Math.random()*0.5);
+        const outerR = r*(0.88 + Math.random()*0.14);
+        // Add some wobble to the angles
+        const wa1 = a1 + (Math.random()-0.5)*0.3;
+        const wa2 = a2 + (Math.random()-0.5)*0.3;
+        const poly = [
+          [cx+Math.cos(wa1)*innerR, cy+Math.sin(wa1)*innerR],
+          [cx+Math.cos(midA)*innerR*0.7, cy+Math.sin(midA)*innerR*0.7],
+          [cx+Math.cos(wa2)*innerR, cy+Math.sin(wa2)*innerR],
+          [cx+Math.cos(wa2)*outerR, cy+Math.sin(wa2)*outerR],
+          [cx+Math.cos(midA)*(outerR+r*0.04), cy+Math.sin(midA)*(outerR+r*0.04)],
+          [cx+Math.cos(wa1)*outerR, cy+Math.sin(wa1)*outerR],
+        ];
+        // Centroid
+        const centX = poly.reduce((s,p)=>s+p[0],0)/poly.length;
+        const centY = poly.reduce((s,p)=>s+p[1],0)/poly.length;
+        // Random glass tint per shard
+        const brightness = 0.85 + Math.random()*0.3;
+        const hue = 190 + Math.random()*30;
+        shards.push({
+          poly, centX, centY,
+          brightness, hue,
+          // Physics for explosion
+          vx: (centX-cx)*( 0.06+Math.random()*0.12),
+          vy: (centY-cy)*( 0.06+Math.random()*0.12),
+          vr: (Math.random()-0.5)*0.25,
+          // State during animation
+          x: 0, y: 0, rot: 0, alpha: 1,
+        });
+      }
+      return shards;
+    }
+
+    let shards = generateShards();
+    let phase = 0, phaseT = 0, lastTime = null, animId;
+    let glintAngle = -Math.PI/4;
+    let reformT = 0; // 0=scattered, 1=back in place
+
+    function easeOut(t) { return 1-(1-t)*(1-t); }
+    function easeIn(t) { return t*t; }
+
+    function drawGlassShard(shard, alpha, offsetX, offsetY, rotation) {
+      if (alpha <= 0) return;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      // Translate to shard's displaced position
+      ctx.translate(offsetX, offsetY);
+      ctx.translate(shard.centX, shard.centY);
+      ctx.rotate(rotation);
+      ctx.translate(-shard.centX, -shard.centY);
+
+      const poly = shard.poly;
+      ctx.beginPath();
+      ctx.moveTo(poly[0][0], poly[0][1]);
+      for (let i=1; i<poly.length; i++) ctx.lineTo(poly[i][0], poly[i][1]);
+      ctx.closePath();
+
+      // Glass fill — translucent with slight tint
+      const fill = ctx.createLinearGradient(
+        poly[0][0], poly[0][1], poly[poly.length-1][0], poly[poly.length-1][1]
+      );
+      fill.addColorStop(0, `hsla(${shard.hue},60%,${90*shard.brightness}%,0.18)`);
+      fill.addColorStop(0.5, `hsla(${shard.hue},40%,${95*shard.brightness}%,0.28)`);
+      fill.addColorStop(1, `hsla(${shard.hue},70%,${80*shard.brightness}%,0.12)`);
+      ctx.fillStyle = fill;
+      ctx.fill();
+
+      // Glass edge — bright crack lines
+      ctx.strokeStyle = `hsla(${shard.hue+10},80%,92%,${0.7*shard.brightness})`;
+      ctx.lineWidth = 0.8;
+      ctx.shadowColor = `hsla(${shard.hue},100%,95%,0.9)`;
+      ctx.shadowBlur = 2;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Specular highlight on each shard
+      ctx.beginPath();
+      ctx.moveTo(poly[0][0], poly[0][1]);
+      ctx.lineTo(poly[1][0], poly[1][1]);
+      ctx.strokeStyle = `rgba(255,255,255,${0.5*shard.brightness})`;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function draw(ts) {
+      if (!lastTime) lastTime = ts;
+      const dt = Math.min((ts-lastTime)/1000, 0.05); lastTime = ts;
+      phaseT += dt;
+
+      // Phase transitions
+      if (phase===0 && phaseT>1.2) { phase=1; phaseT=0; }
+      if (phase===1 && phaseT>2.0) { phase=2; phaseT=0; shards.forEach(s=>{s.x=0;s.y=0;s.rot=0;}); }
+      if (phase===2 && phaseT>0.8) { phase=3; phaseT=0; }
+      if (phase===3 && phaseT>0.6) { phase=4; phaseT=0; shards=generateShards(); }
+      if (phase===4 && phaseT>5.0) { phase=5; phaseT=0; }
+      if (phase===5 && phaseT>1.0) { phase=0; phaseT=0; }
+
+      ctx.clearRect(0,0,W,H);
+
+      if (phase===0) {
+        // Glass forming — crystallise from center outward
+        const progress = easeOut(phaseT/1.2);
+        // Outer ring grows
+        ctx.beginPath(); ctx.arc(cx,cy,r*progress,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(180,230,255,${0.6*progress})`; ctx.lineWidth=1.5;
+        ctx.shadowColor='rgba(180,230,255,0.8)'; ctx.shadowBlur=6; ctx.stroke(); ctx.shadowBlur=0;
+        // Draw shards that are "inside" the forming radius
+        shards.forEach(shard => {
+          const shardDist = Math.sqrt((shard.centX-cx)**2+(shard.centY-cy)**2);
+          const shardProgress = Math.max(0, Math.min(1, (progress*r*1.1-shardDist)/(r*0.4)));
+          drawGlassShard(shard, shardProgress*0.9, 0, 0, 0);
+        });
+        // Frost crystal effect — radial lines from center
+        for (let i=0; i<12; i++) {
+          const a = (i/12)*Math.PI*2;
+          const len = r*progress*(0.7+Math.random()*0.3);
+          ctx.beginPath();
+          ctx.moveTo(cx,cy);
+          ctx.lineTo(cx+Math.cos(a)*len, cy+Math.sin(a)*len);
+          ctx.strokeStyle=`rgba(200,240,255,${0.3*progress})`;
+          ctx.lineWidth=0.5; ctx.stroke();
+        }
+      }
+      else if (phase===1) {
+        // Glass sitting — full shards, glint sweep
+        glintAngle += dt*0.3;
+        shards.forEach(s => drawGlassShard(s, 0.92, 0, 0, 0));
+        // Outer ring
+        ctx.beginPath(); ctx.arc(cx,cy,r+1,0,Math.PI*2);
+        ctx.strokeStyle='rgba(180,230,255,0.5)'; ctx.lineWidth=1.5;
+        ctx.shadowColor='rgba(200,240,255,0.6)'; ctx.shadowBlur=5; ctx.stroke(); ctx.shadowBlur=0;
+        // Glint sweep — bright line that moves across
+        const gx = cx + Math.cos(glintAngle)*r*1.2;
+        const gy = cy + Math.sin(glintAngle)*r*1.2;
+        const gx2 = cx + Math.cos(glintAngle+Math.PI)*r*1.2;
+        const gy2 = cy + Math.sin(glintAngle+Math.PI)*r*1.2;
+        ctx.save();
+        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+        const glint = ctx.createLinearGradient(gx2,gy2,gx,gy);
+        glint.addColorStop(0,'transparent');
+        glint.addColorStop(0.45,'transparent');
+        glint.addColorStop(0.5,'rgba(255,255,255,0.45)');
+        glint.addColorStop(0.55,'transparent');
+        glint.addColorStop(1,'transparent');
+        ctx.fillStyle=glint;
+        ctx.fillRect(cx-r-2,cy-r-2,r*2+4,r*2+4);
+        ctx.restore();
+      }
+      else if (phase===2) {
+        // SHATTERING — pieces fly outward
+        const t = phaseT/0.8;
+        const boom = easeOut(t);
+        // Flash on impact
+        if (t < 0.15) {
+          ctx.save();
+          ctx.globalAlpha = (0.15-t)/0.15 * 0.7;
+          ctx.beginPath(); ctx.arc(cx,cy,r+3,0,Math.PI*2);
+          ctx.fillStyle='rgba(220,240,255,1)'; ctx.fill();
+          ctx.restore();
+        }
+        shards.forEach(s => {
+          s.x += s.vx * (1+boom*3);
+          s.y += s.vy * (1+boom*3);
+          s.rot += s.vr;
+          drawGlassShard(s, Math.max(0,1-boom*1.1), s.x, s.y, s.rot);
+        });
+      }
+      else if (phase===3) {
+        // Dark pause — scattered pieces barely visible and fading
+        const fade = 1 - phaseT/0.6;
+        shards.forEach(s => {
+          s.x += s.vx*0.3; s.y += s.vy*0.3; s.rot += s.vr*0.3;
+          drawGlassShard(s, fade*0.15, s.x, s.y, s.rot);
+        });
+      }
+      else if (phase===4) {
+        // Idle — faint ice ring only
+        ctx.beginPath(); ctx.arc(cx,cy,r+1,0,Math.PI*2);
+        ctx.strokeStyle='rgba(160,210,255,0.35)'; ctx.lineWidth=1.5; ctx.stroke();
+        // Subtle frost dots at ring
+        for (let i=0; i<8; i++) {
+          const a=(i/8)*Math.PI*2;
+          ctx.beginPath(); ctx.arc(cx+Math.cos(a)*r,cy+Math.sin(a)*r,1,0,Math.PI*2);
+          ctx.fillStyle='rgba(200,235,255,0.5)'; ctx.fill();
+        }
+      }
+      else if (phase===5) {
+        // Reforming — shards fly back from scattered position to center
+        const t = easeOut(phaseT/1.0);
+        shards.forEach(s => {
+          // Lerp back to origin
+          const ox = s.x*(1-t);
+          const oy = s.y*(1-t);
+          const or2 = s.rot*(1-t);
+          drawGlassShard(s, t*0.9, ox, oy, or2);
+        });
+        // Ring forms
+        ctx.beginPath(); ctx.arc(cx,cy,r*(0.3+t*0.7),0,Math.PI*2);
+        ctx.strokeStyle=`rgba(180,230,255,${t*0.6})`; ctx.lineWidth=1.5;
+        ctx.shadowColor='rgba(180,230,255,0.8)'; ctx.shadowBlur=6*t; ctx.stroke(); ctx.shadowBlur=0;
+        // Seal flash at the end
+        if (t > 0.85) {
+          ctx.save();
+          ctx.globalAlpha = (t-0.85)/0.15 * 0.3;
+          ctx.beginPath(); ctx.arc(cx,cy,r+2,0,Math.PI*2);
+          ctx.fillStyle='rgba(220,240,255,1)'; ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      animId = requestAnimationFrame(draw);
+    }
+    animId = requestAnimationFrame(draw);
+    shatterCanvases.set(wrap, { canvas, animId });
+  }
+
+  function stopShatterCanvas(wrap) {
+    const d = shatterCanvases.get(wrap);
+    if (d) { cancelAnimationFrame(d.animId); d.canvas.remove(); shatterCanvases.delete(wrap); }
   }
 
   function toast(msg, type = 'info', duration = 3500) {
@@ -2913,7 +3189,7 @@
     }).join('');
 
     // Start canvas engines for all canvas-based decos (always show preview)
-    const canvasDecos = { storm: startStormCanvas, inferno: startInfernoCanvas, yinyang: startYinYangCanvas, hydro: startHydroCanvas };
+    const canvasDecos = { storm: startStormCanvas, inferno: startInfernoCanvas, yinyang: startYinYangCanvas, hydro: startHydroCanvas, shatter: startShatterCanvas };
     Object.entries(canvasDecos).forEach(([id, fn]) => {
       if (decorations.find(d => d.id === id)) {
         const wrap = document.querySelector(`#shopcard-${id} .avatar-wrap`);
