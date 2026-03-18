@@ -62,3 +62,43 @@ router.post('/equip', async (req, res) => {
 
 module.exports = router;
 module.exports.COLORS = COLORS;
+
+// ---- FONTS ----
+const FONTS = [
+  { id: 'bubble', name: 'DynaPuff', price: 15000, description: 'Chunky DynaPuff bubble font' },
+];
+
+router.get('/fonts', async (req, res) => {
+  const owned = await pool.query('SELECT font_id FROM user_fonts WHERE user_id=$1', [req.session.userId]);
+  const user  = await pool.query('SELECT active_font, nexals FROM users WHERE id=$1', [req.session.userId]);
+  const ownedSet = new Set(owned.rows.map(r => r.font_id));
+  res.json({
+    fonts: FONTS.map(f => ({ ...f, owned: ownedSet.has(f.id) })),
+    active: user.rows[0]?.active_font || null,
+    nexals: user.rows[0]?.nexals || 0,
+  });
+});
+
+router.post('/fonts/buy', async (req, res) => {
+  const { fontId } = req.body;
+  const font = FONTS.find(f => f.id === fontId);
+  if (!font) return res.status(404).json({ error: 'Font not found' });
+  const owned = await pool.query('SELECT id FROM user_fonts WHERE user_id=$1 AND font_id=$2', [req.session.userId, fontId]);
+  if (owned.rows.length) return res.status(409).json({ error: 'Already owned' });
+  const user = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
+  if ((user.rows[0]?.nexals || 0) < font.price) return res.status(400).json({ error: `Not enough Nexals (need ${font.price.toLocaleString()})` });
+  await pool.query('UPDATE users SET nexals=nexals-$1 WHERE id=$2', [font.price, req.session.userId]);
+  await pool.query('INSERT INTO user_fonts (id,user_id,font_id) VALUES ($1,$2,$3)', [uuidv4(), req.session.userId, fontId]);
+  const updated = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
+  res.json({ success: true, nexals: updated.rows[0].nexals, font: { ...font, owned: true } });
+});
+
+router.post('/fonts/equip', async (req, res) => {
+  const { fontId } = req.body;
+  if (fontId) {
+    const owned = await pool.query('SELECT id FROM user_fonts WHERE user_id=$1 AND font_id=$2', [req.session.userId, fontId]);
+    if (!owned.rows.length) return res.status(403).json({ error: 'Not owned' });
+  }
+  await pool.query('UPDATE users SET active_font=$1 WHERE id=$2', [fontId || null, req.session.userId]);
+  res.json({ success: true, active: fontId || null });
+});
