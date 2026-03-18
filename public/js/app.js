@@ -90,7 +90,8 @@
     wrap.querySelectorAll('.avatar-deco, .storm-canvas').forEach(e => e.remove());
     // Stop any running canvas engines first
     stopStormCanvas(wrap); stopInfernoCanvas(wrap); stopYinYangCanvas(wrap);
-    stopHydroCanvas(wrap); stopShatterCanvas(wrap);
+    stopHydroCanvas(wrap);
+    stopShatterCanvas(wrap);
 
     // Canvas-only decos don't need an avatar-deco div — the canvas IS the visual
     const canvasOnlyDecos = new Set(['storm','inferno','yinyang','hydro','shatter']);
@@ -131,8 +132,9 @@
     } else { stopHydroCanvas(wrap); }
 
     if (deco === 'shatter') {
-      setTimeout(() => startShatterCanvas(wrap), 100);
+      setTimeout(() => startShatterCanvas(wrap), 80);
     } else { stopShatterCanvas(wrap); }
+
 
     // Shine overlay decos (diamond, goldshine)
     const shineDecos = ['diamond', 'goldshine'];
@@ -731,230 +733,204 @@
     if (d) { cancelAnimationFrame(d.animId); d.canvas.remove(); hydroCanvases.delete(wrap); }
   }
 
+
+
   // ---- Shatter Canvas ----
-  // Phase 0 (1.2s): Glass forms — frost/ice crystallises over avatar from center out
-  // Phase 1 (2.0s): Glass sits — transparent glass pane with reflections, glint sweeps
-  // Phase 2 (0.8s): SHATTER — pieces explode outward with spin and fade
-  // Phase 3 (0.6s): dark pause
-  // Phase 4 (5.0s): idle — faint glass ring
-  // Phase 5 (1.0s): glass reforms — shards fly back in and fuse
   const shatterCanvases = new WeakMap();
 
   function startShatterCanvas(wrap) {
     if (shatterCanvases.has(wrap)) return;
+    const av = wrap.querySelector('.avatar');
+    const S = Math.max(20, (av && av.offsetWidth) || (av && parseInt(av.style.width)) || 36);
+    const R = S / 2 - 1, CX = S / 2, CY = S / 2;
 
-    // Get avatar size — try multiple sources
-    const avatarEl = wrap.querySelector('.avatar');
-    const size = Math.max(20,
-      (avatarEl && avatarEl.offsetWidth) ||
-      (avatarEl && parseInt(avatarEl.style.width)) ||
-      36
-    );
-    const cx = size / 2, cy = size / 2, r = size / 2 - 1;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    cv.style.position   = 'absolute';
+    cv.style.top        = '0';
+    cv.style.left       = '0';
+    cv.style.width      = S + 'px';
+    cv.style.height     = S + 'px';
+    cv.style.pointerEvents = 'none';
+    cv.style.zIndex     = '5';
+    wrap.style.overflow = 'visible';
+    wrap.style.position = wrap.style.position || 'relative';
+    wrap.appendChild(cv);
+    const g = cv.getContext('2d');
 
-    // Canvas is exactly avatar size — sits directly over it
-    const canvas = document.createElement('canvas');
-    canvas.width  = size;
-    canvas.height = size;
-    canvas.style.cssText = `position:absolute;top:0;left:0;width:${size}px;height:${size}px;pointer-events:none;z-index:5;border-radius:50%`;
-    wrap.appendChild(canvas);
-    const ctx = canvas.getContext('2d');
-
-    // ---- Build shards as pie-slice polygons with jagged edges ----
-    function makeShards() {
-      const out = [];
-      const N = 14 + Math.floor(Math.random() * 6);
+    function mkShards() {
+      const arr = [], N = 12 + Math.floor(Math.random() * 6);
       for (let i = 0; i < N; i++) {
-        const a1 = (i / N) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
-        const a2 = ((i + 1) / N) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
-        const mid = (a1 + a2) / 2;
-        const ir = r * (0.04 + Math.random() * 0.22);
-        const or = r * (0.75 + Math.random() * 0.25);
-        // Polygon: inner arc, mid jag, outer arc
-        const poly = [
-          { x: cx + Math.cos(a1) * ir,  y: cy + Math.sin(a1) * ir },
-          { x: cx + Math.cos(mid) * ir * 0.6, y: cy + Math.sin(mid) * ir * 0.6 },
-          { x: cx + Math.cos(a2) * ir,  y: cy + Math.sin(a2) * ir },
-          { x: cx + Math.cos(a2) * or,  y: cy + Math.sin(a2) * or },
-          { x: cx + Math.cos(mid) * (or + r * 0.04), y: cy + Math.sin(mid) * (or + r * 0.04) },
-          { x: cx + Math.cos(a1) * or,  y: cy + Math.sin(a1) * or },
+        const a0 = (i / N) * Math.PI * 2 + (Math.random() - 0.5) * 0.28;
+        const a1 = ((i + 1) / N) * Math.PI * 2 + (Math.random() - 0.5) * 0.28;
+        const am = (a0 + a1) / 2;
+        const ri = R * (0.06 + Math.random() * 0.18);
+        const ro = R * (0.74 + Math.random() * 0.24);
+        const pts = [
+          [CX + Math.cos(a0) * ri,        CY + Math.sin(a0) * ri],
+          [CX + Math.cos(am) * ri * 0.45, CY + Math.sin(am) * ri * 0.45],
+          [CX + Math.cos(a1) * ri,        CY + Math.sin(a1) * ri],
+          [CX + Math.cos(a1) * ro,        CY + Math.sin(a1) * ro],
+          [CX + Math.cos(am) * (ro + R * 0.04), CY + Math.sin(am) * (ro + R * 0.04)],
+          [CX + Math.cos(a0) * ro,        CY + Math.sin(a0) * ro],
         ];
-        const centX = poly.reduce((s, p) => s + p.x, 0) / poly.length;
-        const centY = poly.reduce((s, p) => s + p.y, 0) / poly.length;
-        const da = Math.atan2(centY - cy, centX - cx);
-        out.push({
-          poly, centX, centY,
-          vx: Math.cos(da) * (0.5 + Math.random() * 1.2),
-          vy: Math.sin(da) * (0.5 + Math.random() * 1.2),
-          vr: (Math.random() - 0.5) * 0.12,
-          // current displaced state
+        const cx2 = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+        const cy2 = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+        const da = Math.atan2(cy2 - CY, cx2 - CX);
+        arr.push({
+          pts, cx2, cy2,
+          vx: Math.cos(da) * (0.5 + Math.random() * 1.1),
+          vy: Math.sin(da) * (0.5 + Math.random() * 1.1),
+          vr: (Math.random() - 0.5) * 0.09,
           dx: 0, dy: 0, dr: 0,
         });
       }
-      return out;
+      return arr;
     }
 
-    // Draw one shard — nearly transparent fill, bright edges (real glass look)
     function drawShard(s, alpha) {
-      if (alpha <= 0) return;
-      const { poly, dx, dy, dr, centX, centY } = s;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(centX + dx, centY + dy);
-      ctx.rotate(dr);
-      ctx.translate(-centX, -centY);
-
-      ctx.beginPath();
-      ctx.moveTo(poly[0].x, poly[0].y);
-      for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
-      ctx.closePath();
-
-      // Very faint fill — glass is mostly transparent
-      ctx.fillStyle = 'rgba(210,235,255,0.07)';
-      ctx.fill();
-
-      // Bright crack edges = what makes glass look like glass
-      ctx.strokeStyle = 'rgba(230,245,255,0.75)';
-      ctx.lineWidth = 0.7;
-      ctx.shadowColor = 'rgba(200,230,255,0.9)';
-      ctx.shadowBlur = 2;
-      ctx.stroke();
-
-      // One bright specular edge
-      const p1 = poly[0], p2 = poly[poly.length - 1];
-      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = 1.0;
-      ctx.shadowBlur = 3;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.restore();
+      if (alpha <= 0.01) return;
+      g.save();
+      g.globalAlpha = alpha;
+      g.translate(s.cx2 + s.dx, s.cy2 + s.dy);
+      g.rotate(s.dr);
+      g.translate(-s.cx2, -s.cy2);
+      g.beginPath();
+      g.moveTo(s.pts[0][0], s.pts[0][1]);
+      for (let k = 1; k < s.pts.length; k++) g.lineTo(s.pts[k][0], s.pts[k][1]);
+      g.closePath();
+      g.fillStyle = 'rgba(210,235,255,0.06)';
+      g.fill();
+      g.shadowColor = 'rgba(200,230,255,0.9)';
+      g.shadowBlur = 2;
+      g.strokeStyle = 'rgba(220,242,255,0.82)';
+      g.lineWidth = 0.65;
+      g.stroke();
+      // specular highlight on one edge
+      g.beginPath();
+      g.moveTo(s.pts[0][0], s.pts[0][1]);
+      g.lineTo(s.pts[s.pts.length - 1][0], s.pts[s.pts.length - 1][1]);
+      g.strokeStyle = 'rgba(255,255,255,0.92)';
+      g.lineWidth = 1.0;
+      g.shadowBlur = 3;
+      g.stroke();
+      g.shadowBlur = 0;
+      g.restore();
     }
 
-    let shards = makeShards();
-    // phase: 0=forming 1=hold 2=shatter 3=settle 4=idle 5=reform
-    let phase = 0, phaseT = 0, lastT = null, animId;
-    let glintAngle = 0;
+    function drawRing(alpha) {
+      if (alpha <= 0) return;
+      g.beginPath(); g.arc(CX, CY, R, 0, Math.PI * 2);
+      g.strokeStyle = `rgba(180,220,255,${alpha})`;
+      g.lineWidth = 1.2;
+      g.shadowColor = 'rgba(180,220,255,0.7)';
+      g.shadowBlur = 4;
+      g.stroke();
+      g.shadowBlur = 0;
+    }
 
-    function tick(ts) {
-      if (!lastT) lastT = ts;
-      const dt = Math.min((ts - lastT) / 1000, 0.05);
-      lastT = ts;
-      phaseT += dt;
+    const ease = t => 1 - (1 - t) * (1 - t);
+    let shards = mkShards(), ph = 0, pt = 0, lt = null, aid, ga = 0;
 
-      if (phase === 0 && phaseT > 1.0) { phase = 1; phaseT = 0; }
-      if (phase === 1 && phaseT > 2.5) { phase = 2; phaseT = 0; }
-      if (phase === 2 && phaseT > 0.65){ phase = 3; phaseT = 0; }
-      if (phase === 3 && phaseT > 0.5) { phase = 4; phaseT = 0; shards = makeShards(); }
-      if (phase === 4 && phaseT > 5.0) { phase = 5; phaseT = 0; }
-      if (phase === 5 && phaseT > 1.0) { phase = 0; phaseT = 0; }
+    function frame(ts) {
+      if (!lt) lt = ts;
+      const dt = Math.min((ts - lt) / 1000, 0.05);
+      lt = ts; pt += dt; ga += dt * 0.5;
 
-      ctx.clearRect(0, 0, size, size);
+      if (ph === 0 && pt > 1.0) { ph = 1; pt = 0; }
+      if (ph === 1 && pt > 2.5) { ph = 2; pt = 0; }
+      if (ph === 2 && pt > 0.7) { ph = 3; pt = 0; }
+      if (ph === 3 && pt > 0.5) { ph = 4; pt = 0; shards = mkShards(); }
+      if (ph === 4 && pt > 5.0) { ph = 5; pt = 0; }
+      if (ph === 5 && pt > 1.0) { ph = 0; pt = 0; }
 
-      // Clip all drawing to the avatar circle
-      ctx.save();
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+      g.clearRect(0, 0, S, S);
 
-      const ease = t => 1 - (1 - t) * (1 - t);
-
-      if (phase === 0) {
-        // Form: shards fade in progressively
-        const t = ease(phaseT / 1.0);
+      if (ph === 0) {
+        // Forming: shards materialise one by one inside the circle
+        const t = ease(pt / 1.0);
+        g.save(); g.beginPath(); g.arc(CX, CY, R, 0, Math.PI * 2); g.clip();
         shards.forEach((s, i) => {
-          const st = Math.max(0, Math.min(1, (t * shards.length - i * 0.6)));
+          const st = Math.max(0, Math.min(1, t * shards.length - i * 0.5));
           drawShard(s, st * 0.9);
         });
-        // Ice ring forming
-        ctx.restore();
-        ctx.beginPath(); ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(180,220,255,${t * 0.6})`; ctx.lineWidth = 1.2;
-        ctx.stroke();
-        ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+        g.restore();
+        drawRing(t * 0.5);
       }
-      else if (phase === 1) {
-        // Hold: full glass with glint sweep
-        glintAngle += dt * 0.5;
+      else if (ph === 1) {
+        // Holding: full glass + glint sweep
+        g.save(); g.beginPath(); g.arc(CX, CY, R, 0, Math.PI * 2); g.clip();
         shards.forEach(s => drawShard(s, 0.9));
-        // Glint
-        const gx1 = cx + Math.cos(glintAngle) * r * 1.5;
-        const gy1 = cy + Math.sin(glintAngle) * r * 1.5;
-        const gx2 = cx - Math.cos(glintAngle) * r * 1.5;
-        const gy2 = cy - Math.sin(glintAngle) * r * 1.5;
-        const gl = ctx.createLinearGradient(gx1, gy1, gx2, gy2);
-        gl.addColorStop(0, 'transparent');
-        gl.addColorStop(0.44, 'transparent');
-        gl.addColorStop(0.5, 'rgba(255,255,255,0.7)');
-        gl.addColorStop(0.56, 'transparent');
-        gl.addColorStop(1, 'transparent');
-        ctx.fillStyle = gl;
-        ctx.fillRect(0, 0, size, size);
+        const gx1 = CX + Math.cos(ga) * R * 1.5;
+        const gy1 = CY + Math.sin(ga) * R * 1.5;
+        const gx2 = CX - Math.cos(ga) * R * 1.5;
+        const gy2 = CY - Math.sin(ga) * R * 1.5;
+        const gl = g.createLinearGradient(gx1, gy1, gx2, gy2);
+        gl.addColorStop(0.42, 'transparent');
+        gl.addColorStop(0.50, 'rgba(255,255,255,0.6)');
+        gl.addColorStop(0.58, 'transparent');
+        g.fillStyle = gl; g.fillRect(0, 0, S, S);
+        g.restore();
+        drawRing(0.45);
       }
-      else if (phase === 2) {
-        // Shatter: explode outward
-        const t = ease(phaseT / 0.65);
-        if (phaseT < 0.08) {
-          // Impact flash
-          ctx.fillStyle = `rgba(240,250,255,${(0.08 - phaseT) / 0.08 * 0.8})`;
-          ctx.fillRect(0, 0, size, size);
+      else if (ph === 2) {
+        // Shattering: pieces fly out
+        const t = ease(pt / 0.7);
+        if (pt < 0.07) {
+          g.save(); g.beginPath(); g.arc(CX, CY, R, 0, Math.PI * 2); g.clip();
+          g.fillStyle = `rgba(240,250,255,${(0.07 - pt) / 0.07 * 0.8})`;
+          g.fillRect(0, 0, S, S);
+          g.restore();
         }
         shards.forEach(s => {
-          s.dx += s.vx * (1 + t * 4) * dt * 60;
-          s.dy += s.vy * (1 + t * 4) * dt * 60;
+          s.dx += s.vx * (1 + t * 5) * dt * 60;
+          s.dy += s.vy * (1 + t * 5) * dt * 60;
           s.dr += s.vr * dt * 60;
-          const dist = Math.sqrt(s.dx * s.dx + s.dy * s.dy);
-          drawShard(s, Math.max(0, 1 - dist / (r * 1.1)));
+          const d = Math.sqrt(s.dx * s.dx + s.dy * s.dy);
+          drawShard(s, Math.max(0, 1 - d / R));
         });
       }
-      else if (phase === 3) {
-        // Settle: pieces drift and fade
-        const fade = 1 - phaseT / 0.5;
+      else if (ph === 3) {
+        // Settle: fade out
+        const fade = 1 - pt / 0.5;
         shards.forEach(s => {
-          s.dx += s.vx * 0.1 * dt * 60;
-          s.dy += s.vy * 0.1 * dt * 60;
+          s.dx += s.vx * 0.08 * dt * 60;
+          s.dy += s.vy * 0.08 * dt * 60;
           drawShard(s, fade * 0.2);
         });
       }
-      else if (phase === 4) {
-        // Idle: just faint ring
-        ctx.restore();
-        ctx.beginPath(); ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(160,210,255,0.3)'; ctx.lineWidth = 1.0; ctx.stroke();
-        // frost dots
+      else if (ph === 4) {
+        // Idle: just frost ring
+        drawRing(0.28);
         for (let i = 0; i < 8; i++) {
           const a = (i / 8) * Math.PI * 2;
-          ctx.beginPath(); ctx.arc(cx + Math.cos(a) * (r - 1), cy + Math.sin(a) * (r - 1), 1, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(200,230,255,0.45)'; ctx.fill();
+          g.beginPath(); g.arc(CX + Math.cos(a) * R, CY + Math.sin(a) * R, 0.9, 0, Math.PI * 2);
+          g.fillStyle = 'rgba(200,230,255,0.4)'; g.fill();
         }
-        ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
       }
-      else if (phase === 5) {
-        // Reform: shards fly back
-        const t = ease(phaseT / 1.0);
+      else if (ph === 5) {
+        // Reforming: fly back in
+        const t = ease(pt / 1.0);
+        g.save(); g.beginPath(); g.arc(CX, CY, R, 0, Math.PI * 2); g.clip();
         shards.forEach(s => {
-          const ox = s.dx * (1 - t);
-          const oy = s.dy * (1 - t);
-          const or2 = s.dr * (1 - t);
-          const origDx = s.dx; const origDy = s.dy; const origDr = s.dr;
-          s.dx = ox; s.dy = oy; s.dr = or2;
+          const ox = s.dx, oy = s.dy, or2 = s.dr;
+          s.dx = ox * (1 - t); s.dy = oy * (1 - t); s.dr = or2 * (1 - t);
           drawShard(s, t * 0.88);
-          s.dx = origDx; s.dy = origDy; s.dr = origDr;
+          s.dx = ox; s.dy = oy; s.dr = or2;
         });
-        ctx.restore();
-        ctx.beginPath(); ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(180,220,255,${t * 0.55})`; ctx.lineWidth = 1.2; ctx.stroke();
         if (t > 0.85) {
-          ctx.fillStyle = `rgba(220,240,255,${(t - 0.85) / 0.15 * 0.25})`;
-          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+          g.fillStyle = `rgba(220,240,255,${(t - 0.85) / 0.15 * 0.2})`;
+          g.fillRect(0, 0, S, S);
         }
-        ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+        g.restore();
+        drawRing(t * 0.45);
       }
 
-      ctx.restore();
-      animId = requestAnimationFrame(tick);
+      aid = requestAnimationFrame(frame);
     }
 
-    animId = requestAnimationFrame(tick);
-    shatterCanvases.set(wrap, { canvas, animId });
+    aid = requestAnimationFrame(frame);
+    shatterCanvases.set(wrap, { canvas: cv, animId: aid });
   }
 
   function stopShatterCanvas(wrap) {
