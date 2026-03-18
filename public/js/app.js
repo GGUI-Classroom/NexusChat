@@ -2882,21 +2882,7 @@
       const isOwned = d.owned;
       const isMythical = d.rarity === 'mythical';
 
-      // Mythical unowned: show mystery OR buyable card
-      const myNexalsMythical = (shopData && shopData.nexals) || 0;
-      const canAffordMythical = d.nexalPrice && myNexalsMythical >= d.nexalPrice;
-      if (isMythical && !isOwned && !canAffordMythical) {
-        const priceHint = d.nexalPrice ? d.nexalPrice.toLocaleString() + ' Nexals to unlock' : 'Exclusive code only';
-        return `
-          <div class="shop-card mystery" id="shopcard-${d.id}">
-            <div class="mystery-preview">
-              <div class="mystery-silhouette">✦</div>
-            </div>
-            <span class="shop-rarity rarity-mythical">MYTHICAL</span>
-            <div class="shop-card-name mystery-name">? ? ?</div>
-            <div class="mystery-hint">${d.nexalPrice ? `<span style="color:#ffd700;font-weight:700">${priceHint}</span>` : 'Redeem an exclusive code<br>to reveal this decoration'}</div>
-          </div>`;
-      }
+      // Mythical unowned — show full card with preview (no more mystery hiding)
 
       const myNexals = (shopData && shopData.nexals) || 0;
       const canBuy = !isOwned && d.nexalPrice && myNexals >= d.nexalPrice;
