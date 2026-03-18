@@ -1914,6 +1914,7 @@
     if (el) el.classList.add('active');
     if (view === 'shop') loadShop();
     if (view === 'achievements') loadAchievements();
+    if (view === 'colors') loadColors();
   }
 
   // Rail selection: 'dms' or a server id
@@ -2282,7 +2283,7 @@
           <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>
           <span class="msg-time">${formatTime(msg.createdAt)}</span>
         </div>
-        <div class="msg-content">${renderContent(msg.content, msg.mentions)}</div>
+        <div class="msg-content">${renderContent(msg.content, msg.mentions, author.activeColor || null)}</div>
         ${(isChannelMsg && canDeleteThisMsg) ? `<button class="msg-delete-btn" onclick="deleteChannelMessage('${msg.id}','${msg.channelId}',this)" title="Delete message">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
         </button>` : ''}
@@ -3414,6 +3415,72 @@
     await loadAchievements();
   };
 
+  // ---- Colors Shop ----
+  let colorsData = null;
+
+  async function loadColors() {
+    const r = await api('GET', '/api/colors');
+    if (r.error) return;
+    colorsData = r;
+    updateNexalDisplay(r.nexals || 0);
+    const nc = $('colors-nexal-count');
+    if (nc) nc.textContent = (r.nexals||0).toLocaleString();
+    renderColors(r.colors, r.active, r.nexals);
+  }
+
+  function previewColorHtml(color) {
+    if (color.preview === 'rainbow') return `<span class="color-preview-text msg-color-rainbow">Aa</span>`;
+    if (color.preview === 'fire')    return `<span class="color-preview-text msg-color-fire">Aa</span>`;
+    if (color.preview === 'galaxy')  return `<span class="color-preview-text msg-color-galaxy">Aa</span>`;
+    return `<span class="color-preview-text" style="color:${color.preview}">Aa</span>`;
+  }
+
+  function renderColors(colors, active, nexals) {
+    const grid = $('colors-grid');
+    if (!grid) return;
+    grid.innerHTML = colors.map(c => {
+      const isEquipped = active === c.id;
+      const isOwned    = c.owned;
+      const myNexals   = nexals || 0;
+      const canBuy     = !isOwned && myNexals >= c.price;
+      let btnClass = 'locked', btnText = '🔒 ' + c.price.toLocaleString();
+      if (isEquipped)  { btnClass = 'unequip'; btnText = '✓ Equipped'; }
+      else if (isOwned){ btnClass = 'equip';   btnText = 'Equip'; }
+      else if (canBuy) { btnClass = 'buy';     btnText = 'Buy'; }
+      return `<div class="color-card ${isOwned?'owned':''} ${isEquipped?'equipped':''}" id="colorcard-${c.id}">
+        ${previewColorHtml(c)}
+        <div class="color-card-name">${esc(c.name)}</div>
+        <div class="color-card-price">${c.price.toLocaleString()} Nexals</div>
+        <button class="color-card-btn ${btnClass}" onclick="colorAction('${c.id}','${isEquipped?'unequip':isOwned?'equip':canBuy?'buy':'locked'}')">${btnText}</button>
+      </div>`;
+    }).join('');
+  }
+
+  window.colorAction = async function(colorId, action) {
+    if (action === 'locked') {
+      const c = colorsData && colorsData.colors.find(x=>x.id===colorId);
+      toast('Need ' + (c?c.price.toLocaleString():'?') + ' Nexals to unlock', 'info');
+      return;
+    }
+    if (action === 'buy') {
+      const c = colorsData && colorsData.colors.find(x=>x.id===colorId);
+      if (!confirm('Buy "' + (c?c.name:colorId) + '" for ' + (c?c.price.toLocaleString():'?') + ' Nexals?')) return;
+      const r = await api('POST', '/api/colors/buy', { colorId });
+      if (r.error) return toast(r.error, 'error');
+      colorsData.nexals = r.nexals;
+      updateNexalDisplay(r.nexals);
+      toast('Unlocked ' + (c?c.name:colorId) + '! 🎨', 'success');
+      await loadColors();
+      return;
+    }
+    const equipId = action === 'equip' ? colorId : null;
+    const r = await api('POST', '/api/colors/equip', { colorId: equipId });
+    if (r.error) return toast(r.error, 'error');
+    currentUser.activeColor = equipId;
+    if (colorsData) { colorsData.active = equipId; renderColors(colorsData.colors, equipId, colorsData.nexals); }
+    toast(action==='equip' ? 'Color equipped! 🎨' : 'Color removed', 'success');
+  };
+
   window.unclaimDeco = async function(decoId, name) {
     if (!confirm('Remove "' + name + '" from your collection? You will need the code to reclaim it.')) return;
     const r = await api('DELETE', '/api/shop/unclaim/' + decoId);
@@ -3748,12 +3815,12 @@
   }
 
   // ---- Render message content with mentions ----
-  function renderContent(rawContent, mentions) {
-    // First escape HTML
+  function renderContent(rawContent, mentions, authorColor) {
     let html = esc(rawContent);
-    if (!mentions) return html;
+    if (!mentions) {
+      return authorColor ? `<span class="msg-color-${authorColor}">${html}</span>` : html;
+    }
 
-    // Replace <@user:ID> tokens
     html = html.replace(/&lt;@user:([a-f0-9-]+)&gt;/g, (match, id) => {
       const u = mentions.users && mentions.users[id];
       const name = u ? u.displayName : 'Unknown';
@@ -3761,7 +3828,6 @@
       return `<span class="mention-user${isSelf ? ' mention-self' : ''}" data-user-id="${id}">@${esc(name)}</span>`;
     });
 
-    // Replace <@role:ID> tokens
     html = html.replace(/&lt;@role:([a-f0-9-]+)&gt;/g, (match, id) => {
       const r = mentions.roles && mentions.roles[id];
       const name = r ? r.name : 'Unknown Role';
@@ -3769,7 +3835,7 @@
       return `<span class="mention-role" style="color:${color}" data-role-id="${id}">@${esc(name)}</span>`;
     });
 
-    return html;
+    return authorColor ? `<span class="msg-color-${authorColor}">${html}</span>` : html;
   }
 
   // ---- Start ----
