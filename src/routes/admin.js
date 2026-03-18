@@ -158,6 +158,10 @@ router.get('/users/:userId', async (req, res) => {
     [userId]
   );
 
+  const ownedDecos = await pool.query('SELECT decoration_id FROM user_decorations WHERE user_id=$1', [userId]);
+  const ownedSet = new Set(ownedDecos.rows.map(r => r.decoration_id));
+  const { DECORATIONS } = require('./shop');
+
   res.json({
     id: u.id, username: u.username, displayName: u.display_name,
     nexals: u.nexals,
@@ -166,8 +170,55 @@ router.get('/users/:userId', async (req, res) => {
     servers: serversRes.rows.map(s => ({
       id: s.id, name: s.name, role: s.role, memberCount: parseInt(s.member_count),
       iconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
-    }))
+    })),
+    decorations: DECORATIONS.map(d => ({ id: d.id, name: d.name, rarity: d.rarity, owned: ownedSet.has(d.id) })),
   });
+});
+
+// Change user password
+router.patch('/users/:userId/password', async (req, res) => {
+  const { userId } = req.params;
+  const { password } = req.body;
+  if (!password || password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  const bcrypt = require('bcryptjs');
+  const hash = await bcrypt.hash(password, 12);
+  await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, userId]);
+  res.json({ success: true });
+});
+
+// Change username/display name
+router.patch('/users/:userId/identity', async (req, res) => {
+  const { userId } = req.params;
+  const { username, displayName } = req.body;
+  if (username) {
+    if (!/^[a-zA-Z0-9_.\-]+$/.test(username)) return res.status(400).json({ error: 'Invalid username characters' });
+    const exists = await pool.query('SELECT id FROM users WHERE LOWER(username)=LOWER($1) AND id!=$2', [username, userId]);
+    if (exists.rows.length) return res.status(409).json({ error: 'Username already taken' });
+    await pool.query('UPDATE users SET username=$1 WHERE id=$2', [username.toLowerCase(), userId]);
+  }
+  if (displayName) {
+    await pool.query('UPDATE users SET display_name=$1 WHERE id=$2', [displayName, userId]);
+  }
+  const r = await pool.query('SELECT username, display_name FROM users WHERE id=$1', [userId]);
+  res.json({ success: true, username: r.rows[0].username, displayName: r.rows[0].display_name });
+});
+
+// Give decoration to user
+router.post('/users/:userId/decorations', async (req, res) => {
+  const { userId } = req.params;
+  const { decorationId } = req.body;
+  const already = await pool.query('SELECT id FROM user_decorations WHERE user_id=$1 AND decoration_id=$2', [userId, decorationId]);
+  if (already.rows.length) return res.status(409).json({ error: 'User already owns this decoration' });
+  await pool.query('INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3)', [require('uuid').v4(), userId, decorationId]);
+  res.json({ success: true });
+});
+
+// Remove decoration from user
+router.delete('/users/:userId/decorations/:decorationId', async (req, res) => {
+  const { userId, decorationId } = req.params;
+  await pool.query('UPDATE users SET active_decoration=NULL WHERE id=$1 AND active_decoration=$2', [userId, decorationId]);
+  await pool.query('DELETE FROM user_decorations WHERE user_id=$1 AND decoration_id=$2', [userId, decorationId]);
+  res.json({ success: true });
 });
 
 // Update user nexals
