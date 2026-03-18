@@ -2668,3 +2668,29 @@ html, body {
 .color-card-btn.equip  { background: var(--accent); color:#fff; }
 .color-card-btn.unequip{ background: rgba(61,214,140,0.15); color: var(--green); }
 .color-card-btn.locked { background: var(--bg-hover); color: var(--text-muted); cursor:default; }
+
+/* ===== BUBBLE FONT ===== */
+.msg-font-bubble {
+  font-family: 'DynaPuff', cursive !important;
+  font-size: 1.1em;
+  letter-spacing: 0.5px;
+}
+
+/* Font shop cards */
+.font-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 14px 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  transition: var(--transition);
+}
+.font-card:hover { border-color: var(--border-bright); }
+.font-card.owned { border-color: rgba(91,110,245,0.4); }
+.font-card.equipped { border-color: var(--green); box-shadow: 0 0 12px rgba(61,214,140,0.2); }
+.font-preview-text {
+  font-family: 'DynaPuff', cursive;
+  font-size: 20px;
+  color: var(--text-primary);
+  padding: 4px 0;
+}
