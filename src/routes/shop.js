@@ -142,8 +142,8 @@ const DECORATIONS = [
   // Mythicals
   { id: 'inferno',      nexalPrice: 10000, name: 'Inferno',        description: 'Real animated flames that engulf your avatar.',         rarity: 'mythical',  preview: 'inferno' },
   { id: 'hydro',        nexalPrice: 10000, name: 'Hydro',          description: 'Shimmering water ripples and bubbles orbit your avatar.',rarity: 'mythical',  preview: 'hydro' },
+  { id: 'shatter',      nexalPrice: 10000, name: 'Shatter',        description: 'Glass forms over your avatar, glints, then dramatically shatters. Reforms every 5s.', rarity: 'mythical', preview: 'shatter' },
   { id: 'yinyang',      nexalPrice: 10000, name: 'Yin & Yang',     description: 'Balance of light and dark. Every 5s, the symbol manifests.', rarity: 'mythical', preview: 'yinyang' },
-  { id: 'shattersling',      nexalPrice: 10000, name: 'Shatter',         description: 'Glass forms over your avatar then dramatically shatters. Reforms every 5s.', rarity: 'mythical', preview: 'shatter' },
 ];
 
 // Special nexal boost codes (not decorations)
@@ -165,12 +165,12 @@ function getCodeMap() {
     [process.env.DECO_CODE_FROSTBITE || 'FROSTBITE']:       'frost',
     [process.env.DECO_CODE_GOLDRING  || 'GOLDRING']:        'orbit_gold',
     [process.env.DECO_CODE_BLUEGLOW      || 'BLUEGLOW']:      'glow_blue',
-    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSADMIN']:    'nexus_admin',
+    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSETRALX']:    'nexus_admin',
     [process.env.DECO_CODE_STORMBRINGER  || 'STORMBRINGER']:  'storm',
     [process.env.DECO_CODE_INFERNO       || 'INFERNO']:       'inferno',
     [process.env.DECO_CODE_HYDRO         || 'HYDRO']:         'hydro',
+    [process.env.DECO_CODE_SHATTER       || 'TEST']:       'shatter',
     [process.env.DECO_CODE_YINYANG       || 'YINYANG']:       'yinyang',
-    [process.env.DECO_CODE_SHATTER       || 'SHATTER']:       'shatter',
   };
 }
 
