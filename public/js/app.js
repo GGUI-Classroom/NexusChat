@@ -742,337 +742,218 @@
 
   function startShatterCanvas(wrap) {
     if (shatterCanvases.has(wrap)) return;
+
+    // Get avatar size — try multiple sources
     const avatarEl = wrap.querySelector('.avatar');
-    // Try offsetWidth, then explicit style width, then default 36
-    let size = avatarEl ? (avatarEl.offsetWidth || parseInt(avatarEl.style.width) || 36) : 36;
-    if (size < 10) size = 36; // safety fallback
-    const pad = 26;
-    const W = size + pad*2, H = size + pad*2;
+    const size = Math.max(20,
+      (avatarEl && avatarEl.offsetWidth) ||
+      (avatarEl && parseInt(avatarEl.style.width)) ||
+      36
+    );
+    const cx = size / 2, cy = size / 2, r = size / 2 - 1;
+
+    // Canvas is exactly avatar size — sits directly over it
     const canvas = document.createElement('canvas');
-    canvas.className = 'storm-canvas';
-    canvas.width = W; canvas.height = H;
-    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    canvas.width  = size;
+    canvas.height = size;
+    canvas.style.cssText = `position:absolute;top:0;left:0;width:${size}px;height:${size}px;pointer-events:none;z-index:5;border-radius:50%`;
     wrap.appendChild(canvas);
     const ctx = canvas.getContext('2d');
-    const cx = W/2, cy = H/2, r = size/2;
 
-    // ---- Shard generation: realistic glass crack topology ----
-    // Start from crack origin points, build outward crack tree, then fill polygons
-    function generateShards() {
-      const shards = [];
-      // Pick 2-3 crack origin points near center
-      const origins = [];
-      for (let i = 0; i < 2 + Math.floor(Math.random()*2); i++) {
-        const a = Math.random()*Math.PI*2;
-        const d = r*(0.05 + Math.random()*0.25);
-        origins.push([cx + Math.cos(a)*d, cy + Math.sin(a)*d]);
-      }
-
-      // Build crack lines radiating outward from origins with branching
-      const lines = [];
-      function addCrack(ox, oy, angle, length, depth) {
-        if (depth <= 0 || length < r*0.08) return;
-        // Jagged segments
-        let x = ox, y = oy;
-        const segs = 3 + Math.floor(Math.random()*3);
-        const pts = [[x, y]];
-        for (let i = 0; i < segs; i++) {
-          const jitter = (Math.random()-0.5) * 0.45;
-          const segLen = (length/segs) * (0.7+Math.random()*0.6);
-          x += Math.cos(angle + jitter) * segLen;
-          y += Math.sin(angle + jitter) * segLen;
-          // Clip to circle
-          const dist = Math.sqrt((x-cx)**2+(y-cy)**2);
-          if (dist > r*1.02) {
-            const clip = r*1.02/dist;
-            x = cx+(x-cx)*clip; y = cy+(y-cy)*clip;
-            pts.push([x, y]);
-            break;
-          }
-          pts.push([x, y]);
-        }
-        lines.push(pts);
-        // Branch
-        if (depth > 1 && Math.random() < 0.65) {
-          const branchAngle = angle + (Math.random()-0.5)*1.4;
-          addCrack(pts[Math.floor(pts.length/2)][0], pts[Math.floor(pts.length/2)][1],
-            branchAngle, length*(0.4+Math.random()*0.3), depth-1);
-        }
-      }
-
-      // Radiate cracks from each origin
-      const numMain = 5 + Math.floor(Math.random()*5);
-      origins.forEach(([ox, oy]) => {
-        for (let i = 0; i < Math.ceil(numMain/origins.length); i++) {
-          const angle = Math.random()*Math.PI*2;
-          addCrack(ox, oy, angle, r*(0.7+Math.random()*0.5), 3);
-        }
-      });
-
-      // Build shards from crack network using angular sector approach
-      const numShards = 12 + Math.floor(Math.random()*8);
-      for (let s = 0; s < numShards; s++) {
-        const a1 = (s/numShards)*Math.PI*2;
-        const a2 = ((s+1)/numShards)*Math.PI*2 + (Math.random()-0.5)*0.15;
-        const mid = (a1+a2)/2;
-        // Inner radius varies with jagged edges
-        const inner = r*(0.02+Math.random()*0.18);
-        const outer = r*(0.82+Math.random()*0.2);
-        const jag1 = (Math.random()-0.5)*0.18;
-        const jag2 = (Math.random()-0.5)*0.18;
+    // ---- Build shards as pie-slice polygons with jagged edges ----
+    function makeShards() {
+      const out = [];
+      const N = 14 + Math.floor(Math.random() * 6);
+      for (let i = 0; i < N; i++) {
+        const a1 = (i / N) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+        const a2 = ((i + 1) / N) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
+        const mid = (a1 + a2) / 2;
+        const ir = r * (0.04 + Math.random() * 0.22);
+        const or = r * (0.75 + Math.random() * 0.25);
+        // Polygon: inner arc, mid jag, outer arc
         const poly = [
-          [cx+Math.cos(a1+jag1)*inner,    cy+Math.sin(a1+jag1)*inner],
-          [cx+Math.cos(mid)*inner*0.5,     cy+Math.sin(mid)*inner*0.5],
-          [cx+Math.cos(a2+jag2)*inner,     cy+Math.sin(a2+jag2)*inner],
-          [cx+Math.cos(a2+jag2)*outer,     cy+Math.sin(a2+jag2)*outer],
-          [cx+Math.cos(mid)*(outer+r*0.02),cy+Math.sin(mid)*(outer+r*0.02)],
-          [cx+Math.cos(a1+jag1)*outer,     cy+Math.sin(a1+jag1)*outer],
+          { x: cx + Math.cos(a1) * ir,  y: cy + Math.sin(a1) * ir },
+          { x: cx + Math.cos(mid) * ir * 0.6, y: cy + Math.sin(mid) * ir * 0.6 },
+          { x: cx + Math.cos(a2) * ir,  y: cy + Math.sin(a2) * ir },
+          { x: cx + Math.cos(a2) * or,  y: cy + Math.sin(a2) * or },
+          { x: cx + Math.cos(mid) * (or + r * 0.04), y: cy + Math.sin(mid) * (or + r * 0.04) },
+          { x: cx + Math.cos(a1) * or,  y: cy + Math.sin(a1) * or },
         ];
-        const centX = poly.reduce((s,p)=>s+p[0],0)/poly.length;
-        const centY = poly.reduce((s,p)=>s+p[1],0)/poly.length;
-        // Outward explosion direction
-        const da = Math.atan2(centY-cy, centX-cx);
-        const speed = 0.08+Math.random()*0.14;
-        shards.push({
+        const centX = poly.reduce((s, p) => s + p.x, 0) / poly.length;
+        const centY = poly.reduce((s, p) => s + p.y, 0) / poly.length;
+        const da = Math.atan2(centY - cy, centX - cx);
+        out.push({
           poly, centX, centY,
-          // Explosion physics
-          vx: Math.cos(da)*speed*(0.8+Math.random()*0.8),
-          vy: Math.sin(da)*speed*(0.8+Math.random()*0.8),
-          vr: (Math.random()-0.5)*0.35,
-          // Current state
-          x:0, y:0, rot:0,
-          // Visual properties — make each shard look subtly different
-          refractHue: 195+Math.random()*30,      // icy blue-white
-          clarity: 0.04+Math.random()*0.08,      // very low fill opacity = transparent glass
-          edgeBright: 0.7+Math.random()*0.3,     // edge highlight strength
-          specularSide: Math.random()>0.5 ? 0:1, // which edge catches light
+          vx: Math.cos(da) * (0.5 + Math.random() * 1.2),
+          vy: Math.sin(da) * (0.5 + Math.random() * 1.2),
+          vr: (Math.random() - 0.5) * 0.12,
+          // current displaced state
+          dx: 0, dy: 0, dr: 0,
         });
       }
-      return { shards, lines };
+      return out;
     }
 
-    let gen = generateShards();
-    let shards = gen.shards;
-    let cracks = gen.lines;
-    let phase=0, phaseT=0, lastTime=null, animId;
-    let glintA = 0;
-
-    function easeOut(t) { return 1-(1-t)*(1-t); }
-    function easeInOut(t) { return t<0.5?2*t*t:-1+(4-2*t)*t; }
-
-    // Draw one glass shard — key insight: glass is mostly transparent
-    // what you see is the EDGES (refraction lines) not the fill
-    function drawShard(s, alpha, dx, dy, rot) {
-      if (alpha <= 0.01) return;
+    // Draw one shard — nearly transparent fill, bright edges (real glass look)
+    function drawShard(s, alpha) {
+      if (alpha <= 0) return;
+      const { poly, dx, dy, dr, centX, centY } = s;
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.translate(s.centX+dx, s.centY+dy);
-      ctx.rotate(rot);
-      ctx.translate(-s.centX, -s.centY);
+      ctx.translate(centX + dx, centY + dy);
+      ctx.rotate(dr);
+      ctx.translate(-centX, -centY);
 
-      const poly = s.poly;
       ctx.beginPath();
-      ctx.moveTo(poly[0][0], poly[0][1]);
-      for (let i=1; i<poly.length; i++) ctx.lineTo(poly[i][0], poly[i][1]);
+      ctx.moveTo(poly[0].x, poly[0].y);
+      for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
       ctx.closePath();
 
-      // Almost invisible fill — just a breath of tint to suggest glass mass
-      const fillG = ctx.createLinearGradient(poly[0][0],poly[0][1],poly[3][0],poly[3][1]);
-      fillG.addColorStop(0, `hsla(${s.refractHue},40%,96%,${s.clarity})`);
-      fillG.addColorStop(0.5, `hsla(${s.refractHue+10},30%,100%,${s.clarity*0.5})`);
-      fillG.addColorStop(1, `hsla(${s.refractHue-5},50%,90%,${s.clarity*1.5})`);
-      ctx.fillStyle = fillG;
+      // Very faint fill — glass is mostly transparent
+      ctx.fillStyle = 'rgba(210,235,255,0.07)';
       ctx.fill();
 
-      // The real glass look: sharp bright crack edges
-      // Primary edge — brightest
-      ctx.beginPath();
-      ctx.moveTo(poly[0][0], poly[0][1]);
-      for (let i=1; i<poly.length; i++) ctx.lineTo(poly[i][0], poly[i][1]);
-      ctx.closePath();
-      ctx.strokeStyle = `rgba(220,238,255,${0.55*s.edgeBright*alpha})`;
-      ctx.lineWidth = 0.6;
-      ctx.stroke();
-
-      // Specular catch — one or two edges are much brighter (mirror reflection)
-      const specEdges = [s.specularSide, (s.specularSide+1)%poly.length];
-      specEdges.forEach(i => {
-        const p1 = poly[i], p2 = poly[(i+1)%poly.length];
-        ctx.beginPath(); ctx.moveTo(p1[0],p1[1]); ctx.lineTo(p2[0],p2[1]);
-        ctx.strokeStyle = `rgba(255,255,255,${0.85*s.edgeBright})`;
-        ctx.lineWidth = 1.0;
-        ctx.shadowColor = 'rgba(255,255,255,0.9)';
-        ctx.shadowBlur = 1.5;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-      });
-
-      // Dark edge on opposite side (shadow of the crack)
-      const darkEdge = (s.specularSide+3)%poly.length;
-      const pd1 = poly[darkEdge], pd2 = poly[(darkEdge+1)%poly.length];
-      ctx.beginPath(); ctx.moveTo(pd1[0],pd1[1]); ctx.lineTo(pd2[0],pd2[1]);
-      ctx.strokeStyle = `rgba(0,20,40,${0.18*s.edgeBright})`;
+      // Bright crack edges = what makes glass look like glass
+      ctx.strokeStyle = 'rgba(230,245,255,0.75)';
       ctx.lineWidth = 0.7;
+      ctx.shadowColor = 'rgba(200,230,255,0.9)';
+      ctx.shadowBlur = 2;
       ctx.stroke();
 
+      // One bright specular edge
+      const p1 = poly[0], p2 = poly[poly.length - 1];
+      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 1.0;
+      ctx.shadowBlur = 3;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
       ctx.restore();
     }
 
-    // Draw the crack network lines
-    function drawCracks(alpha) {
-      if (alpha <= 0) return;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
-      cracks.forEach(pts => {
-        ctx.beginPath();
-        ctx.moveTo(pts[0][0], pts[0][1]);
-        for (let i=1; i<pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-        // Crack = very dark thin line with white glow = refraction at edge
-        ctx.strokeStyle = `rgba(180,220,255,${0.5*alpha})`;
-        ctx.lineWidth = 0.5;
-        ctx.shadowColor = 'rgba(200,235,255,0.8)';
-        ctx.shadowBlur = 1.5;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        // Dark core of crack
-        ctx.strokeStyle = `rgba(0,10,30,${0.25*alpha})`;
-        ctx.lineWidth = 0.3;
-        ctx.stroke();
-      });
-      ctx.restore();
-    }
+    let shards = makeShards();
+    // phase: 0=forming 1=hold 2=shatter 3=settle 4=idle 5=reform
+    let phase = 0, phaseT = 0, lastT = null, animId;
+    let glintAngle = 0;
 
-    function draw(ts) {
-      if (!lastTime) lastTime = ts;
-      const dt = Math.min((ts-lastTime)/1000, 0.05); lastTime = ts;
+    function tick(ts) {
+      if (!lastT) lastT = ts;
+      const dt = Math.min((ts - lastT) / 1000, 0.05);
+      lastT = ts;
       phaseT += dt;
 
-      // Phase: 0=forming(1.0s) 1=hold(2.0s) 2=shatter(0.7s) 3=settle(0.5s) 4=idle(5s) 5=reform(1.0s)
-      if (phase===0 && phaseT>1.0) { phase=1; phaseT=0; }
-      if (phase===1 && phaseT>2.0) { phase=2; phaseT=0; shards.forEach(s=>{s.x=0;s.y=0;s.rot=0;}); }
-      if (phase===2 && phaseT>0.7) { phase=3; phaseT=0; }
-      if (phase===3 && phaseT>0.5) { phase=4; phaseT=0; const g=generateShards(); shards=g.shards; cracks=g.lines; }
-      if (phase===4 && phaseT>5.0) { phase=5; phaseT=0; }
-      if (phase===5 && phaseT>1.0) { phase=0; phaseT=0; }
+      if (phase === 0 && phaseT > 1.0) { phase = 1; phaseT = 0; }
+      if (phase === 1 && phaseT > 2.5) { phase = 2; phaseT = 0; }
+      if (phase === 2 && phaseT > 0.65){ phase = 3; phaseT = 0; }
+      if (phase === 3 && phaseT > 0.5) { phase = 4; phaseT = 0; shards = makeShards(); }
+      if (phase === 4 && phaseT > 5.0) { phase = 5; phaseT = 0; }
+      if (phase === 5 && phaseT > 1.0) { phase = 0; phaseT = 0; }
 
-      ctx.clearRect(0,0,W,H);
-      glintA += dt*0.6;
+      ctx.clearRect(0, 0, size, size);
 
-      if (phase===0) {
-        // Forming: cracks spread progressively, shards materialise
-        const t = easeOut(phaseT/1.0);
-        // Clip to circle
-        ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
-        // Very faint overall glass tint
-        ctx.fillStyle=`rgba(200,230,255,${t*0.06})`; ctx.fillRect(0,0,W,H);
-        ctx.restore();
-        // Draw shards progressively
-        shards.forEach((s,i) => {
-          const shardT = Math.max(0, Math.min(1, (t*shards.length - i*0.4)));
-          drawShard(s, shardT*0.85, 0, 0, 0);
+      // Clip all drawing to the avatar circle
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+
+      const ease = t => 1 - (1 - t) * (1 - t);
+
+      if (phase === 0) {
+        // Form: shards fade in progressively
+        const t = ease(phaseT / 1.0);
+        shards.forEach((s, i) => {
+          const st = Math.max(0, Math.min(1, (t * shards.length - i * 0.6)));
+          drawShard(s, st * 0.9);
         });
-        drawCracks(t*0.8);
-        // Ring forms
-        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
-        ctx.strokeStyle=`rgba(200,230,255,${t*0.55})`; ctx.lineWidth=1.2;
-        ctx.shadowColor='rgba(200,230,255,0.7)'; ctx.shadowBlur=4*t; ctx.stroke(); ctx.shadowBlur=0;
-      }
-      else if (phase===1) {
-        // Hold: full glass, moving glint
-        ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
-        ctx.fillStyle='rgba(200,225,255,0.04)'; ctx.fillRect(0,0,W,H);
+        // Ice ring forming
         ctx.restore();
-        shards.forEach(s => drawShard(s, 0.88, 0, 0, 0));
-        drawCracks(0.85);
-        // Ring
-        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
-        ctx.strokeStyle='rgba(200,230,255,0.5)'; ctx.lineWidth=1.2;
-        ctx.shadowColor='rgba(200,230,255,0.5)'; ctx.shadowBlur=3; ctx.stroke(); ctx.shadowBlur=0;
-        // Moving glint — single bright line sweeping at angle
-        ctx.save();
-        ctx.beginPath(); ctx.arc(cx,cy,r-0.5,0,Math.PI*2); ctx.clip();
-        const gx1=cx+Math.cos(glintA)*r*1.3, gy1=cy+Math.sin(glintA)*r*1.3;
-        const gx2=cx+Math.cos(glintA+Math.PI)*r*1.3, gy2=cy+Math.sin(glintA+Math.PI)*r*1.3;
-        const gl=ctx.createLinearGradient(gx1,gy1,gx2,gy2);
-        gl.addColorStop(0,'transparent'); gl.addColorStop(0.43,'transparent');
-        gl.addColorStop(0.47,'rgba(255,255,255,0.55)');
-        gl.addColorStop(0.5,'rgba(255,255,255,0.9)');
-        gl.addColorStop(0.53,'rgba(255,255,255,0.55)');
-        gl.addColorStop(0.57,'transparent'); gl.addColorStop(1,'transparent');
-        ctx.fillStyle=gl; ctx.fillRect(cx-r-1,cy-r-1,r*2+2,r*2+2);
-        ctx.restore();
+        ctx.beginPath(); ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(180,220,255,${t * 0.6})`; ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
       }
-      else if (phase===2) {
-        // SHATTER
-        const t = phaseT/0.7;
-        const boom = easeOut(Math.min(t,1));
-        // Impact flash (first 12% only)
-        if (t < 0.12) {
-          const fi = 1-(t/0.12);
-          ctx.save(); ctx.globalAlpha=fi*0.75;
-          ctx.beginPath(); ctx.arc(cx,cy,r+2,0,Math.PI*2);
-          ctx.fillStyle='rgba(240,250,255,1)'; ctx.fill();
-          ctx.restore();
+      else if (phase === 1) {
+        // Hold: full glass with glint sweep
+        glintAngle += dt * 0.5;
+        shards.forEach(s => drawShard(s, 0.9));
+        // Glint
+        const gx1 = cx + Math.cos(glintAngle) * r * 1.5;
+        const gy1 = cy + Math.sin(glintAngle) * r * 1.5;
+        const gx2 = cx - Math.cos(glintAngle) * r * 1.5;
+        const gy2 = cy - Math.sin(glintAngle) * r * 1.5;
+        const gl = ctx.createLinearGradient(gx1, gy1, gx2, gy2);
+        gl.addColorStop(0, 'transparent');
+        gl.addColorStop(0.44, 'transparent');
+        gl.addColorStop(0.5, 'rgba(255,255,255,0.7)');
+        gl.addColorStop(0.56, 'transparent');
+        gl.addColorStop(1, 'transparent');
+        ctx.fillStyle = gl;
+        ctx.fillRect(0, 0, size, size);
+      }
+      else if (phase === 2) {
+        // Shatter: explode outward
+        const t = ease(phaseT / 0.65);
+        if (phaseT < 0.08) {
+          // Impact flash
+          ctx.fillStyle = `rgba(240,250,255,${(0.08 - phaseT) / 0.08 * 0.8})`;
+          ctx.fillRect(0, 0, size, size);
         }
         shards.forEach(s => {
-          // Velocity accelerates with boom
-          s.x += s.vx*(1+boom*5)*dt*60;
-          s.y += s.vy*(1+boom*5)*dt*60;
-          s.rot += s.vr*(1+boom*3)*dt*60;
-          // Alpha fades as they scatter
-          const dist = Math.sqrt(s.x*s.x+s.y*s.y);
-          const alpha = Math.max(0, 1 - dist/(r*1.2));
-          drawShard(s, alpha, s.x, s.y, s.rot);
+          s.dx += s.vx * (1 + t * 4) * dt * 60;
+          s.dy += s.vy * (1 + t * 4) * dt * 60;
+          s.dr += s.vr * dt * 60;
+          const dist = Math.sqrt(s.dx * s.dx + s.dy * s.dy);
+          drawShard(s, Math.max(0, 1 - dist / (r * 1.1)));
         });
-        drawCracks(Math.max(0, 1-t*3));
       }
-      else if (phase===3) {
-        // Settle: pieces still drifting, fading out
-        const fade = 1-phaseT/0.5;
+      else if (phase === 3) {
+        // Settle: pieces drift and fade
+        const fade = 1 - phaseT / 0.5;
         shards.forEach(s => {
-          s.x += s.vx*0.15*dt*60;
-          s.y += s.vy*0.15*dt*60;
-          s.rot += s.vr*0.15*dt*60;
-          drawShard(s, fade*0.18, s.x, s.y, s.rot);
+          s.dx += s.vx * 0.1 * dt * 60;
+          s.dy += s.vy * 0.1 * dt * 60;
+          drawShard(s, fade * 0.2);
         });
       }
-      else if (phase===4) {
-        // Idle: barely visible frost ring
-        ctx.beginPath(); ctx.arc(cx,cy,r+0.5,0,Math.PI*2);
-        ctx.strokeStyle='rgba(170,210,255,0.28)'; ctx.lineWidth=1.0; ctx.stroke();
-        for (let i=0; i<10; i++) {
-          const a=(i/10)*Math.PI*2;
-          ctx.beginPath(); ctx.arc(cx+Math.cos(a)*r,cy+Math.sin(a)*r,0.8,0,Math.PI*2);
-          ctx.fillStyle='rgba(210,235,255,0.4)'; ctx.fill();
+      else if (phase === 4) {
+        // Idle: just faint ring
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(160,210,255,0.3)'; ctx.lineWidth = 1.0; ctx.stroke();
+        // frost dots
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          ctx.beginPath(); ctx.arc(cx + Math.cos(a) * (r - 1), cy + Math.sin(a) * (r - 1), 1, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(200,230,255,0.45)'; ctx.fill();
         }
+        ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
       }
-      else if (phase===5) {
-        // Reform: shards fly back and solidify
-        const t = easeOut(phaseT/1.0);
+      else if (phase === 5) {
+        // Reform: shards fly back
+        const t = ease(phaseT / 1.0);
         shards.forEach(s => {
-          const ox = s.x*(1-t);
-          const oy = s.y*(1-t);
-          const or2 = s.rot*(1-t);
-          drawShard(s, t*0.85, ox, oy, or2);
+          const ox = s.dx * (1 - t);
+          const oy = s.dy * (1 - t);
+          const or2 = s.dr * (1 - t);
+          const origDx = s.dx; const origDy = s.dy; const origDr = s.dr;
+          s.dx = ox; s.dy = oy; s.dr = or2;
+          drawShard(s, t * 0.88);
+          s.dx = origDx; s.dy = origDy; s.dr = origDr;
         });
-        drawCracks(t*0.85);
-        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
-        ctx.strokeStyle=`rgba(200,230,255,${t*0.5})`; ctx.lineWidth=1.2;
-        ctx.shadowColor='rgba(200,230,255,0.6)'; ctx.shadowBlur=3*t; ctx.stroke(); ctx.shadowBlur=0;
-        // Seal flash at end
-        if (t>0.88) {
-          const fi=(t-0.88)/0.12;
-          ctx.save(); ctx.globalAlpha=fi*fi*0.35;
-          ctx.beginPath(); ctx.arc(cx,cy,r+1,0,Math.PI*2);
-          ctx.fillStyle='rgba(230,245,255,1)'; ctx.fill();
-          ctx.restore();
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(180,220,255,${t * 0.55})`; ctx.lineWidth = 1.2; ctx.stroke();
+        if (t > 0.85) {
+          ctx.fillStyle = `rgba(220,240,255,${(t - 0.85) / 0.15 * 0.25})`;
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
         }
+        ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
       }
 
-      animId = requestAnimationFrame(draw);
+      ctx.restore();
+      animId = requestAnimationFrame(tick);
     }
-    animId = requestAnimationFrame(draw);
+
+    animId = requestAnimationFrame(tick);
     shatterCanvases.set(wrap, { canvas, animId });
   }
 
