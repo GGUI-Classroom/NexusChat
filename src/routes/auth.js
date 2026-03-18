@@ -23,7 +23,7 @@ router.post('/register', async (req, res) => {
     await pool.query('INSERT INTO users (id, username, display_name, password_hash) VALUES ($1,$2,$3,$4)',
       [id, username.toLowerCase(), displayName, hash]);
     req.session.userId = id;
-    return res.json({ success: true, user: { id, username: username.toLowerCase(), displayName, bio: null, activeDecoration: null } });
+    return res.json({ success: true, user: { id, username: username.toLowerCase(), displayName, bio: null, activeDecoration: null, activeColor: null } });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'Server error' });
@@ -75,7 +75,7 @@ router.get('/me', async (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
   try {
     const r = await pool.query(
-      'SELECT id, username, display_name, avatar_data, avatar_mime, bio, active_decoration FROM users WHERE id=$1',
+      'SELECT id, username, display_name, avatar_data, avatar_mime, bio, active_decoration, active_color FROM users WHERE id=$1',
       [req.session.userId]
     );
     const user = r.rows[0];
