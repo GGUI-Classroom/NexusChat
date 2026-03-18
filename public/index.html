@@ -512,9 +512,10 @@
         <button class="modal-close" onclick="closeAdminPanel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0">
-        <button class="admin-tab active" data-tab="suspend">⛔ Suspend User</button>
-        <button class="admin-tab" data-tab="servers">🌐 All Servers</button>
-        <button class="admin-tab" data-tab="history">📋 Suspension Log</button>
+        <button class="admin-tab active" data-tab="suspend">⛔ Suspend</button>
+        <button class="admin-tab" data-tab="servers">🌐 Servers</button>
+        <button class="admin-tab" data-tab="userinfo">👤 User Info</button>
+        <button class="admin-tab" data-tab="history">📋 Log</button>
       </div>
       <div style="flex:1;overflow-y:auto">
         <!-- Suspend Tab -->
@@ -555,6 +556,14 @@
         <!-- History Tab -->
         <div class="admin-pane" id="admin-pane-history">
           <div id="admin-history-list" style="padding:12px 16px"></div>
+        </div>
+        <!-- User Info Tab -->
+        <div class="admin-pane" id="admin-pane-userinfo">
+          <div style="padding:16px 20px 8px;display:flex;gap:10px">
+            <input type="text" id="admin-userinfo-search" placeholder="Search by username…" style="flex:1" />
+            <button class="btn-secondary" id="admin-userinfo-search-btn">Lookup</button>
+          </div>
+          <div id="admin-userinfo-result" style="padding:0 16px 16px"></div>
         </div>
       </div>
     </div>
