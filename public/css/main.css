@@ -2669,17 +2669,17 @@ html, body {
 .color-card-btn.unequip{ background: rgba(61,214,140,0.15); color: var(--green); }
 .color-card-btn.locked { background: var(--bg-hover); color: var(--text-muted); cursor:default; }
 
-/* ===== BUBBLE FONT ===== */
-.msg-font-bubble {
+/* ===== DYNAPUFF FONT ===== */
+.msg-font-bubble,
+.username-font-bubble {
   font-family: 'DynaPuff', cursive !important;
-  font-size: 0.8em;
-  letter-spacing: 0.5px;
 }
-
-.msg-font-pixel {
-  font-family: 'VT323', cursive !important;
-  font-size: 0.8em;
-  letter-spacing: 0.5px;
+.msg-font-bubble {
+  font-size: 1.05em;
+  letter-spacing: 0.3px;
+}
+.username-font-bubble {
+  font-size: 0.95em;
 }
 
 /* Font shop cards */
@@ -2701,9 +2701,13 @@ html, body {
   padding: 4px 0;
 }
 
-.font-preview-text2 {
-  font-family: 'VT323', cursive;
-  font-size: 20px;
-  color: var(--text-primary);
-  padding: 4px 0;
+/* VT323 retro font */
+.msg-font-vt323 {
+  font-family: 'VT323', monospace !important;
+  font-size: 1.25em;
+  letter-spacing: 0.5px;
+}
+.username-font-vt323 {
+  font-family: 'VT323', monospace !important;
+  font-size: 1.1em;
 }
