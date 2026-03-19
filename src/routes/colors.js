@@ -66,16 +66,18 @@ module.exports.COLORS = COLORS;
 // ---- FONTS ----
 const FONTS = [
   { id: 'bubble', name: 'DynaPuff', price: 15000, description: 'Chunky DynaPuff bubble font' },
+  { id: 'vt323', name: 'VT323', price: 10000, description: 'Retro pixel terminal font' },
 ];
 
 router.get('/fonts', async (req, res) => {
   const owned = await pool.query('SELECT font_id FROM user_fonts WHERE user_id=$1', [req.session.userId]);
-  const user  = await pool.query('SELECT active_font, nexals FROM users WHERE id=$1', [req.session.userId]);
+  const user  = await pool.query('SELECT active_font, nexals, font_on_username FROM users WHERE id=$1', [req.session.userId]);
   const ownedSet = new Set(owned.rows.map(r => r.font_id));
   res.json({
     fonts: FONTS.map(f => ({ ...f, owned: ownedSet.has(f.id) })),
     active: user.rows[0]?.active_font || null,
     nexals: user.rows[0]?.nexals || 0,
+    fontOnUsername: !!user.rows[0]?.font_on_username,
   });
 });
 
@@ -91,6 +93,12 @@ router.post('/fonts/buy', async (req, res) => {
   await pool.query('INSERT INTO user_fonts (id,user_id,font_id) VALUES ($1,$2,$3)', [uuidv4(), req.session.userId, fontId]);
   const updated = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
   res.json({ success: true, nexals: updated.rows[0].nexals, font: { ...font, owned: true } });
+});
+
+router.post('/fonts/toggle-username', async (req, res) => {
+  const { enabled } = req.body;
+  await pool.query('UPDATE users SET font_on_username=$1 WHERE id=$2', [!!enabled, req.session.userId]);
+  res.json({ success: true, fontOnUsername: !!enabled });
 });
 
 router.post('/fonts/equip', async (req, res) => {
