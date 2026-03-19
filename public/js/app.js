@@ -1150,10 +1150,20 @@
     }
   }
 
+  function applyFontClass(el, user) {
+    if (!el) return;
+    el.classList.remove('username-font-bubble', 'username-font-vt323');
+    if (user && user.fontOnUsername && user.activeFont) {
+      el.classList.add('username-font-' + user.activeFont);
+    }
+  }
+
   function updateSelfCard() {
     if (!currentUser) return;
     $('self-display-name').textContent = currentUser.displayName;
     $('self-username').textContent = '@' + currentUser.username;
+    applyFontClass($('self-display-name'), currentUser);
+    applyFontClass($('self-username'), currentUser);
     const el = $('self-avatar-display');
     renderAvatar(el, currentUser);
   }
@@ -1344,7 +1354,7 @@
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name" style="${roleStyle}">${esc(m.displayName)}</span>
+          <span class="member-name${m.activeFont === 'bubble' ? ' username-font-bubble' : ''}" style="${roleStyle}">${esc(m.displayName)}</span>
           ${isOwner ? '<span class="member-role" style="color:var(--yellow)">Owner</span>' : (m.roleName ? `<span class="member-role" style="color:${m.roleColor||'var(--accent)'}">${esc(m.roleName)}</span>` : '')}
           ${canManage ? `<div class="member-actions">
             <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
@@ -2023,7 +2033,7 @@
           <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="fdot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name">${esc(f.displayName)}</div>
+          <div class="display-name${f.activeFont === 'bubble' ? ' username-font-bubble' : ''}">${esc(f.displayName)}</div>
           <div class="username">@${esc(f.username)}</div>
           <div class="status ${f.status === 'online' ? 'online' : ''}" id="fstatus-${f.id}">${f.status === 'online' ? '● Online' : '○ Offline'}</div>
         </div>
@@ -2167,6 +2177,7 @@
     // Set header
     renderAvatar($('chat-peer-avatar'), user);
     $('chat-peer-name').textContent = user.displayName;
+    applyFontClass($('chat-peer-name'), user);
     $('chat-peer-username').textContent = '@' + user.username;
     const statusDot = $('chat-peer-status');
     statusDot.className = `status-dot ${user.status === 'online' ? 'online' : ''}`;
@@ -2280,7 +2291,7 @@
       <div class="avatar-wrap" style="flex-shrink:0;align-self:flex-start;margin-top:2px"><div class="avatar" id="mav-${msg.id}"></div></div>
       <div class="msg-body">
         <div class="msg-header">
-          <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>
+          <span class="${roleClass}${author.activeFont === 'bubble' ? ' username-font-bubble' : ''}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>
           <span class="msg-time">${formatTime(msg.createdAt)}</span>
         </div>
         <div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(msg.content, msg.mentions, author.activeColor || null)}</div>
@@ -3120,6 +3131,34 @@
           </div>
         </div>
 
+        <!-- Colors -->
+        <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Text Colors</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${(data.colors||[]).map(c=>`
+              <div style="display:flex;align-items:center;gap:4px;padding:3px 8px;background:var(--bg-hover);border-radius:99px;border:1px solid ${c.owned?'rgba(91,110,245,0.4)':'var(--border)'}">
+                <span style="color:${['rainbow','fire','galaxy'].includes(c.preview)?'#ffd700':c.preview};font-weight:700;font-size:11px">${esc(c.name)}</span>
+                ${c.owned
+                  ? `<button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:10px;padding:0 2px" onclick="adminRemoveColor('${data.id}','${c.id}')">✕</button>`
+                  : `<button style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:10px;padding:0 2px" onclick="adminGiveColor('${data.id}','${c.id}')">+</button>`}
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- Fonts -->
+        <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Fonts</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${(data.fonts||[]).map(f=>`
+              <div style="display:flex;align-items:center;gap:4px;padding:3px 8px;background:var(--bg-hover);border-radius:99px;border:1px solid ${f.owned?'rgba(91,110,245,0.4)':'var(--border)'}">
+                <span style="font-size:11px;font-weight:700;${f.owned?'color:var(--accent)':''}">${esc(f.name)}</span>
+                ${f.owned
+                  ? `<button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:10px;padding:0 2px" onclick="adminRemoveFont('${data.id}','${f.id}')">✕</button>`
+                  : `<button style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:10px;padding:0 2px" onclick="adminGiveFont('${data.id}','${f.id}')">+</button>`}
+              </div>`).join('')}
+          </div>
+        </div>
+
         <!-- Servers -->
         <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
           <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Servers (${data.servers.length})</div>
@@ -3176,6 +3215,26 @@
     await adminLookupUser();
   };
 
+  window.adminGiveColor = async function(userId, colorId) {
+    const r = await api('POST', '/api/admin/users/'+userId+'/colors', { colorId });
+    if (r.error) return toast(r.error, 'error');
+    toast('Color given', 'success'); await adminLookupUser();
+  };
+  window.adminRemoveColor = async function(userId, colorId) {
+    const r = await api('DELETE', '/api/admin/users/'+userId+'/colors/'+colorId);
+    if (r.error) return toast(r.error, 'error');
+    toast('Color removed', 'info'); await adminLookupUser();
+  };
+  window.adminGiveFont = async function(userId, fontId) {
+    const r = await api('POST', '/api/admin/users/'+userId+'/fonts', { fontId });
+    if (r.error) return toast(r.error, 'error');
+    toast('Font given', 'success'); await adminLookupUser();
+  };
+  window.adminRemoveFont = async function(userId, fontId) {
+    const r = await api('DELETE', '/api/admin/users/'+userId+'/fonts/'+fontId);
+    if (r.error) return toast(r.error, 'error');
+    toast('Font removed', 'info'); await adminLookupUser();
+  };
   window.adminRemoveDeco = async function(userId, decoId) {
     if (!confirm('Remove this decoration from user?')) return;
     const r = await api('DELETE', '/api/admin/users/' + userId + '/decorations/' + decoId);
@@ -3458,10 +3517,35 @@
     }).join('');
   }
 
-  function renderFonts(fonts, active, nexals) {
+  function renderFonts(fonts, active, nexals, fontOnUsername) {
     const grid = $('fonts-grid');
     if (!grid) return;
     const myNexals = nexals || 0;
+    // Inject toggle after grid
+    let toggleDiv = $('font-username-toggle');
+    if (!toggleDiv) {
+      toggleDiv = document.createElement('div');
+      toggleDiv.id = 'font-username-toggle';
+      toggleDiv.style.cssText = 'padding:0 20px 16px;';
+      grid.parentElement.insertBefore(toggleDiv, grid.nextSibling);
+    }
+    const hasFont = active && fonts.find(f => f.id === active && f.owned);
+    toggleDiv.innerHTML = hasFont ? `
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600">
+        <input type="checkbox" id="font-on-username-cb" ${fontOnUsername ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--accent)" />
+        Apply DynaPuff font to my username &amp; display name
+      </label>` : '';
+    if (hasFont) {
+      setTimeout(() => {
+        const cb = $('font-on-username-cb');
+        if (cb) cb.addEventListener('change', async function() {
+          const r = await api('POST', '/api/colors/fonts/toggle-username', { enabled: this.checked });
+          if (r.error) return toast(r.error, 'error');
+          currentUser.fontOnUsername = this.checked;
+          updateSelfCard();
+        });
+      }, 0);
+    }
     grid.innerHTML = fonts.map(f => {
       const isEquipped = active === f.id;
       const isOwned = f.owned;
@@ -3495,6 +3579,7 @@
     const r = await api('POST', '/api/colors/fonts/equip', { fontId: equipId });
     if (r.error) return toast(r.error, 'error');
     currentUser.activeFont = equipId;
+    updateSelfCard();
     toast(action === 'equip' ? 'Font equipped! 🔤' : 'Font removed', 'success');
     await loadColors();
   };
@@ -3694,6 +3779,7 @@
     // Render what we have immediately
     renderAvatar($('popup-avatar'), data);
     $('popup-name').textContent = data.displayName;
+    applyFontClass($('popup-name'), data);
     $('popup-username').textContent = '@' + data.username;
     $('popup-status').className = 'status-dot ' + (data.status === 'online' ? 'online' : '');
     $('popup-bio-section').style.display = 'none';
