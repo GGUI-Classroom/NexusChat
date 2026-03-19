@@ -2676,6 +2676,12 @@ html, body {
   letter-spacing: 0.5px;
 }
 
+.msg-font-pixel {
+  font-family: 'VT323', cursive !important;
+  font-size: 0.8em;
+  letter-spacing: 0.5px;
+}
+
 /* Font shop cards */
 .font-card {
   background: var(--bg-elevated);
@@ -2690,6 +2696,13 @@ html, body {
 .font-card.equipped { border-color: var(--green); box-shadow: 0 0 12px rgba(61,214,140,0.2); }
 .font-preview-text {
   font-family: 'DynaPuff', cursive;
+  font-size: 20px;
+  color: var(--text-primary);
+  padding: 4px 0;
+}
+
+.font-preview-text2 {
+  font-family: 'VT323', cursive;
   font-size: 20px;
   color: var(--text-primary);
   padding: 4px 0;
