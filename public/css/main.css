@@ -2596,7 +2596,8 @@ html, body {
   border-radius: 50%;
   overflow: visible;
   background:
-    radial-gradient(circle at 50% 52%, transparent 60%, rgba(116, 78, 255, 0.13) 67%, rgba(68, 214, 255, 0.1) 74%, transparent 80%);
+    radial-gradient(circle at 50% 50%, rgba(72, 120, 255, 0.12) 0%, rgba(106, 188, 255, 0.08) 36%, transparent 62%),
+    radial-gradient(circle at 50% 52%, transparent 46%, rgba(116, 78, 255, 0.18) 60%, rgba(68, 214, 255, 0.14) 73%, transparent 84%);
   box-shadow:
     0 0 10px rgba(92, 214, 255, 0.34),
     0 0 20px rgba(168, 92, 255, 0.26),
@@ -2625,9 +2626,9 @@ html, body {
     ),
     radial-gradient(circle at 28% 30%, rgba(224, 246, 255, 0.44), transparent 48%),
     radial-gradient(circle at 72% 68%, rgba(196, 150, 255, 0.34), transparent 50%);
-  -webkit-mask: radial-gradient(circle, transparent 58%, #000 63%, #000 78%, transparent 82%);
-          mask: radial-gradient(circle, transparent 58%, #000 63%, #000 78%, transparent 82%);
-  filter: blur(0.2px) saturate(1.15);
+    -webkit-mask: radial-gradient(circle, transparent 36%, #000 44%, #000 84%, transparent 92%);
+      mask: radial-gradient(circle, transparent 36%, #000 44%, #000 84%, transparent 92%);
+    filter: blur(0.3px) saturate(1.17);
   animation: aether-rotate 6.2s linear infinite;
 }
 
@@ -2652,10 +2653,12 @@ html, body {
     radial-gradient(140% 80% at 26% 16%, rgba(150, 244, 255, 0.54) 0%, rgba(118, 202, 255, 0.26) 34%, transparent 62%),
     radial-gradient(130% 76% at 76% 26%, rgba(208, 136, 255, 0.48) 0%, rgba(160, 104, 255, 0.22) 36%, transparent 64%),
     radial-gradient(132% 82% at 20% 74%, rgba(132, 236, 255, 0.4) 0%, rgba(106, 184, 255, 0.18) 34%, transparent 66%),
-    radial-gradient(136% 84% at 82% 76%, rgba(206, 130, 255, 0.38) 0%, rgba(152, 102, 255, 0.16) 34%, transparent 68%);
-  -webkit-mask: radial-gradient(circle, transparent 54%, #000 60%, #000 82%, transparent 88%);
-          mask: radial-gradient(circle, transparent 54%, #000 60%, #000 82%, transparent 88%);
-  filter: blur(0.8px) saturate(1.08) drop-shadow(0 0 8px rgba(164, 228, 255, 0.34));
+    radial-gradient(136% 84% at 82% 76%, rgba(206, 130, 255, 0.38) 0%, rgba(152, 102, 255, 0.16) 34%, transparent 68%),
+    radial-gradient(132% 74% at 20% 48%, transparent 56%, rgba(118, 238, 255, 0.5) 62%, rgba(108, 190, 255, 0.22) 68%, transparent 74%),
+    radial-gradient(126% 72% at 78% 54%, transparent 54%, rgba(208, 130, 255, 0.46) 60%, rgba(170, 106, 255, 0.2) 67%, transparent 74%);
+  -webkit-mask: radial-gradient(circle, transparent 24%, #000 34%, #000 84%, transparent 92%);
+          mask: radial-gradient(circle, transparent 24%, #000 34%, #000 84%, transparent 92%);
+  filter: blur(1px) saturate(1.1) drop-shadow(0 0 9px rgba(164, 228, 255, 0.36));
   animation: aether-spark 6.4s ease-in-out infinite;
 }
 
@@ -2683,17 +2686,17 @@ html, body {
   0%, 100% {
     opacity: 0.78;
     transform: rotate(0deg) scale(1);
-    filter: blur(0.8px) saturate(1.05) drop-shadow(0 0 7px rgba(164, 228, 255, 0.32));
+    filter: blur(1px) saturate(1.08) drop-shadow(0 0 8px rgba(164, 228, 255, 0.34));
   }
   40% {
     opacity: 1;
     transform: rotate(9deg) scale(1.05);
-    filter: blur(1px) saturate(1.1) drop-shadow(0 0 11px rgba(174, 236, 255, 0.46));
+    filter: blur(1.1px) saturate(1.14) drop-shadow(0 0 13px rgba(174, 236, 255, 0.48));
   }
   70% {
     opacity: 0.9;
     transform: rotate(-6deg) scale(1.01);
-    filter: blur(0.9px) saturate(1.06) drop-shadow(0 0 9px rgba(176, 190, 255, 0.38));
+    filter: blur(1px) saturate(1.1) drop-shadow(0 0 10px rgba(176, 190, 255, 0.4));
   }
 }
 
