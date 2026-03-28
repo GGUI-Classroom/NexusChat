@@ -2590,6 +2590,65 @@ html, body {
   overflow: visible;
 }
 
+/* -- MAGMA (mythical) -- */
+.avatar-deco.deco-magma {
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 96, 0, 0.95);
+  box-shadow: 0 0 10px rgba(255, 90, 0, 0.75), 0 0 22px rgba(255, 40, 0, 0.35);
+  background: radial-gradient(circle at 50% 30%, rgba(255, 210, 70, 0.24), rgba(255, 80, 0, 0.06) 55%, transparent 75%);
+  animation: magma-ring-pulse 2.4s ease-in-out infinite;
+  overflow: visible;
+}
+
+.avatar-deco.deco-magma::before,
+.avatar-deco.deco-magma::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffd86a 0%, #ff8a00 36%, #ff4a00 72%, rgba(255, 70, 0, 0.5) 100%);
+  box-shadow: 0 0 8px rgba(255, 118, 0, 0.65), 0 0 14px rgba(255, 52, 0, 0.3);
+  transform-origin: top center;
+}
+
+.avatar-deco.deco-magma::before {
+  left: 19%;
+  width: 9px;
+  height: 17px;
+  animation: magma-drip-left 1.6s ease-in-out infinite;
+}
+
+.avatar-deco.deco-magma::after {
+  right: 22%;
+  width: 7px;
+  height: 13px;
+  animation: magma-drip-right 1.3s ease-in-out infinite;
+}
+
+@keyframes magma-ring-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 90, 0, 0.62), 0 0 18px rgba(255, 40, 0, 0.3);
+    border-color: rgba(255, 100, 0, 0.9);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(255, 120, 0, 0.88), 0 0 28px rgba(255, 36, 0, 0.44);
+    border-color: rgba(255, 150, 40, 1);
+  }
+}
+
+@keyframes magma-drip-left {
+  0%, 100% { transform: translateY(0) scaleY(1); opacity: 0.9; }
+  45% { transform: translateY(6px) scaleY(1.25); opacity: 1; }
+  75% { transform: translateY(2px) scaleY(0.92); opacity: 0.95; }
+}
+
+@keyframes magma-drip-right {
+  0%, 100% { transform: translateY(0) scaleY(1); opacity: 0.88; }
+  50% { transform: translateY(5px) scaleY(1.18); opacity: 1; }
+  80% { transform: translateY(1px) scaleY(0.95); opacity: 0.92; }
+}
+
 /* ===== MESSAGE TEXT COLORS ===== */
 .msg-color-red    { color: #ff4444 !important; }
 .msg-color-orange { color: #ff8c00 !important; }
@@ -2677,6 +2736,12 @@ html, body {
 }
 
 .msg-font-pixel {
+  font-family: 'VT323', cursive !important;
+  font-size: 0.8em;
+  letter-spacing: 0.5px;
+}
+
+.msg-font-vt323 {
   font-family: 'VT323', cursive !important;
   font-size: 0.8em;
   letter-spacing: 0.5px;

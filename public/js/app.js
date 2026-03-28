@@ -3417,6 +3417,7 @@
 
   // ---- Colors Shop ----
   let colorsData = null;
+  let fontsData = null;
 
   async function loadColors() {
     const [r, fr] = await Promise.all([api('GET', '/api/colors'), api('GET', '/api/colors/fonts')]);
@@ -3427,7 +3428,10 @@
       if (nc) nc.textContent = (r.nexals||0).toLocaleString();
       renderColors(r.colors, r.active, r.nexals);
     }
-    if (!fr.error) renderFonts(fr.fonts, fr.active, fr.nexals);
+    if (!fr.error) {
+      fontsData = fr;
+      renderFonts(fr.fonts, fr.active, fr.nexals);
+    }
   }
 
   function previewColorHtml(color) {
@@ -3462,6 +3466,10 @@
     const grid = $('fonts-grid');
     if (!grid) return;
     const myNexals = nexals || 0;
+    const previewStyles = {
+      bubble: "font-family:'DynaPuff',cursive;",
+      vt323: "font-family:'VT323',cursive;letter-spacing:0.6px;"
+    };
     grid.innerHTML = fonts.map(f => {
       const isEquipped = active === f.id;
       const isOwned = f.owned;
@@ -3471,7 +3479,7 @@
       else if (isOwned){ btnClass = 'equip';   btnText = 'Equip'; }
       else if (canBuy) { btnClass = 'buy';     btnText = 'Buy'; }
       return `<div class="font-card ${isOwned?'owned':''} ${isEquipped?'equipped':''}">
-        <div class="font-preview-text">Aa Bb</div>
+        <div class="font-preview-text" style="${previewStyles[f.id] || ''}">Aa Bb</div>
         <div class="color-card-name">${esc(f.name)}</div>
         <div class="color-card-price">${f.price.toLocaleString()} Nexals</div>
         <button class="color-card-btn ${btnClass}" onclick="fontAction('${f.id}','${isEquipped?'unequip':isOwned?'equip':canBuy?'buy':'locked'}')">${btnText}</button>
@@ -3482,12 +3490,15 @@
   window.fontAction = async function(fontId, action) {
     if (action === 'locked') { toast('Not enough Nexals', 'info'); return; }
     if (action === 'buy') {
-      if (!confirm('Buy Bubble font for 15,000 Nexals?')) return;
+      const f = fontsData && fontsData.fonts && fontsData.fonts.find(x => x.id === fontId);
+      const fontName = f ? f.name : fontId;
+      const fontPrice = f ? f.price.toLocaleString() : '?';
+      if (!confirm('Buy ' + fontName + ' font for ' + fontPrice + ' Nexals?')) return;
       const r = await api('POST', '/api/colors/fonts/buy', { fontId });
       if (r.error) return toast(r.error, 'error');
       currentUser.activeFont = fontId;
       updateNexalDisplay(r.nexals);
-      toast('Bubble font unlocked! 🔤', 'success');
+      toast(fontName + ' font unlocked! 🔤', 'success');
       await loadColors();
       return;
     }

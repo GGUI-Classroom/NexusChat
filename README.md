@@ -10,6 +10,7 @@ Built with Node.js, Express, Socket.io, PostgreSQL, and WebRTC.
 - Voice calls via WebRTC peer-to-peer audio
 - Online/offline presence
 - Dark themed UI
+- Multi-instance realtime sync (messages + call signaling) via Redis backplane
 
 ## Local Development
 
@@ -28,7 +29,12 @@ DATABASE_URL=postgres://user:pass@localhost:5432/nexus npm run dev
 - Name: `nexus-db` | Plan: **Free** | Click **Create**
 - Copy the **Internal Database URL** once provisioned
 
-### 2. Push to GitHub
+### 2. Create a shared Redis service
+- Render dashboard → **New → Redis**
+- Name: `nexus-redis` | Plan: **Free** | Click **Create**
+- Copy the **Internal Redis URL**
+
+### 3. Push to GitHub
 ```bash
 git init
 git add .
@@ -39,7 +45,7 @@ git branch -M main
 git push -u origin main
 ```
 
-### 3. Create the Web Service
+### 4. Create the Web Service
 - Render → **New → Web Service** → connect your repo
 - Settings:
   - **Runtime**: Node
@@ -47,15 +53,21 @@ git push -u origin main
   - **Start Command**: `npm start`
   - **Plan**: Free
 
-### 4. Add Environment Variables
+### 5. Add Environment Variables
 | Key | Value |
 |-----|-------|
 | `DATABASE_URL` | Internal DB URL from step 1 |
+| `REDIS_URL` | Internal Redis URL from step 2 |
 | `SESSION_SECRET` | Any long random string |
 | `NODE_ENV` | `production` |
 
-### 5. Deploy
+### 6. Deploy
 Click **Create Web Service** — live in ~2 minutes.
+
+## Multi-Webservice Interconnection (Render Clones)
+- Every cloned web service must use the same `DATABASE_URL` and the same `REDIS_URL`.
+- Redis is required for cross-instance Socket.IO fanout and call state sync.
+- If `REDIS_URL` is missing, realtime works only inside a single web service instance.
 
 ## Notes
 - Free tier: 512 MB RAM, no persistent disk needed (everything in PostgreSQL)

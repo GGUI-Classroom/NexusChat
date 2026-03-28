@@ -66,6 +66,7 @@ module.exports.COLORS = COLORS;
 // ---- FONTS ----
 const FONTS = [
   { id: 'bubble', name: 'DynaPuff', price: 15000, description: 'Chunky DynaPuff bubble font' },
+  { id: 'vt323', name: 'VT323', price: 15000, description: 'Retro terminal pixel font' },
 ];
 
 router.get('/fonts', async (req, res) => {

@@ -1,6 +1,8 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
+const { createClient } = require('redis');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
@@ -13,6 +15,7 @@ const io = new Server(server, { cors: { origin: false } });
 
 const isProd = process.env.NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nexus-dev-secret-change-in-prod';
+const REDIS_URL = process.env.REDIS_URL;
 
 // Trust Render's proxy so secure cookies work over HTTPS
 if (isProd) app.set('trust proxy', 1);
@@ -59,6 +62,83 @@ io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
 const userSockets = new Map();
 const voiceRooms = new Map();
 const userInCall = new Map();
+let redisClient = null;
+const CALL_USER_KEY_PREFIX = 'nexus:call:user:';
+const CALL_ROOM_KEY_PREFIX = 'nexus:call:room:';
+
+async function setupRedisBackplane() {
+  if (!REDIS_URL) {
+    console.warn('REDIS_URL not set, running without cross-instance realtime sync.');
+    return;
+  }
+
+  try {
+    const pubClient = createClient({ url: REDIS_URL });
+    const subClient = pubClient.duplicate();
+    await Promise.all([pubClient.connect(), subClient.connect()]);
+    io.adapter(createAdapter(pubClient, subClient));
+    redisClient = pubClient;
+    console.log('Redis backplane connected for Socket.IO.');
+  } catch (err) {
+    console.error('Redis backplane unavailable, continuing in single-instance mode:', err.message);
+  }
+}
+
+function getCallUserKey(userId) {
+  return `${CALL_USER_KEY_PREFIX}${userId}`;
+}
+
+function getCallRoomKey(roomId) {
+  return `${CALL_ROOM_KEY_PREFIX}${roomId}`;
+}
+
+async function getUserCallRoom(userId) {
+  if (redisClient && redisClient.isOpen) {
+    return redisClient.get(getCallUserKey(userId));
+  }
+  return userInCall.get(userId) || null;
+}
+
+async function setUserCallRoom(userId, roomId) {
+  if (redisClient && redisClient.isOpen) {
+    await redisClient.set(getCallUserKey(userId), roomId, { EX: 60 * 60 * 12 });
+  }
+  userInCall.set(userId, roomId);
+}
+
+async function clearUserCallRoom(userId) {
+  if (redisClient && redisClient.isOpen) {
+    await redisClient.del(getCallUserKey(userId));
+  }
+  userInCall.delete(userId);
+}
+
+async function setRoomParticipants(roomId, participants) {
+  if (redisClient && redisClient.isOpen) {
+    const roomKey = getCallRoomKey(roomId);
+    await redisClient.del(roomKey);
+    if (participants.length) {
+      await redisClient.sAdd(roomKey, participants.map(String));
+      await redisClient.expire(roomKey, 60 * 60 * 12);
+    }
+  }
+  voiceRooms.set(roomId, new Set(participants));
+}
+
+async function getRoomParticipants(roomId) {
+  if (redisClient && redisClient.isOpen) {
+    const participants = await redisClient.sMembers(getCallRoomKey(roomId));
+    return new Set(participants || []);
+  }
+  return voiceRooms.get(roomId) || new Set();
+}
+
+async function clearRoomParticipants(roomId) {
+  if (redisClient && redisClient.isOpen) {
+    await redisClient.del(getCallRoomKey(roomId));
+  }
+  voiceRooms.delete(roomId);
+}
 
 io.use((socket, next) => {
   const sess = socket.request.session;
@@ -312,7 +392,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('call_invite', async ({ toId }) => {
-    if (userInCall.has(toId)) { socket.emit('call_busy', { userId: toId }); return; }
+    const targetRoom = await getUserCallRoom(toId);
+    if (targetRoom) { socket.emit('call_busy', { userId: toId }); return; }
     const roomId = uuidv4();
     const caller = await pool.query('SELECT username, display_name, avatar_data, avatar_mime FROM users WHERE id=$1', [userId]);
     const c = caller.rows[0];
@@ -326,10 +407,10 @@ io.on('connection', (socket) => {
     socket.emit('call_ringing', { roomId, toId });
   });
 
-  socket.on('call_accept', ({ roomId, toId }) => {
-    voiceRooms.set(roomId, new Set([userId, toId]));
-    userInCall.set(userId, roomId);
-    userInCall.set(toId, roomId);
+  socket.on('call_accept', async ({ roomId, toId }) => {
+    await setRoomParticipants(roomId, [userId, toId]);
+    await setUserCallRoom(userId, roomId);
+    await setUserCallRoom(toId, roomId);
     socket.join(`call:${roomId}`);
     io.to(`user:${toId}`).emit('call_accepted', { roomId, byId: userId });
     socket.emit('call_joined', { roomId });
@@ -354,11 +435,14 @@ io.on('connection', (socket) => {
     io.to(`user:${toId}`).emit('webrtc_ice', { roomId, fromId: userId, candidate });
   });
 
-  socket.on('call_end', ({ roomId }) => {
-    const room = voiceRooms.get(roomId);
-    if (room) {
-      room.forEach(uid => { userInCall.delete(uid); io.to(`user:${uid}`).emit('call_ended', { roomId }); });
-      voiceRooms.delete(roomId);
+  socket.on('call_end', async ({ roomId }) => {
+    const room = await getRoomParticipants(roomId);
+    if (room && room.size) {
+      for (const uid of room) {
+        await clearUserCallRoom(uid);
+        io.to(`user:${uid}`).emit('call_ended', { roomId });
+      }
+      await clearRoomParticipants(roomId);
     }
     socket.leave(`call:${roomId}`);
   });
@@ -383,14 +467,19 @@ io.on('connection', (socket) => {
         userSockets.delete(userId);
         await pool.query("UPDATE users SET status='offline' WHERE id=$1", [userId]);
         broadcastStatusChange(userId, 'offline');
-        const roomId = userInCall.get(userId);
+        const roomId = await getUserCallRoom(userId);
         if (roomId) {
-          const room = voiceRooms.get(roomId);
-          if (room) {
-            room.forEach(uid => { if (uid !== userId) { userInCall.delete(uid); io.to(`user:${uid}`).emit('call_ended', { roomId }); } });
-            voiceRooms.delete(roomId);
+          const room = await getRoomParticipants(roomId);
+          if (room && room.size) {
+            for (const uid of room) {
+              if (uid !== userId) {
+                await clearUserCallRoom(uid);
+                io.to(`user:${uid}`).emit('call_ended', { roomId });
+              }
+            }
+            await clearRoomParticipants(roomId);
           }
-          userInCall.delete(userId);
+          await clearUserCallRoom(userId);
         }
       }
     }
@@ -408,9 +497,13 @@ async function broadcastStatusChange(userId, status) {
 
 const PORT = process.env.PORT || 3000;
 
-initDb().then(() => {
+async function start() {
+  await initDb();
+  await setupRedisBackplane();
   server.listen(PORT, () => console.log(`Nexus running on port ${PORT}`));
-}).catch(err => {
-  console.error('Failed to initialize database:', err);
+}
+
+start().catch(err => {
+  console.error('Failed to initialize server:', err);
   process.exit(1);
 });
