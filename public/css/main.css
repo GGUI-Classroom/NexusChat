@@ -2596,7 +2596,7 @@ html, body {
   border-radius: 50%;
   overflow: visible;
   background:
-    radial-gradient(circle at 50% 52%, transparent 58%, rgba(116, 78, 255, 0.15) 66%, rgba(68, 214, 255, 0.11) 74%, transparent 84%);
+    radial-gradient(circle at 50% 52%, transparent 66%, rgba(116, 78, 255, 0.13) 71%, rgba(68, 214, 255, 0.1) 76%, transparent 84%);
   box-shadow:
     0 0 10px rgba(92, 214, 255, 0.34),
     0 0 20px rgba(168, 92, 255, 0.26),
@@ -2625,8 +2625,8 @@ html, body {
     ),
     radial-gradient(circle at 28% 30%, rgba(224, 246, 255, 0.44), transparent 48%),
     radial-gradient(circle at 72% 68%, rgba(196, 150, 255, 0.34), transparent 50%);
-      -webkit-mask: radial-gradient(circle, transparent 53%, #000 60%, #000 82%, transparent 90%);
-        mask: radial-gradient(circle, transparent 53%, #000 60%, #000 82%, transparent 90%);
+        -webkit-mask: radial-gradient(circle, transparent 64%, #000 69%, #000 79%, transparent 88%);
+          mask: radial-gradient(circle, transparent 64%, #000 69%, #000 79%, transparent 88%);
     filter: blur(0.3px) saturate(1.17);
   animation: aether-rotate 6.2s linear infinite;
 }
@@ -2655,8 +2655,8 @@ html, body {
     radial-gradient(136% 84% at 82% 76%, rgba(206, 130, 255, 0.38) 0%, rgba(152, 102, 255, 0.16) 34%, transparent 68%),
     radial-gradient(132% 74% at 20% 48%, transparent 60%, rgba(118, 238, 255, 0.44) 66%, rgba(108, 190, 255, 0.18) 72%, transparent 78%),
     radial-gradient(126% 72% at 78% 54%, transparent 58%, rgba(208, 130, 255, 0.4) 64%, rgba(170, 106, 255, 0.17) 71%, transparent 78%);
-  -webkit-mask: radial-gradient(circle, transparent 48%, #000 56%, #000 84%, transparent 92%);
-          mask: radial-gradient(circle, transparent 48%, #000 56%, #000 84%, transparent 92%);
+    -webkit-mask: radial-gradient(circle, transparent 61%, #000 67%, #000 80%, transparent 89%);
+      mask: radial-gradient(circle, transparent 61%, #000 67%, #000 80%, transparent 89%);
   filter: blur(1px) saturate(1.1) drop-shadow(0 0 9px rgba(164, 228, 255, 0.36));
   animation: aether-spark 6.4s ease-in-out infinite;
 }
