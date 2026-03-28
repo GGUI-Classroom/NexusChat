@@ -152,6 +152,7 @@ const DECORATIONS = [
   { id: 'hydro',        nexalPrice: null, name: 'Hydro',          description: 'Shimmering water ripples and bubbles orbit your avatar.',rarity: 'mythical',  preview: 'hydro' },
   { id: 'shatter',      nexalPrice: null, name: 'Shatter',        description: 'Glass forms over your avatar, glints, then dramatically shatters. Reforms every 5s.', rarity: 'mythical', preview: 'shatter' },
   { id: 'yinyang',      nexalPrice: null, name: 'Yin & Yang',     description: 'Balance of light and dark. Every 5s, the symbol manifests.', rarity: 'mythical', preview: 'yinyang' },
+  { id: 'aether_mist',  nexalPrice: 10000, name: 'Aether Mist',   description: 'Iridescent mist swirls with astral sparks in a premium aura.', rarity: 'mythical', preview: 'aether_mist' },
   { id: 'magma',        nexalPrice: 10000, name: 'Magma',         description: 'Molten lava drips from above your profile in a fiery flow.', rarity: 'mythical', preview: 'magma' },
 ];
 
