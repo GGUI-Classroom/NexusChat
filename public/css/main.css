@@ -2633,17 +2633,30 @@ html, body {
 
 .avatar-deco.deco-aether_mist::after {
   background-image:
-    radial-gradient(circle at center, rgba(234, 247, 255, 0.95) 0 32%, rgba(166, 236, 255, 0.6) 48%, transparent 74%),
-    radial-gradient(circle at center, rgba(248, 230, 255, 0.9) 0 30%, rgba(210, 152, 255, 0.55) 46%, transparent 72%),
-    radial-gradient(circle at center, rgba(230, 246, 255, 0.84) 0 28%, rgba(126, 210, 255, 0.45) 44%, transparent 70%),
-    radial-gradient(circle at center, rgba(255, 245, 255, 0.88) 0 30%, rgba(190, 128, 255, 0.5) 46%, transparent 72%),
-    radial-gradient(circle at center, rgba(232, 255, 255, 0.82) 0 28%, rgba(104, 224, 255, 0.42) 44%, transparent 70%),
-    radial-gradient(circle at center, rgba(244, 235, 255, 0.82) 0 28%, rgba(168, 110, 255, 0.42) 44%, transparent 70%);
-  background-repeat: no-repeat;
-  background-size: 4px 4px, 3px 3px, 3px 3px, 4px 4px, 2px 2px, 2px 2px;
-  background-position: 12% 28%, 26% 12%, 46% 8%, 71% 18%, 84% 40%, 20% 72%;
-  filter: blur(0.1px) drop-shadow(0 0 2px rgba(184, 234, 255, 0.55));
-  animation: aether-spark 5.1s ease-in-out infinite;
+    conic-gradient(
+      from 18deg,
+      transparent 0deg,
+      rgba(132, 246, 255, 0.7) 40deg,
+      rgba(138, 214, 255, 0.34) 64deg,
+      transparent 92deg,
+      transparent 126deg,
+      rgba(206, 132, 255, 0.68) 160deg,
+      rgba(186, 116, 255, 0.3) 182deg,
+      transparent 216deg,
+      transparent 250deg,
+      rgba(120, 236, 255, 0.66) 286deg,
+      rgba(112, 186, 255, 0.28) 308deg,
+      transparent 342deg,
+      transparent 360deg
+    ),
+    radial-gradient(140% 80% at 26% 16%, rgba(150, 244, 255, 0.54) 0%, rgba(118, 202, 255, 0.26) 34%, transparent 62%),
+    radial-gradient(130% 76% at 76% 26%, rgba(208, 136, 255, 0.48) 0%, rgba(160, 104, 255, 0.22) 36%, transparent 64%),
+    radial-gradient(132% 82% at 20% 74%, rgba(132, 236, 255, 0.4) 0%, rgba(106, 184, 255, 0.18) 34%, transparent 66%),
+    radial-gradient(136% 84% at 82% 76%, rgba(206, 130, 255, 0.38) 0%, rgba(152, 102, 255, 0.16) 34%, transparent 68%);
+  -webkit-mask: radial-gradient(circle, transparent 54%, #000 60%, #000 82%, transparent 88%);
+          mask: radial-gradient(circle, transparent 54%, #000 60%, #000 82%, transparent 88%);
+  filter: blur(0.8px) saturate(1.08) drop-shadow(0 0 8px rgba(164, 228, 255, 0.34));
+  animation: aether-spark 6.4s ease-in-out infinite;
 }
 
 @keyframes aether-rotate {
@@ -2668,19 +2681,19 @@ html, body {
 
 @keyframes aether-spark {
   0%, 100% {
-    opacity: 0.72;
+    opacity: 0.78;
     transform: rotate(0deg) scale(1);
-    background-position: 12% 28%, 26% 12%, 46% 8%, 71% 18%, 84% 40%, 20% 72%;
+    filter: blur(0.8px) saturate(1.05) drop-shadow(0 0 7px rgba(164, 228, 255, 0.32));
   }
   40% {
     opacity: 1;
-    transform: rotate(6deg) scale(1.03);
-    background-position: 16% 24%, 32% 16%, 52% 13%, 74% 24%, 80% 46%, 24% 68%;
+    transform: rotate(9deg) scale(1.05);
+    filter: blur(1px) saturate(1.1) drop-shadow(0 0 11px rgba(174, 236, 255, 0.46));
   }
   70% {
     opacity: 0.9;
-    transform: rotate(-4deg) scale(0.99);
-    background-position: 18% 30%, 28% 20%, 48% 16%, 68% 28%, 76% 50%, 22% 62%;
+    transform: rotate(-6deg) scale(1.01);
+    filter: blur(0.9px) saturate(1.06) drop-shadow(0 0 9px rgba(176, 190, 255, 0.38));
   }
 }
 
