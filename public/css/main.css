@@ -2592,12 +2592,18 @@ html, body {
 
 /* -- MAGMA (mythical) -- */
 .avatar-deco.deco-magma {
-  inset: -3px;
+  inset: -4px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 96, 0, 0.95);
-  box-shadow: 0 0 10px rgba(255, 90, 0, 0.75), 0 0 22px rgba(255, 40, 0, 0.35);
-  background: radial-gradient(circle at 50% 30%, rgba(255, 210, 70, 0.24), rgba(255, 80, 0, 0.06) 55%, transparent 75%);
-  animation: magma-ring-pulse 2.4s ease-in-out infinite;
+  border: 1px solid rgba(210, 70, 6, 0.44);
+  box-shadow:
+    0 0 7px rgba(232, 74, 8, 0.35),
+    0 0 15px rgba(204, 40, 0, 0.2),
+    inset 0 7px 12px rgba(255, 145, 44, 0.12),
+    inset 0 -6px 13px rgba(52, 6, 0, 0.62);
+  background:
+    radial-gradient(circle at 50% 4%, rgba(255, 176, 76, 0.22) 0 12%, transparent 30%),
+    radial-gradient(circle at 50% 50%, transparent 63%, rgba(226, 70, 0, 0.17) 68%, rgba(186, 34, 0, 0.11) 73%, transparent 79%);
+  animation: magma-ring-pulse 2.6s ease-in-out infinite;
   overflow: visible;
 }
 
@@ -2605,48 +2611,107 @@ html, body {
 .avatar-deco.deco-magma::after {
   content: '';
   position: absolute;
-  top: -6px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #ffd86a 0%, #ff8a00 36%, #ff4a00 72%, rgba(255, 70, 0, 0.5) 100%);
-  box-shadow: 0 0 8px rgba(255, 118, 0, 0.65), 0 0 14px rgba(255, 52, 0, 0.3);
-  transform-origin: top center;
+  inset: -2px;
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .avatar-deco.deco-magma::before {
-  left: 19%;
-  width: 9px;
-  height: 17px;
-  animation: magma-drip-left 1.6s ease-in-out infinite;
+  background: conic-gradient(
+    from 28deg,
+    #240400 0deg,
+    #320600 32deg,
+    #4d0d00 52deg,
+    #d44600 74deg,
+    #ffad4e 84deg,
+    #e55b00 96deg,
+    #460d00 126deg,
+    #2e0600 165deg,
+    #451000 212deg,
+    #c83f00 244deg,
+    #f89f42 258deg,
+    #d84f00 273deg,
+    #4a0d00 308deg,
+    #260400 360deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 59%, #000 63%, #000 77%, transparent 81%);
+          mask: radial-gradient(circle, transparent 59%, #000 63%, #000 77%, transparent 81%);
+  filter: saturate(1.22) contrast(1.06) blur(0.2px);
+  animation: magma-flow 12s linear infinite, magma-ring-pulse 2.6s ease-in-out infinite;
 }
 
 .avatar-deco.deco-magma::after {
-  right: 22%;
-  width: 7px;
-  height: 13px;
-  animation: magma-drip-right 1.3s ease-in-out infinite;
+  background-image:
+    radial-gradient(circle, rgba(255, 196, 102, 0.86) 0 38%, rgba(233, 78, 0, 0.86) 53%, rgba(210, 36, 0, 0.62) 67%, transparent 76%),
+    radial-gradient(circle, rgba(246, 166, 72, 0.82) 0 40%, rgba(220, 66, 0, 0.82) 55%, rgba(200, 30, 0, 0.6) 68%, transparent 76%),
+    radial-gradient(circle, rgba(250, 184, 92, 0.8) 0 39%, rgba(230, 76, 0, 0.82) 54%, rgba(205, 32, 0, 0.58) 67%, transparent 75%),
+    radial-gradient(circle, rgba(234, 150, 62, 0.82) 0 39%, rgba(214, 58, 0, 0.8) 54%, rgba(188, 26, 0, 0.58) 67%, transparent 76%),
+    radial-gradient(circle, rgba(244, 172, 82, 0.8) 0 39%, rgba(224, 72, 0, 0.8) 54%, rgba(196, 30, 0, 0.58) 67%, transparent 76%),
+    radial-gradient(circle, rgba(238, 160, 70, 0.76) 0 38%, rgba(210, 62, 0, 0.76) 53%, rgba(180, 22, 0, 0.54) 66%, transparent 75%);
+  background-repeat: no-repeat;
+  background-size: 8px 13px, 7px 11px, 8px 12px, 6px 10px, 7px 11px, 5px 9px;
+  background-position: 14% -8%, 29% -10%, 46% -8%, 62% -11%, 78% -9%, 88% -12%;
+  filter: drop-shadow(0 0 2px rgba(242, 138, 58, 0.24)) drop-shadow(0 0 4px rgba(220, 52, 0, 0.16));
+  animation: magma-drops-fall 5.6s cubic-bezier(0.24, 0.05, 0.22, 1) infinite;
 }
 
 @keyframes magma-ring-pulse {
   0%, 100% {
-    box-shadow: 0 0 8px rgba(255, 90, 0, 0.62), 0 0 18px rgba(255, 40, 0, 0.3);
-    border-color: rgba(255, 100, 0, 0.9);
+    box-shadow:
+      0 0 5px rgba(224, 74, 8, 0.3),
+      0 0 12px rgba(200, 38, 0, 0.18),
+      inset 0 6px 10px rgba(238, 144, 54, 0.09),
+      inset 0 -6px 13px rgba(56, 6, 0, 0.62);
+    border-color: rgba(198, 64, 8, 0.36);
   }
   50% {
-    box-shadow: 0 0 14px rgba(255, 120, 0, 0.88), 0 0 28px rgba(255, 36, 0, 0.44);
-    border-color: rgba(255, 150, 40, 1);
+    box-shadow:
+      0 0 9px rgba(234, 98, 10, 0.5),
+      0 0 20px rgba(222, 44, 0, 0.28),
+      inset 0 8px 13px rgba(248, 178, 76, 0.15),
+      inset 0 -6px 14px rgba(62, 7, 0, 0.64);
+    border-color: rgba(220, 88, 18, 0.54);
   }
 }
 
-@keyframes magma-drip-left {
-  0%, 100% { transform: translateY(0) scaleY(1); opacity: 0.9; }
-  45% { transform: translateY(6px) scaleY(1.25); opacity: 1; }
-  75% { transform: translateY(2px) scaleY(0.92); opacity: 0.95; }
+@keyframes magma-flow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
-@keyframes magma-drip-right {
-  0%, 100% { transform: translateY(0) scaleY(1); opacity: 0.88; }
-  50% { transform: translateY(5px) scaleY(1.18); opacity: 1; }
-  80% { transform: translateY(1px) scaleY(0.95); opacity: 0.92; }
+@keyframes magma-drops-fall {
+  0% {
+    opacity: 0;
+    background-position: 14% -11%, 29% -13%, 46% -11%, 62% -14%, 78% -12%, 88% -15%;
+  }
+  10% {
+    opacity: 1;
+    background-position: 14% -2%, 29% -4%, 46% -1%, 62% -5%, 78% -3%, 88% -6%;
+  }
+  24% {
+    opacity: 0.98;
+    background-position: 14% 8%, 29% 7%, 46% 10%, 62% 8%, 78% 9%, 88% 7%;
+  }
+  52% {
+    opacity: 0.92;
+    background-position: 14% 42%, 29% 49%, 46% 45%, 62% 52%, 78% 44%, 88% 50%;
+  }
+  76% {
+    opacity: 0.78;
+    background-position: 14% 76%, 29% 81%, 46% 84%, 62% 79%, 78% 83%, 88% 80%;
+  }
+  90% {
+    opacity: 0.4;
+    background-position: 14% 95%, 29% 98%, 46% 100%, 62% 97%, 78% 99%, 88% 96%;
+    background-size: 9px 7px, 8px 6px, 9px 7px, 7px 6px, 8px 6px, 6px 5px;
+    filter: drop-shadow(0 0 1px rgba(242, 138, 58, 0.16));
+  }
+  100% {
+    opacity: 0;
+    background-position: 14% 106%, 29% 108%, 46% 110%, 62% 107%, 78% 109%, 88% 106%;
+    background-size: 10px 4px, 9px 4px, 10px 4px, 8px 4px, 9px 4px, 7px 3px;
+    filter: drop-shadow(0 0 0 rgba(242, 138, 58, 0));
+  }
 }
 
 /* ===== MESSAGE TEXT COLORS ===== */
