@@ -2642,29 +2642,23 @@ html, body {
 
 .avatar-deco.deco-magma::after {
   background-image:
-    linear-gradient(180deg, rgba(255,170,84,0.94) 0%, rgba(233,78,0,0.86) 72%, rgba(205,36,0,0) 100%),
-    radial-gradient(ellipse at 50% 72%, rgba(255,196,102,0.9) 0 36%, rgba(232,76,0,0.84) 54%, rgba(194,30,0,0.62) 72%, transparent 82%),
-    linear-gradient(180deg, rgba(248,156,72,0.9) 0%, rgba(220,66,0,0.82) 70%, rgba(190,30,0,0) 100%),
-    radial-gradient(ellipse at 50% 70%, rgba(246,166,72,0.86) 0 38%, rgba(214,62,0,0.8) 56%, rgba(186,28,0,0.58) 72%, transparent 82%),
-    linear-gradient(180deg, rgba(252,176,90,0.9) 0%, rgba(230,76,0,0.84) 72%, rgba(198,30,0,0) 100%),
-    radial-gradient(ellipse at 50% 72%, rgba(250,184,92,0.84) 0 37%, rgba(226,72,0,0.82) 55%, rgba(188,30,0,0.58) 72%, transparent 82%),
-    linear-gradient(180deg, rgba(238,148,62,0.88) 0%, rgba(214,58,0,0.78) 70%, rgba(176,24,0,0) 100%),
-    radial-gradient(ellipse at 50% 70%, rgba(234,150,62,0.84) 0 38%, rgba(208,54,0,0.78) 56%, rgba(178,24,0,0.56) 72%, transparent 82%),
-    linear-gradient(180deg, rgba(246,168,80,0.88) 0%, rgba(224,72,0,0.8) 70%, rgba(186,28,0,0) 100%),
-    radial-gradient(ellipse at 50% 72%, rgba(244,172,82,0.84) 0 37%, rgba(220,70,0,0.8) 55%, rgba(184,28,0,0.56) 72%, transparent 82%),
-    linear-gradient(180deg, rgba(240,158,70,0.84) 0%, rgba(210,62,0,0.76) 70%, rgba(170,22,0,0) 100%),
-    radial-gradient(ellipse at 50% 70%, rgba(238,160,70,0.8) 0 36%, rgba(206,58,0,0.76) 54%, rgba(168,22,0,0.54) 72%, transparent 82%),
-    linear-gradient(180deg, rgba(255,188,96,0.92) 0%, rgba(236,86,0,0.88) 58%, rgba(195,34,0,0.58) 78%, rgba(160,18,0,0) 100%),
-    radial-gradient(ellipse at 50% 64%, rgba(255,205,118,0.92) 0 40%, rgba(238,88,0,0.88) 56%, rgba(188,28,0,0.62) 74%, transparent 84%),
-    radial-gradient(ellipse at 34% 58%, rgba(250,158,78,0.66) 0 34%, rgba(200,44,0,0.42) 54%, transparent 76%),
-    radial-gradient(ellipse at 70% 62%, rgba(248,148,70,0.62) 0 32%, rgba(190,36,0,0.4) 52%, transparent 74%),
-    linear-gradient(118deg, transparent 0%, rgba(255,170,86,0.72) 36%, rgba(218,66,0,0.5) 58%, transparent 86%),
-    linear-gradient(62deg, transparent 0%, rgba(250,162,78,0.68) 34%, rgba(210,60,0,0.48) 56%, transparent 84%);
+    linear-gradient(180deg, rgba(255,198,112,0.92) 0%, rgba(240,92,0,0.88) 56%, rgba(198,34,0,0.62) 80%, rgba(150,14,0,0) 100%),
+    radial-gradient(ellipse at 50% 64%, rgba(255,214,132,0.94) 0 38%, rgba(242,94,0,0.9) 56%, rgba(194,30,0,0.64) 74%, transparent 86%),
+    radial-gradient(ellipse at 32% 58%, rgba(252,170,86,0.72) 0 34%, rgba(208,48,0,0.46) 54%, transparent 78%),
+    radial-gradient(ellipse at 70% 60%, rgba(248,156,76,0.68) 0 34%, rgba(198,40,0,0.42) 54%, transparent 78%),
+    linear-gradient(180deg, rgba(250,178,92,0.88) 0%, rgba(228,74,0,0.82) 68%, rgba(184,28,0,0) 100%),
+    radial-gradient(ellipse at 50% 72%, rgba(246,182,98,0.86) 0 38%, rgba(224,68,0,0.8) 56%, rgba(180,26,0,0.58) 74%, transparent 84%),
+    linear-gradient(180deg, rgba(244,164,80,0.84) 0%, rgba(220,64,0,0.78) 66%, rgba(176,22,0,0) 100%),
+    radial-gradient(ellipse at 50% 70%, rgba(238,166,80,0.82) 0 38%, rgba(214,58,0,0.76) 56%, rgba(172,22,0,0.54) 74%, transparent 84%),
+    linear-gradient(180deg, rgba(242,160,76,0.82) 0%, rgba(214,60,0,0.76) 66%, rgba(170,22,0,0) 100%),
+    radial-gradient(ellipse at 50% 70%, rgba(236,160,76,0.8) 0 38%, rgba(208,56,0,0.74) 56%, rgba(166,20,0,0.52) 74%, transparent 84%),
+    linear-gradient(116deg, transparent 0%, rgba(255,174,92,0.56) 38%, rgba(216,64,0,0.38) 60%, transparent 84%),
+    linear-gradient(64deg, transparent 0%, rgba(252,166,86,0.54) 36%, rgba(206,58,0,0.36) 58%, transparent 82%);
   background-repeat: no-repeat;
-  background-size: 3px 7px, 7px 8px, 2px 6px, 6px 7px, 3px 8px, 7px 8px, 2px 7px, 6px 7px, 3px 7px, 7px 8px, 2px 6px, 6px 7px, 8px 20px, 17px 18px, 7px 9px, 8px 8px, 10px 3px, 9px 3px;
-  background-position: 13% -16%, 13% -11%, 27% -18%, 27% -13%, 43% -15%, 43% -10%, 59% -19%, 59% -14%, 74% -17%, 74% -12%, 86% -20%, 86% -15%, 50% -20%, 50% -9%, 45% -7%, 56% -8%, 8% -12%, 91% -13%;
-  filter: drop-shadow(0 0 2px rgba(242, 138, 58, 0.24)) drop-shadow(0 0 4px rgba(220, 52, 0, 0.16));
-  animation: magma-drops-fall 7.6s cubic-bezier(0.24, 0.05, 0.22, 1) infinite;
+  background-size: 8px 24px, 20px 20px, 8px 10px, 9px 9px, 5px 13px, 12px 12px, 4px 11px, 10px 10px, 4px 10px, 9px 9px, 12px 4px, 10px 4px;
+  background-position: 50% -22%, 50% -10%, 45% -7%, 57% -8%, 24% -16%, 24% -9%, 74% -17%, 74% -10%, 86% -18%, 86% -11%, 8% -12%, 91% -13%;
+  filter: blur(0.08px) drop-shadow(0 0 2px rgba(242, 138, 58, 0.22)) drop-shadow(0 0 5px rgba(220, 52, 0, 0.14));
+  animation: magma-drops-fall 7.9s cubic-bezier(0.24, 0.05, 0.22, 1) infinite;
 }
 
 @keyframes magma-ring-pulse {
@@ -2694,46 +2688,46 @@ html, body {
 @keyframes magma-drops-fall {
   0% {
     opacity: 0;
-    background-position: 13% -16%, 13% -11%, 27% -18%, 27% -13%, 43% -15%, 43% -10%, 59% -19%, 59% -14%, 74% -17%, 74% -12%, 86% -20%, 86% -15%, 50% -20%, 50% -9%, 45% -7%, 56% -8%, 8% -12%, 91% -13%;
-    background-size: 3px 7px, 7px 8px, 2px 6px, 6px 7px, 3px 8px, 7px 8px, 2px 7px, 6px 7px, 3px 7px, 7px 8px, 2px 6px, 6px 7px, 8px 20px, 17px 18px, 7px 9px, 8px 8px, 10px 3px, 9px 3px;
+    background-position: 50% -22%, 50% -10%, 45% -7%, 57% -8%, 24% -16%, 24% -9%, 74% -17%, 74% -10%, 86% -18%, 86% -11%, 8% -12%, 91% -13%;
+    background-size: 8px 24px, 20px 20px, 8px 10px, 9px 9px, 5px 13px, 12px 12px, 4px 11px, 10px 10px, 4px 10px, 9px 9px, 12px 4px, 10px 4px;
   }
   10% {
     opacity: 1;
-    background-position: 13% -9%, 13% -4%, 27% -11%, 27% -6%, 43% -8%, 43% -3%, 59% -12%, 59% -7%, 74% -10%, 74% -5%, 86% -13%, 86% -8%, 50% -16%, 50% -5%, 45% -4%, 56% -5%, 9% -8%, 90% -9%;
+    background-position: 50% -18%, 50% -6%, 45% -4%, 57% -5%, 24% -11%, 24% -4%, 74% -12%, 74% -5%, 86% -13%, 86% -6%, 9% -8%, 90% -9%;
   }
   22% {
     opacity: 0.98;
-    background-position: 13% -4%, 13% 1%, 27% -6%, 27% -1%, 43% -3%, 43% 2%, 59% -7%, 59% -2%, 74% -5%, 74% 0%, 86% -8%, 86% -3%, 50% -13%, 50% -2%, 45% -2%, 56% -2%, 10% -6%, 89% -7%;
-    background-size: 3px 12px, 8px 9px, 2px 10px, 7px 8px, 3px 13px, 8px 9px, 2px 10px, 7px 8px, 3px 11px, 8px 9px, 2px 10px, 7px 8px, 8px 24px, 18px 18px, 7px 9px, 8px 8px, 12px 4px, 10px 4px;
+    background-position: 50% -14%, 50% -2%, 45% -1%, 57% -1%, 24% -7%, 24% 0%, 74% -8%, 74% -1%, 86% -8%, 86% -1%, 10% -6%, 89% -7%;
+    background-size: 9px 30px, 22px 21px, 8px 11px, 9px 10px, 6px 16px, 13px 13px, 5px 13px, 11px 11px, 5px 12px, 10px 10px, 14px 4px, 12px 4px;
   }
   36% {
     opacity: 0.98;
-    background-position: 13% -2%, 13% 3%, 27% -4%, 27% 1%, 43% -1%, 43% 4%, 59% -5%, 59% 0%, 74% -2%, 74% 3%, 86% -6%, 86% -1%, 50% -10%, 50% 1%, 45% 0%, 56% 0%, 10% -5%, 89% -6%;
-    background-size: 3px 15px, 8px 9px, 2px 13px, 7px 8px, 3px 16px, 8px 9px, 2px 12px, 7px 8px, 3px 14px, 8px 9px, 2px 13px, 7px 8px, 9px 28px, 18px 19px, 7px 10px, 8px 9px, 13px 4px, 11px 4px;
+    background-position: 50% -11%, 50% 1%, 45% 1%, 57% 1%, 24% -4%, 24% 3%, 74% -5%, 74% 2%, 86% -5%, 86% 2%, 10% -5%, 89% -6%;
+    background-size: 10px 34px, 23px 22px, 9px 12px, 10px 11px, 6px 19px, 13px 13px, 5px 16px, 12px 11px, 5px 14px, 11px 10px, 14px 4px, 12px 4px;
   }
   50% {
     opacity: 0.92;
-    background-position: 13% 16%, 13% 22%, 27% 20%, 27% 26%, 43% 18%, 43% 24%, 59% 22%, 59% 28%, 74% 20%, 74% 26%, 86% 24%, 86% 30%, 50% 8%, 50% 18%, 45% 15%, 56% 16%, 11% 2%, 88% 1%;
-    background-size: 3px 11px, 8px 9px, 2px 10px, 7px 8px, 3px 12px, 8px 9px, 2px 10px, 7px 8px, 3px 11px, 8px 9px, 2px 10px, 7px 8px, 8px 22px, 18px 17px, 6px 8px, 7px 7px, 8px 2px, 7px 2px;
+    background-position: 50% 8%, 50% 19%, 45% 16%, 57% 16%, 24% 14%, 24% 22%, 74% 18%, 74% 26%, 86% 21%, 86% 28%, 11% 2%, 88% 1%;
+    background-size: 8px 24px, 22px 18px, 7px 9px, 8px 8px, 5px 13px, 12px 12px, 4px 11px, 10px 10px, 4px 10px, 9px 9px, 8px 2px, 7px 2px;
   }
   70% {
     opacity: 0.78;
-    background-position: 13% 46%, 13% 53%, 27% 52%, 27% 58%, 43% 49%, 43% 56%, 59% 54%, 59% 60%, 74% 50%, 74% 57%, 86% 56%, 86% 62%, 50% 43%, 50% 54%, 45% 50%, 56% 51%, 12% 28%, 87% 27%;
+    background-position: 50% 43%, 50% 55%, 45% 50%, 57% 51%, 24% 44%, 24% 52%, 74% 50%, 74% 58%, 86% 54%, 86% 61%, 12% 28%, 87% 27%;
   }
   86% {
     opacity: 0.58;
-    background-position: 13% 78%, 13% 84%, 27% 82%, 27% 88%, 43% 80%, 43% 86%, 59% 84%, 59% 90%, 74% 81%, 74% 87%, 86% 85%, 86% 91%, 50% 78%, 50% 88%, 45% 84%, 56% 85%, 12% 54%, 87% 53%;
+    background-position: 50% 78%, 50% 90%, 45% 84%, 57% 85%, 24% 80%, 24% 88%, 74% 84%, 74% 92%, 86% 88%, 86% 95%, 12% 54%, 87% 53%;
   }
   94% {
     opacity: 0.4;
-    background-position: 13% 94%, 13% 99%, 27% 97%, 27% 101%, 43% 96%, 43% 101%, 59% 98%, 59% 102%, 74% 96%, 74% 101%, 86% 99%, 86% 103%, 50% 95%, 50% 102%, 45% 98%, 56% 99%, 12% 82%, 87% 81%;
-    background-size: 6px 3px, 10px 5px, 5px 3px, 9px 4px, 6px 3px, 10px 5px, 5px 3px, 9px 4px, 6px 3px, 10px 5px, 5px 3px, 9px 4px, 14px 8px, 22px 9px, 8px 5px, 9px 5px, 2px 1px, 2px 1px;
+    background-position: 50% 95%, 50% 104%, 45% 98%, 57% 99%, 24% 97%, 24% 103%, 74% 99%, 74% 105%, 86% 101%, 86% 107%, 12% 82%, 87% 81%;
+    background-size: 14px 9px, 26px 10px, 9px 5px, 10px 5px, 8px 5px, 14px 6px, 7px 4px, 12px 5px, 7px 4px, 11px 5px, 2px 1px, 2px 1px;
     filter: drop-shadow(0 0 1px rgba(242, 138, 58, 0.16));
   }
   100% {
     opacity: 0;
-    background-position: 13% 106%, 13% 109%, 27% 108%, 27% 111%, 43% 107%, 43% 110%, 59% 109%, 59% 112%, 74% 107%, 74% 110%, 86% 110%, 86% 113%, 50% 107%, 50% 112%, 45% 109%, 56% 110%, 12% 96%, 87% 95%;
-    background-size: 7px 2px, 11px 3px, 6px 2px, 10px 3px, 7px 2px, 11px 3px, 6px 2px, 10px 3px, 7px 2px, 11px 3px, 6px 2px, 10px 3px, 16px 5px, 24px 6px, 9px 4px, 10px 4px, 0 0, 0 0;
+    background-position: 50% 108%, 50% 113%, 45% 109%, 57% 110%, 24% 108%, 24% 111%, 74% 110%, 74% 114%, 86% 112%, 86% 115%, 12% 96%, 87% 95%;
+    background-size: 16px 5px, 28px 6px, 10px 4px, 11px 4px, 9px 4px, 15px 5px, 8px 3px, 13px 4px, 8px 3px, 12px 4px, 0 0, 0 0;
     filter: drop-shadow(0 0 0 rgba(242, 138, 58, 0));
   }
 }
