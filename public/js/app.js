@@ -2337,11 +2337,56 @@
   }
 
   // ---- Socket.io ----
-  function connectSocket() {
+  let socketIoLoadPromise = null;
+
+  function ensureSocketIoClient() {
+    if (typeof window.io === 'function') return Promise.resolve(true);
+    if (socketIoLoadPromise) return socketIoLoadPromise;
+
+    socketIoLoadPromise = new Promise(resolve => {
+      // Reuse existing script tag if present.
+      const existing = document.querySelector('script[src="/socket.io/socket.io.js"]');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(typeof window.io === 'function'), { once: true });
+        existing.addEventListener('error', () => resolve(false), { once: true });
+        // In case script is already loaded but global wasn't checked yet.
+        setTimeout(() => resolve(typeof window.io === 'function'), 0);
+        return;
+      }
+
+      const s = document.createElement('script');
+      s.src = '/socket.io/socket.io.js';
+      s.async = true;
+      s.onload = () => resolve(typeof window.io === 'function');
+      s.onerror = () => resolve(false);
+      document.head.appendChild(s);
+    }).finally(() => {
+      // Allow retries if loading failed.
+      if (typeof window.io !== 'function') socketIoLoadPromise = null;
+    });
+
+    return socketIoLoadPromise;
+  }
+
+  async function connectSocket() {
+    if (socket) return;
+
+    if (typeof window.io !== 'function') {
+      const loaded = await ensureSocketIoClient();
+      if (!loaded || typeof window.io !== 'function') {
+        console.warn('Socket.IO client unavailable; continuing without realtime for now.');
+        toast('Realtime unavailable right now. Refresh in a few seconds.', 'info', 3500);
+        return;
+      }
+    }
+
     socket = io({ transports: ['websocket', 'polling'] });
 
     socket.on('connect', () => console.log('Socket connected'));
     socket.on('disconnect', () => console.log('Socket disconnected'));
+    socket.on('connect_error', err => {
+      console.warn('Socket connect error:', err && err.message ? err.message : err);
+    });
 
     socket.on('new_message', msg => {
       // Deduplicate — if this message ID is already in the DOM, skip it
