@@ -1880,18 +1880,56 @@
   }
 
   // ---- Add Channel ----
-  $('add-channel-btn').addEventListener('click', async () => {
-    const name = prompt('Channel name:');
-    if (!name || !name.trim()) return;
-    const typeRaw = prompt('Channel type? Type "text" or "voice"', 'text');
-    if (typeRaw === null) return;
-    const type = String(typeRaw || 'text').trim().toLowerCase() === 'voice' ? 'voice' : 'text';
-    const r = await api('POST', `/api/servers/${activeServerId}/channels`, { name: name.trim(), type });
-    if (r.error) return toast(r.error, 'error');
+  function resetChannelCreateModal() {
+    $('channel-create-name').value = '';
+    $('channel-create-type').value = 'text';
+    showError('channel-create-error', '');
+    $('channel-create-submit').disabled = false;
+  }
+
+  function closeChannelCreateModal() {
+    $('channel-create-modal').classList.remove('active');
+    resetChannelCreateModal();
+  }
+
+  $('add-channel-btn').addEventListener('click', () => {
+    if (!activeServerId) return;
+    resetChannelCreateModal();
+    $('channel-create-modal').classList.add('active');
+    $('channel-create-name').focus();
+  });
+
+  $('channel-create-close').addEventListener('click', closeChannelCreateModal);
+  $('channel-create-cancel').addEventListener('click', closeChannelCreateModal);
+  $('channel-create-modal').addEventListener('click', e => {
+    if (e.target === $('channel-create-modal')) closeChannelCreateModal();
+  });
+
+  $('channel-create-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (!activeServerId) return;
+    const name = $('channel-create-name').value.trim();
+    const type = $('channel-create-type').value === 'voice' ? 'voice' : 'text';
+    if (!name) {
+      showError('channel-create-error', 'Channel name is required');
+      return;
+    }
+
+    $('channel-create-submit').disabled = true;
+    showError('channel-create-error', '');
+
+    const r = await api('POST', `/api/servers/${activeServerId}/channels`, { name, type });
+    if (r.error) {
+      $('channel-create-submit').disabled = false;
+      showError('channel-create-error', r.error);
+      return;
+    }
+
     const s = await api('GET', `/api/servers/${activeServerId}`);
     activeServerData = s;
     renderChannelList(s.channels, true);
     openChannel(r.channel);
+    closeChannelCreateModal();
   });
 
   // ---- Create / Join Server ----

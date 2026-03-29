@@ -170,7 +170,7 @@ html, body {
   letter-spacing: 1px; text-transform: uppercase;
   color: var(--text-secondary);
 }
-.field-group input, .field-group textarea {
+.field-group input, .field-group textarea, .field-group select {
   background: var(--bg-void);
   border: 1px solid var(--border-bright);
   border-radius: var(--radius-sm);
@@ -181,9 +181,17 @@ html, body {
   outline: none;
   transition: var(--transition);
 }
-.field-group input:focus, .field-group textarea:focus {
+.field-group input:focus, .field-group textarea:focus, .field-group select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-muted);
+}
+.field-group select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%), linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% + 1px), calc(100% - 12px) calc(50% + 1px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
 }
 .field-hint {
   font-size: 11px; color: var(--text-muted);
@@ -222,6 +230,13 @@ html, body {
   display: inline-block;
 }
 .btn-secondary:hover { background: var(--bg-hover); }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
 
 /* ===== MAIN APP ===== */
 #main-screen {

@@ -511,6 +511,34 @@
     </div>
   </div>
 
+  <!-- Create Channel Modal -->
+  <div class="modal-overlay" id="channel-create-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Create Channel</h2>
+        <button class="modal-close" id="channel-create-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <form class="modal-body" id="channel-create-form">
+        <div class="field-group">
+          <label>Channel Name</label>
+          <input type="text" id="channel-create-name" placeholder="e.g. general" maxlength="50" />
+        </div>
+        <div class="field-group">
+          <label>Channel Type</label>
+          <select id="channel-create-type">
+            <option value="text">Text Channel</option>
+            <option value="voice">Voice Channel</option>
+          </select>
+        </div>
+        <div class="form-error" id="channel-create-error"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="channel-create-cancel">Cancel</button>
+          <button type="submit" class="btn-primary" id="channel-create-submit">Create Channel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Channel Permissions Modal -->
   <div class="modal-overlay" id="channel-perms-modal">
     <div class="modal">
