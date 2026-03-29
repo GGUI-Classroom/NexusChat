@@ -15,6 +15,7 @@ const io = new Server(server, { cors: { origin: false } });
 
 const isProd = process.env.NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nexus-dev-secret-change-in-prod';
+const DATABASE_URL = process.env.DATABASE_URL;
 const REDIS_URL = process.env.REDIS_URL;
 
 // Trust Render's proxy so secure cookies work over HTTPS
@@ -498,6 +499,19 @@ async function broadcastStatusChange(userId, status) {
 const PORT = process.env.PORT || 3000;
 
 async function start() {
+  if (isProd) {
+    const missing = [];
+    if (!DATABASE_URL) missing.push('DATABASE_URL');
+    if (!REDIS_URL) missing.push('REDIS_URL');
+    if (missing.length) {
+      console.error(
+        `Missing required production environment variables: ${missing.join(', ')}. ` +
+        'Configure these secrets before starting the service.'
+      );
+      process.exit(1);
+    }
+  }
+
   await initDb();
   await setupRedisBackplane();
   server.listen(PORT, () => console.log(`Nexus running on port ${PORT}`));

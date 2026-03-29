@@ -69,6 +69,35 @@ Click **Create Web Service** — live in ~2 minutes.
 - Redis is required for cross-instance Socket.IO fanout and call state sync.
 - If `REDIS_URL` is missing, realtime works only inside a single web service instance.
 
+## Shared Backend Across Render And Other Hosts
+- Yes, this project can be cloned and deployed anywhere while using one shared backend.
+- Requirement: every deployment (Render, Railway, Fly.io, VPS, etc.) must use the same `DATABASE_URL` and `REDIS_URL` values.
+- Keep `SESSION_SECRET` private, but it can be different per deployment unless you need cross-domain session portability.
+
+### Fast Setup For People Cloning
+1. Create one managed PostgreSQL and one managed Redis service.
+2. Keep these URLs in a password manager or secret manager.
+3. In each deployment platform, set the same values for:
+  - `DATABASE_URL`
+  - `REDIS_URL`
+4. Set a unique `SESSION_SECRET` for each deployment unless you intentionally need shared cookie validation.
+5. Deploy.
+
+### Security For Sharing URLs
+- Do not post `DATABASE_URL` or `REDIS_URL` publicly (GitHub, screenshots, chat logs, client-side code).
+- Share them only with trusted collaborators who are actually deploying a backend.
+- Treat both as secrets because they grant direct backend access.
+- Prefer creating separate credentials per collaborator/platform when your provider supports it, so access can be rotated/revoked safely.
+
+### Why This Works
+- PostgreSQL stores durable app data (users, messages, servers).
+- Redis is the realtime backplane for Socket.IO, so events and call state sync across instances and hosts.
+- With shared URLs, each clone is just another stateless app node connected to the same data and realtime bus.
+
+### Clone-Friendly Files
+- `render.yaml` includes `DATABASE_URL` and `REDIS_URL` as required sync-false environment variables.
+- `.env.example` shows the minimum environment keys for local and non-Render hosts.
+
 ## Notes
 - Free tier: 512 MB RAM, no persistent disk needed (everything in PostgreSQL)
 - Avatar uploads capped at 2 MB (stored as base64 in DB)
