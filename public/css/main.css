@@ -2042,6 +2042,47 @@ html, body {
 }
 .shop-redeem-area .field-group { flex: 1; margin: 0; }
 
+.shop-subsection {
+  padding: 2px 20px 0;
+}
+
+.shop-subsection h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.shop-subsection p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ringtone-grid {
+  padding-top: 12px;
+}
+
+.ringtone-card-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 28% 22%, rgba(255,255,255,0.16), rgba(255,255,255,0.02) 40%), linear-gradient(145deg, rgba(70,90,255,0.35), rgba(40,180,220,0.2));
+  color: #dce7ff;
+}
+
+.shop-card-btn.preview {
+  background: rgba(111, 220, 255, 0.12);
+  color: #94e8ff;
+  border: 1px solid rgba(111, 220, 255, 0.28);
+}
+
+.shop-card-btn.preview:hover {
+  background: rgba(111, 220, 255, 0.2);
+}
+
 /* ===== MENTIONS ===== */
 .mention-user, .mention-role {
   display: inline-block;

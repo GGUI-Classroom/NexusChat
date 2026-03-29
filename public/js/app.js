@@ -17,6 +17,7 @@
   let pendingCallData = null; // incoming call data before answering
   let ringtoneCtx = null;
   let ringtoneNodes = [];
+  let ringtonePreviewTimer = null;
   let isScreenSharing = false;
   let screenStream = null;
   let outgoingCallTo = null;
@@ -40,6 +41,80 @@
   let groupCallState = null;
   let groupCameraStream = null;
   let groupScreenStream = null;
+
+  const RINGTONE_PRESETS = {
+    neon_surge: {
+      wave: 'triangle',
+      intervalMs: 1050,
+      gain: 0.2,
+      pattern: [
+        { f: 740, t: 0.00, d: 0.10 },
+        { f: 988, t: 0.16, d: 0.12 },
+        { f: 1318, t: 0.34, d: 0.14 }
+      ]
+    },
+    cyber_echo: {
+      wave: 'square',
+      intervalMs: 980,
+      gain: 0.17,
+      pattern: [
+        { f: 660, t: 0.00, d: 0.08 },
+        { f: 660, t: 0.14, d: 0.08 },
+        { f: 880, t: 0.30, d: 0.12 },
+        { f: 660, t: 0.50, d: 0.10 }
+      ]
+    },
+    starlight_ping: {
+      wave: 'sine',
+      intervalMs: 1100,
+      gain: 0.2,
+      pattern: [
+        { f: 988, t: 0.00, d: 0.11 },
+        { f: 1174, t: 0.18, d: 0.11 },
+        { f: 1568, t: 0.40, d: 0.14 }
+      ]
+    },
+    thunder_hop: {
+      wave: 'sawtooth',
+      intervalMs: 1000,
+      gain: 0.16,
+      pattern: [
+        { f: 220, t: 0.00, d: 0.12 },
+        { f: 440, t: 0.20, d: 0.10 },
+        { f: 554, t: 0.36, d: 0.10 },
+        { f: 659, t: 0.52, d: 0.12 }
+      ]
+    },
+    velvet_alarm: {
+      wave: 'triangle',
+      intervalMs: 1150,
+      gain: 0.18,
+      pattern: [
+        { f: 523, t: 0.00, d: 0.14 },
+        { f: 659, t: 0.24, d: 0.14 },
+        { f: 784, t: 0.46, d: 0.16 }
+      ]
+    }
+  };
+
+  const DEFAULT_INCOMING_RINGTONE = {
+    wave: 'sine',
+    intervalMs: 1000,
+    gain: 0.18,
+    pattern: [
+      { f: 660, t: 0, d: 0.15 },
+      { f: 880, t: 0.2, d: 0.15 }
+    ]
+  };
+
+  const DEFAULT_OUTGOING_RINGTONE = {
+    wave: 'sine',
+    intervalMs: 1200,
+    gain: 0.16,
+    pattern: [
+      { f: 520, t: 0, d: 0.1 }
+    ]
+  };
 
   // ---- Helpers ----
   const $ = id => document.getElementById(id);
@@ -3301,15 +3376,22 @@
   }
 
   // ---- Ringtone (Web Audio API) ----
-  function playRingtone(isIncoming) {
+  function getRingtonePreset(ringtoneId) {
+    if (!ringtoneId) return null;
+    return RINGTONE_PRESETS[ringtoneId] || null;
+  }
+
+  function playRingtone(isIncoming, opts = {}) {
     stopRingtone();
     try {
       ringtoneCtx = new (window.AudioContext || window.webkitAudioContext)();
-      let beat = 0;
-      // Discord-inspired: two-tone rising beep pattern
-      const schedule = isIncoming
-        ? [{ f: 660, t: 0, d: 0.15 }, { f: 880, t: 0.2, d: 0.15 }, { f: 0, t: 0.5, d: 0 }] // incoming: repeating
-        : [{ f: 520, t: 0, d: 0.1 }, { f: 0, t: 0.6, d: 0 }]; // outgoing: gentle pulse
+      const chosen = getRingtonePreset(opts.ringtoneId || (currentUser && currentUser.activeRingtone));
+      const preset = chosen || (isIncoming ? DEFAULT_INCOMING_RINGTONE : DEFAULT_OUTGOING_RINGTONE);
+      const schedule = preset.pattern || [];
+      const waveType = preset.wave || 'sine';
+      const gainPeak = Math.max(0.05, Math.min(0.3, (preset.gain || 0.18) * (opts.gainBoost || 1)));
+      const interval = preset.intervalMs || (isIncoming ? 1000 : 1200);
+      const oneShot = !!opts.oneShot;
 
       function playPattern() {
         if (!ringtoneCtx) return;
@@ -3319,19 +3401,22 @@
           const gain = ringtoneCtx.createGain();
           osc.connect(gain);
           gain.connect(ringtoneCtx.destination);
-          osc.type = 'sine';
+          osc.type = waveType;
           osc.frequency.setValueAtTime(f, ringtoneCtx.currentTime + t);
           gain.gain.setValueAtTime(0, ringtoneCtx.currentTime + t);
-          gain.gain.linearRampToValueAtTime(0.18, ringtoneCtx.currentTime + t + 0.01);
+          gain.gain.linearRampToValueAtTime(gainPeak, ringtoneCtx.currentTime + t + 0.01);
           gain.gain.linearRampToValueAtTime(0, ringtoneCtx.currentTime + t + d);
           osc.start(ringtoneCtx.currentTime + t);
           osc.stop(ringtoneCtx.currentTime + t + d + 0.05);
           ringtoneNodes.push(osc);
         });
-        const interval = isIncoming ? 1000 : 1200;
-        ringtoneNodes.push(setTimeout(playPattern, interval));
+        if (!oneShot) ringtoneNodes.push(setTimeout(playPattern, interval));
       }
       playPattern();
+      if (oneShot) {
+        const maxStep = schedule.reduce((max, s) => Math.max(max, (s.t || 0) + (s.d || 0)), 0);
+        ringtoneNodes.push(setTimeout(stopRingtone, Math.ceil((maxStep + 0.2) * 1000)));
+      }
     } catch(e) {
       console.warn('Ringtone error:', e);
     }
@@ -4046,6 +4131,7 @@
 
   // ---- Shop ----
   let shopData = null;
+  let ringtoneShopData = null;
 
   async function loadShop() {
     const r = await api('GET', '/api/shop');
@@ -4053,6 +4139,7 @@
     shopData = r;
     updateNexalDisplay(r.nexals || 0);
     renderShop(r.decorations, r.active);
+    await loadRingtones();
   }
 
   function updateNexalDisplay(nexals) {
@@ -4158,6 +4245,102 @@
     }
     toast(action === 'equip' ? 'Decoration equipped! ✨' : 'Decoration removed', 'success');
   };
+
+  async function loadRingtones() {
+    const grid = $('ringtone-grid');
+    if (!grid) return;
+    const r = await api('GET', '/api/ringtones');
+    if (r.error) {
+      grid.innerHTML = '<div style="padding:12px;color:var(--red)">' + esc(r.error) + '</div>';
+      return;
+    }
+    ringtoneShopData = r;
+    renderRingtoneShop(r.ringtones, r.active);
+  }
+
+  function renderRingtoneShop(ringtones, active) {
+    const grid = $('ringtone-grid');
+    if (!grid) return;
+
+    const myNexals = (ringtoneShopData && ringtoneShopData.nexals) || 0;
+    grid.innerHTML = (ringtones || []).map(r => {
+      const isOwned = !!r.owned;
+      const isEquipped = active === r.id;
+      const canBuy = !isOwned && myNexals >= r.price;
+      let btnClass = 'locked';
+      let btnText = '🔒 ' + r.price.toLocaleString() + ' Nexals';
+      let action = 'locked';
+      if (isEquipped) {
+        btnClass = 'unequip';
+        btnText = '✓ Equipped';
+        action = 'unequip';
+      } else if (isOwned) {
+        btnClass = 'equip';
+        btnText = 'Equip';
+        action = 'equip';
+      } else if (canBuy) {
+        btnClass = 'buy';
+        btnText = 'Buy 5,000';
+        action = 'buy';
+      }
+
+      return `
+        <div class="shop-card ${isOwned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}">
+          <div class="ringtone-card-preview">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="30" height="30"><path d="M12 3v18"/><path d="M8 7v10"/><path d="M16 7v10"/><path d="M4 10v4"/><path d="M20 10v4"/></svg>
+          </div>
+          <div class="shop-card-name">${esc(r.name)}</div>
+          <div class="shop-card-desc">${esc(r.description)}</div>
+          <div class="shop-card-price">${r.price.toLocaleString()} Nexals</div>
+          <button class="shop-card-btn preview" onclick="ringtoneAction('${r.id}','preview')">Preview</button>
+          <button class="shop-card-btn ${btnClass}" onclick="ringtoneAction('${r.id}','${action}')">${btnText}</button>
+        </div>`;
+    }).join('');
+  }
+
+  window.ringtoneAction = async function(ringtoneId, action) {
+    if (!ringtoneShopData) return;
+
+    if (action === 'preview') {
+      previewRingtone(ringtoneId);
+      return;
+    }
+
+    if (action === 'locked') {
+      toast('Not enough Nexals! Need 5,000.', 'error');
+      return;
+    }
+
+    if (action === 'buy') {
+      const ring = ringtoneShopData.ringtones.find(x => x.id === ringtoneId);
+      if (!confirm('Buy "' + (ring ? ring.name : ringtoneId) + '" for 5,000 Nexals?')) return;
+      const r = await api('POST', '/api/ringtones/buy', { ringtoneId });
+      if (r.error) return toast(r.error, 'error');
+      toast('Ringtone purchased! 🔔', 'success');
+      await loadShop();
+      return;
+    }
+
+    const equipId = action === 'equip' ? ringtoneId : null;
+    const r = await api('POST', '/api/ringtones/equip', { ringtoneId: equipId });
+    if (r.error) return toast(r.error, 'error');
+    currentUser.activeRingtone = equipId;
+    ringtoneShopData.active = equipId;
+    renderRingtoneShop(ringtoneShopData.ringtones, equipId);
+    toast(action === 'equip' ? 'Ringtone equipped!' : 'Ringtone reset to default', 'success');
+  };
+
+  function previewRingtone(ringtoneId) {
+    if (ringtonePreviewTimer) {
+      clearTimeout(ringtonePreviewTimer);
+      ringtonePreviewTimer = null;
+    }
+    playRingtone(true, { ringtoneId, oneShot: true, gainBoost: 1.05 });
+    ringtonePreviewTimer = setTimeout(() => {
+      stopRingtone();
+      ringtonePreviewTimer = null;
+    }, 1600);
+  }
 
   $('shop-redeem-btn').addEventListener('click', async () => {
     const code = $('shop-code-input').value.trim().toUpperCase();
