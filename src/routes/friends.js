@@ -10,13 +10,14 @@ router.get('/search', async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 2) return res.json({ users: [] });
   const r = await pool.query(
-    `SELECT id, username, display_name, avatar_data, avatar_mime FROM users
+    `SELECT id, username, display_name, avatar_data, avatar_mime, active_decoration FROM users
      WHERE LOWER(username) LIKE LOWER($1) AND id != $2 LIMIT 10`,
     [`%${q}%`, req.session.userId]
   );
   res.json({ users: r.rows.map(u => ({
     id: u.id, username: u.username, displayName: u.display_name,
-    avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null
+    avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
+    activeDecoration: u.active_decoration || null
   }))});
 });
 
@@ -49,7 +50,7 @@ router.post('/request', async (req, res) => {
 
 router.get('/requests/incoming', async (req, res) => {
   const r = await pool.query(
-    `SELECT fr.id, fr.from_id, fr.created_at, u.username, u.display_name, u.avatar_data, u.avatar_mime
+    `SELECT fr.id, fr.from_id, fr.created_at, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration
      FROM friend_requests fr JOIN users u ON u.id=fr.from_id
      WHERE fr.to_id=$1 AND fr.status='pending'`,
     [req.session.userId]
@@ -57,13 +58,14 @@ router.get('/requests/incoming', async (req, res) => {
   res.json({ requests: r.rows.map(r => ({
     id: r.id, fromId: r.from_id, username: r.username, displayName: r.display_name,
     avatarDataUrl: r.avatar_data ? `data:${r.avatar_mime};base64,${r.avatar_data}` : null,
-    createdAt: r.created_at
+    createdAt: r.created_at,
+    activeDecoration: r.active_decoration || null
   }))});
 });
 
 router.get('/requests/outgoing', async (req, res) => {
   const r = await pool.query(
-    `SELECT fr.id, fr.to_id, fr.created_at, u.username, u.display_name, u.avatar_data, u.avatar_mime
+    `SELECT fr.id, fr.to_id, fr.created_at, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration
      FROM friend_requests fr JOIN users u ON u.id=fr.to_id
      WHERE fr.from_id=$1 AND fr.status='pending'`,
     [req.session.userId]
@@ -71,7 +73,8 @@ router.get('/requests/outgoing', async (req, res) => {
   res.json({ requests: r.rows.map(r => ({
     id: r.id, toId: r.to_id, username: r.username, displayName: r.display_name,
     avatarDataUrl: r.avatar_data ? `data:${r.avatar_mime};base64,${r.avatar_data}` : null,
-    createdAt: r.created_at
+    createdAt: r.created_at,
+    activeDecoration: r.active_decoration || null
   }))});
 });
 
@@ -107,7 +110,7 @@ router.delete('/:friendId', async (req, res) => {
 
 router.get('/', async (req, res) => {
   const r = await pool.query(
-    `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status
+    `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status, u.active_decoration
      FROM friendships f
      JOIN users u ON u.id = CASE WHEN f.user1_id=$1 THEN f.user2_id ELSE f.user1_id END
      WHERE f.user1_id=$1 OR f.user2_id=$1`,
@@ -115,7 +118,8 @@ router.get('/', async (req, res) => {
   );
   res.json({ friends: r.rows.map(u => ({
     id: u.id, username: u.username, displayName: u.display_name, status: u.status,
-    avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null
+    avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
+    activeDecoration: u.active_decoration || null
   }))});
 });
 

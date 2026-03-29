@@ -31,7 +31,7 @@ router.post('/avatar', requireAuth, upload.single('avatar'), async (req, res) =>
 // Get any user's public profile
 router.get('/profile/:userId', requireAuth, async (req, res) => {
   const r = await pool.query(
-    'SELECT id, username, display_name, avatar_data, avatar_mime, bio FROM users WHERE id=$1',
+    'SELECT id, username, display_name, avatar_data, avatar_mime, bio, active_decoration FROM users WHERE id=$1',
     [req.params.userId]
   );
   if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
@@ -39,7 +39,8 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
   res.json({
     id: u.id, username: u.username, displayName: u.display_name,
     avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
-    bio: u.bio || null
+    bio: u.bio || null,
+    activeDecoration: u.active_decoration || null
   });
 });
 
