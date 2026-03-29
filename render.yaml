@@ -18,7 +18,3 @@ services:
         value: /opt/render/project/data
       - key: UPLOADS_DIR
         value: /opt/render/project/data/avatars
-    disk:
-      name: nexus-data
-      mountPath: /opt/render/project/data
-      sizeGB: 1
