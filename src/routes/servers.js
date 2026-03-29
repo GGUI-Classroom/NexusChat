@@ -531,13 +531,9 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   params.push(parseInt(limit));
   const r = await pool.query(q, params);
   const messages = r.rows.reverse();
-  // Collect all mention data for the batch
-  const allContent = messages.map(m => m.content).join(' ');
-  const mentionData = await resolveMentions(allContent, id);
   res.json({ messages: messages.map(m => ({
     id: m.id, channelId: m.channel_id, fromId: m.from_id,
     content: m.content, createdAt: parseInt(m.created_at),
-    mentions: mentionData,
     author: {
       username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,

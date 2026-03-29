@@ -281,27 +281,10 @@ io.on('connection', (socket) => {
     if (!check.rows.length) return; // not a member or channel doesn't belong to server
     const row = check.rows[0];
 
-    // Check private channel visibility
-    if (row.ch_private && !row.is_admin && row.member_role !== 'admin') {
-      const viewPerm = await pool.query(
-        `SELECT allow_view FROM channel_permissions WHERE channel_id=$1 AND role_id=$2`,
-        [channelId, row.role_id]
-      );
-      if (!viewPerm.rows.length || !viewPerm.rows[0].allow_view) {
-        socket.emit('channel_error', { channelId, error: 'You cannot access this channel' });
-        return;
-      }
-    }
-    // Check channel lock: if locked, only admins/roles with explicit allow_send=true can post
-    if (row.locked && !row.is_admin && row.member_role !== 'admin') {
-      const perm = await pool.query(
-        `SELECT allow_send FROM channel_permissions WHERE channel_id=$1 AND role_id=$2`,
-        [channelId, row.role_id]
-      );
-      if (!perm.rows.length || !perm.rows[0].allow_send) {
-        socket.emit('channel_error', { channelId, error: 'You do not have permission to send messages in this channel' });
-        return;
-      }
+    // Check send permission (already fetched in initial query as perm_allow)
+    if (row.locked && !row.is_admin && row.member_role !== 'admin' && !row.perm_allow) {
+      socket.emit('channel_error', { channelId, error: 'You do not have permission to send messages in this channel' });
+      return;
     }
 
     const msgId = uuidv4();
