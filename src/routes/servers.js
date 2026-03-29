@@ -200,8 +200,20 @@ router.get('/:id', async (req, res) => {
     pool.query('SELECT * FROM server_roles WHERE server_id=$1 ORDER BY position ASC', [id])
   ]);
   if (!sRes.rows.length) return res.status(404).json({ error: 'Not found' });
+  const blockedWordsRes = await pool.query('SELECT word FROM server_blocked_words WHERE server_id=$1 ORDER BY word ASC', [id]);
   res.json({
     server: fmtServer(sRes.rows[0]),
+    botConfig: {
+      name: 'NexusGuard',
+      prefix: sRes.rows[0].bot_prefix || '/',
+      enabled: sRes.rows[0].bot_enabled !== false,
+      automod: sRes.rows[0].bot_auto_mod !== false,
+      blockLinks: !!sRes.rows[0].bot_block_links,
+      capsThreshold: Math.min(100, Math.max(50, parseInt(sRes.rows[0].bot_caps_threshold, 10) || 90)),
+      spamWindow: Math.min(20, Math.max(3, parseInt(sRes.rows[0].bot_spam_window, 10) || 6)),
+      blockedWords: blockedWordsRes.rows.map(w => w.word),
+      modLogChannelId: sRes.rows[0].mod_log_channel_id || null
+    },
     channels: chRes.rows.filter(c => c.can_view).map(c => ({ id: c.id, name: c.name, position: c.position, locked: !!c.locked, private: !!c.private })),
     members: memRes.rows.map(m => ({
       id: m.id, username: m.username, displayName: m.display_name,
@@ -214,6 +226,88 @@ router.get('/:id', async (req, res) => {
       activeFont: m.active_font || null
     })),
     roles: roleRes.rows.map(r => ({ id: r.id, name: r.name, color: r.color, isAdmin: r.is_admin, position: r.position, canDeleteMessages: !!r.can_delete_messages }))
+  });
+});
+
+router.get('/:id/bot-config', async (req, res) => {
+  const { id } = req.params;
+  const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  const s = await pool.query(
+    `SELECT bot_prefix, bot_enabled, bot_auto_mod, bot_block_links,
+            bot_caps_threshold, bot_spam_window, mod_log_channel_id
+     FROM servers WHERE id=$1`,
+    [id]
+  );
+  const blockedWordsRes = await pool.query('SELECT word FROM server_blocked_words WHERE server_id=$1 ORDER BY word ASC', [id]);
+  if (!s.rows.length) return res.status(404).json({ error: 'Server not found' });
+  const row = s.rows[0];
+  res.json({
+    config: {
+      name: 'NexusGuard',
+      prefix: row.bot_prefix || '/',
+      enabled: row.bot_enabled !== false,
+      automod: row.bot_auto_mod !== false,
+      blockLinks: !!row.bot_block_links,
+      capsThreshold: Math.min(100, Math.max(50, parseInt(row.bot_caps_threshold, 10) || 90)),
+      spamWindow: Math.min(20, Math.max(3, parseInt(row.bot_spam_window, 10) || 6)),
+      blockedWords: blockedWordsRes.rows.map(w => w.word),
+      modLogChannelId: row.mod_log_channel_id || null
+    }
+  });
+});
+
+router.patch('/:id/bot-config', async (req, res) => {
+  const { id } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+
+  const prefixRaw = (req.body.prefix || '/').toString().trim();
+  const prefix = (prefixRaw.slice(0, 2) || '/');
+  const enabled = req.body.enabled !== false;
+  const automod = req.body.automod !== false;
+  const blockLinks = !!req.body.blockLinks;
+  const capsThreshold = Math.min(100, Math.max(50, parseInt(req.body.capsThreshold, 10) || 90));
+  const spamWindow = Math.min(20, Math.max(3, parseInt(req.body.spamWindow, 10) || 6));
+  const blockedWords = Array.isArray(req.body.blockedWords)
+    ? req.body.blockedWords.map(w => String(w || '').trim().toLowerCase()).filter(w => w.length >= 2 && w.length <= 40)
+    : null;
+
+  await pool.query(
+    `UPDATE servers
+     SET bot_prefix=$1,
+         bot_enabled=$2,
+         bot_auto_mod=$3,
+         bot_block_links=$4,
+         bot_caps_threshold=$5,
+         bot_spam_window=$6
+     WHERE id=$7`,
+    [prefix, enabled, automod, blockLinks, capsThreshold, spamWindow, id]
+  );
+
+  if (blockedWords) {
+    await pool.query('DELETE FROM server_blocked_words WHERE server_id=$1', [id]);
+    for (const word of blockedWords) {
+      await pool.query(
+        `INSERT INTO server_blocked_words (id, server_id, word, created_by)
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (server_id, word) DO NOTHING`,
+        [uuidv4(), id, word, req.session.userId]
+      );
+    }
+  }
+
+  res.json({
+    success: true,
+    config: {
+      name: 'NexusGuard',
+      prefix,
+      enabled,
+      automod,
+      blockLinks,
+      capsThreshold,
+      spamWindow,
+      blockedWords: blockedWords || undefined
+    }
   });
 });
 

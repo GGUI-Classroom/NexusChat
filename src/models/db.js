@@ -141,6 +141,14 @@ async function initDb() {
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_decoration TEXT DEFAULT NULL`, 'alter_users_decoration');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_color TEXT DEFAULT NULL`, 'alter_users_color');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_font TEXT DEFAULT NULL`, 'alter_users_font');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS mod_log_channel_id TEXT DEFAULT NULL`, 'alter_servers_mod_log_channel');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_name TEXT DEFAULT 'NexusBot'`, 'alter_servers_bot_name');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_prefix TEXT DEFAULT '/'`, 'alter_servers_bot_prefix');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_enabled BOOLEAN DEFAULT TRUE`, 'alter_servers_bot_enabled');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_auto_mod BOOLEAN DEFAULT TRUE`, 'alter_servers_bot_automod');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_block_links BOOLEAN DEFAULT FALSE`, 'alter_servers_bot_block_links');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_caps_threshold INTEGER DEFAULT 90`, 'alter_servers_bot_caps_threshold');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_spam_window INTEGER DEFAULT 6`, 'alter_servers_bot_spam_window');
   await runSql(`CREATE TABLE IF NOT EXISTS user_fonts (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -183,6 +191,52 @@ async function initDb() {
     claimed_at BIGINT DEFAULT NULL,
     UNIQUE(user_id, achievement_id)
   )`, 'user_achievements');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS server_mutes (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    muted_by TEXT NOT NULL REFERENCES users(id),
+    reason TEXT DEFAULT NULL,
+    muted_until BIGINT NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(server_id, user_id)
+  )`, 'server_mutes');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS moderation_logs (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    channel_id TEXT DEFAULT NULL REFERENCES channels(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    actor_user_id TEXT NOT NULL REFERENCES users(id),
+    target_user_id TEXT DEFAULT NULL REFERENCES users(id),
+    details TEXT DEFAULT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'moderation_logs');
+
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_mutes_lookup ON server_mutes(server_id, user_id, muted_until)`, 'idx_server_mutes_lookup');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_moderation_logs_server_time ON moderation_logs(server_id, created_at DESC)`, 'idx_moderation_logs_server_time');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS server_blocked_words (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    word TEXT NOT NULL,
+    created_by TEXT DEFAULT NULL REFERENCES users(id),
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(server_id, word)
+  )`, 'server_blocked_words');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_blocked_words_server ON server_blocked_words(server_id)`, 'idx_server_blocked_words_server');
+
+  await runSql(`
+    INSERT INTO users (id, username, display_name, password_hash, status, active_color)
+    VALUES ('00000000-0000-0000-0000-000000000001', 'nexusbot', 'NexusBot', 'nexusbot-local-only', 'online', '#f4b942')
+    ON CONFLICT (id) DO NOTHING
+  `, 'seed_nexusbot_user');
+  await runSql(`
+    UPDATE users
+    SET username='nexusguard', display_name='NexusGuard', status='online', active_color='#f4b942'
+    WHERE id='00000000-0000-0000-0000-000000000001'
+  `, 'normalize_nexusguard_user');
 
   console.log('Database initialized');
 }

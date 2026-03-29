@@ -41,16 +41,16 @@ router.post('/login', async (req, res) => {
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
     // Check suspension
     const susp = await pool.query(
-      `SELECT suspended_until FROM suspensions WHERE user_id=$1 AND active=TRUE AND suspended_until > EXTRACT(EPOCH FROM NOW())::BIGINT ORDER BY created_at DESC LIMIT 1`,
+      `SELECT suspended_until, reason FROM suspensions WHERE user_id=$1 AND active=TRUE AND suspended_until > EXTRACT(EPOCH FROM NOW())::BIGINT ORDER BY created_at DESC LIMIT 1`,
       [user.id]
     );
     if (susp.rows.length) {
       const until = parseInt(susp.rows[0].suspended_until);
-      const untilDate = new Date(until * 1000);
       return res.status(403).json({
-        error: `Your account is suspended until ${untilDate.toUTCString()}`,
+        error: 'Account suspended',
         suspended: true,
-        suspendedUntil: until
+        suspendedUntil: until,
+        suspendedReason: susp.rows[0].reason || null
       });
     }
 
@@ -76,6 +76,21 @@ router.post('/logout', (req, res) => {
 router.get('/me', async (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
   try {
+    const susp = await pool.query(
+      `SELECT suspended_until, reason FROM suspensions
+       WHERE user_id=$1 AND active=TRUE AND suspended_until > EXTRACT(EPOCH FROM NOW())::BIGINT
+       ORDER BY created_at DESC LIMIT 1`,
+      [req.session.userId]
+    );
+    if (susp.rows.length) {
+      return res.json({
+        user: null,
+        suspended: true,
+        suspendedUntil: parseInt(susp.rows[0].suspended_until),
+        suspendedReason: susp.rows[0].reason || null
+      });
+    }
+
     const r = await pool.query(
       'SELECT id, username, display_name, avatar_data, avatar_mime, bio, active_decoration, active_color, active_font FROM users WHERE id=$1',
       [req.session.userId]

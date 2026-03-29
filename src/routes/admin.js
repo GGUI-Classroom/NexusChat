@@ -67,7 +67,53 @@ router.post('/suspend', async (req, res) => {
     [uuidv4(), user.rows[0].id, req.session.userId, reason || null, until]
   );
 
-  res.json({ success: true, username: user.rows[0].username, userId: user.rows[0].id, suspendedUntil: until });
+  if (req.io) {
+    req.io.to(`user:${user.rows[0].id}`).emit('account_suspended', {
+      suspendedUntil: until,
+      reason: reason || null
+    });
+  }
+
+  // Send DM from NexusGuard bot so user has a written notice.
+  const BOT_ID = '00000000-0000-0000-0000-000000000001';
+  const existingFriend = await pool.query(
+    `SELECT id FROM friendships
+     WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)
+     LIMIT 1`,
+    [BOT_ID, user.rows[0].id]
+  );
+  if (!existingFriend.rows.length) {
+    await pool.query('INSERT INTO friendships (id, user1_id, user2_id) VALUES ($1,$2,$3)', [uuidv4(), BOT_ID, user.rows[0].id]);
+  }
+  await pool.query(
+    'INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
+    [
+      uuidv4(),
+      BOT_ID,
+      user.rows[0].id,
+      `[NexusGuard] Your account was suspended until ${new Date(until * 1000).toLocaleString()}. Reason: ${reason || 'No reason provided'}`,
+      Math.floor(Date.now() / 1000)
+    ]
+  );
+  if (req.io) {
+    req.io.to(`user:${user.rows[0].id}`).emit('new_message', {
+      id: uuidv4(),
+      fromId: BOT_ID,
+      toId: user.rows[0].id,
+      content: `[NexusGuard] Your account was suspended until ${new Date(until * 1000).toLocaleString()}. Reason: ${reason || 'No reason provided'}`,
+      createdAt: Math.floor(Date.now() / 1000),
+      author: {
+        username: 'nexusguard',
+        displayName: 'NexusGuard',
+        avatarDataUrl: null,
+        activeDecoration: null,
+        activeColor: '#f4b942',
+        activeFont: null
+      }
+    });
+  }
+
+  res.json({ success: true, username: user.rows[0].username, userId: user.rows[0].id, suspendedUntil: until, reason: reason || null });
 });
 
 // Unsuspend a user
@@ -139,7 +185,7 @@ router.get('/suspensions', async (req, res) => {
 router.get('/users/:userId', async (req, res) => {
   const { userId } = req.params;
   const userRes = await pool.query(
-    'SELECT id, username, display_name, nexals FROM users WHERE id=$1', [userId]
+    'SELECT id, username, display_name, nexals, active_font FROM users WHERE id=$1', [userId]
   );
   if (!userRes.rows.length) return res.status(404).json({ error: 'User not found' });
   const u = userRes.rows[0];
@@ -161,6 +207,9 @@ router.get('/users/:userId', async (req, res) => {
   const ownedDecos = await pool.query('SELECT decoration_id FROM user_decorations WHERE user_id=$1', [userId]);
   const ownedSet = new Set(ownedDecos.rows.map(r => r.decoration_id));
   const { DECORATIONS } = require('./shop');
+  const ownedFonts = await pool.query('SELECT font_id FROM user_fonts WHERE user_id=$1', [userId]);
+  const ownedFontSet = new Set(ownedFonts.rows.map(r => r.font_id));
+  const { FONTS } = require('./colors');
 
   res.json({
     id: u.id, username: u.username, displayName: u.display_name,
@@ -172,6 +221,7 @@ router.get('/users/:userId', async (req, res) => {
       iconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
     })),
     decorations: DECORATIONS.map(d => ({ id: d.id, name: d.name, rarity: d.rarity, owned: ownedSet.has(d.id) })),
+    fonts: FONTS.map(f => ({ id: f.id, name: f.name, owned: ownedFontSet.has(f.id), active: u.active_font === f.id })),
   });
 });
 
@@ -221,6 +271,24 @@ router.delete('/users/:userId/decorations/:decorationId', async (req, res) => {
   res.json({ success: true });
 });
 
+router.post('/users/:userId/fonts', async (req, res) => {
+  const { userId } = req.params;
+  const { fontId } = req.body;
+  const { FONTS } = require('./colors');
+  if (!FONTS.find(f => f.id === fontId)) return res.status(404).json({ error: 'Unknown font' });
+  const already = await pool.query('SELECT id FROM user_fonts WHERE user_id=$1 AND font_id=$2', [userId, fontId]);
+  if (already.rows.length) return res.status(409).json({ error: 'User already owns this font' });
+  await pool.query('INSERT INTO user_fonts (id, user_id, font_id) VALUES ($1,$2,$3)', [require('uuid').v4(), userId, fontId]);
+  res.json({ success: true });
+});
+
+router.delete('/users/:userId/fonts/:fontId', async (req, res) => {
+  const { userId, fontId } = req.params;
+  await pool.query('UPDATE users SET active_font=NULL WHERE id=$1 AND active_font=$2', [userId, fontId]);
+  await pool.query('DELETE FROM user_fonts WHERE user_id=$1 AND font_id=$2', [userId, fontId]);
+  res.json({ success: true });
+});
+
 // Update user nexals
 router.patch('/users/:userId/nexals', async (req, res) => {
   const { userId } = req.params;
@@ -229,6 +297,52 @@ router.patch('/users/:userId/nexals', async (req, res) => {
   await pool.query('UPDATE users SET nexals=$1 WHERE id=$2', [Math.max(0, parseInt(nexals)), userId]);
   const r = await pool.query('SELECT nexals FROM users WHERE id=$1', [userId]);
   res.json({ success: true, nexals: r.rows[0].nexals });
+});
+
+router.post('/users/:userId/warn', async (req, res) => {
+  const { userId } = req.params;
+  const reason = String(req.body.reason || '').trim() || 'No reason provided';
+  const target = await pool.query('SELECT id, username FROM users WHERE id=$1', [userId]);
+  if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
+  if (ADMIN_IDS.has(target.rows[0].id)) return res.status(403).json({ error: 'Cannot warn an admin' });
+
+  const BOT_ID = '00000000-0000-0000-0000-000000000001';
+  const existingFriend = await pool.query(
+    `SELECT id FROM friendships
+     WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)
+     LIMIT 1`,
+    [BOT_ID, userId]
+  );
+  if (!existingFriend.rows.length) {
+    await pool.query('INSERT INTO friendships (id, user1_id, user2_id) VALUES ($1,$2,$3)', [uuidv4(), BOT_ID, userId]);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const content = `[NexusGuard] You have received an admin warning. Reason: ${reason}`;
+  await pool.query(
+    'INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
+    [uuidv4(), BOT_ID, userId, content, now]
+  );
+
+  if (req.io) {
+    req.io.to(`user:${userId}`).emit('new_message', {
+      id: uuidv4(),
+      fromId: BOT_ID,
+      toId: userId,
+      content,
+      createdAt: now,
+      author: {
+        username: 'nexusguard',
+        displayName: 'NexusGuard',
+        avatarDataUrl: null,
+        activeDecoration: null,
+        activeColor: '#f4b942',
+        activeFont: null
+      }
+    });
+  }
+
+  res.json({ success: true });
 });
 
 module.exports = router;

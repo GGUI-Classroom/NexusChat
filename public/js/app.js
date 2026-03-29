@@ -1044,14 +1044,17 @@
   }
 
   async function checkAuth() {
-    const r = await api('GET', '/api/auth/me');
-    return r.user;
+    return api('GET', '/api/auth/me');
   }
 
   async function init() {
-    const user = await checkAuth();
-    if (user) {
-      currentUser = user;
+    const auth = await checkAuth();
+    if (auth && auth.suspended) {
+      showSuspensionScreen(null, auth.suspendedUntil, auth.suspendedReason || null);
+      return;
+    }
+    if (auth && auth.user) {
+      currentUser = auth.user;
       enterApp();
     } else {
       showScreen('auth-screen');
@@ -1098,6 +1101,10 @@
       password: $('login-password').value
     });
     btn.disabled = false; btn.textContent = 'Sign In';
+    if (r && r.suspended) {
+      showSuspensionScreen(null, r.suspendedUntil, r.suspendedReason || null);
+      return;
+    }
     if (r.error) return showError('login-error', r.error);
     if (!r.user) return showError('login-error', 'Unexpected response — check browser console');
     currentUser = r.user;
@@ -2551,12 +2558,12 @@
       toast((peer ? peer.displayName : 'Peer') + ' started screen sharing', 'info');
     });
 
-    socket.on('account_suspended', ({ suspendedUntil }) => {
+    socket.on('account_suspended', ({ suspendedUntil, reason }) => {
       // Immediately show suspension screen and log out
       api('POST', '/api/auth/logout').then(() => {
         currentUser = null;
         if (socket) { socket.disconnect(); socket = null; }
-        showSuspensionScreen(null, suspendedUntil, null);
+        showSuspensionScreen(null, suspendedUntil, reason || null);
       });
     });
 
@@ -3027,8 +3034,6 @@
     $('admin-suspend-username').value = '';
     $('admin-suspend-reason').value = '';
     $('admin-suspend-duration').value = '1';
-    // Kick the user live if they're online
-    if (socket) socket.emit('admin_suspend_user', { targetUserId: r.userId, suspendedUntil: r.suspendedUntil });
   });
 
   $('admin-unsuspend-btn').addEventListener('click', async () => {
@@ -3150,6 +3155,16 @@
           <div class="form-error" id="admin-nexal-error" style="margin-top:4px"></div>
         </div>
 
+        <!-- Warning -->
+        <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Warn User (DM from NexusGuard)</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="admin-warn-reason" placeholder="Reason for warning" style="flex:1;min-width:180px" />
+            <button class="btn-secondary" style="font-size:11px;padding:6px 12px;white-space:nowrap" onclick="adminWarnUser('${data.id}')">Send Warning</button>
+          </div>
+          <div class="form-error" id="admin-warn-error" style="margin-top:4px"></div>
+        </div>
+
         <!-- Decorations -->
         <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
           <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Decorations</div>
@@ -3161,6 +3176,20 @@
                 ${d.owned
                   ? `<button class="action-btn danger" style="font-size:10px;padding:3px 8px" onclick="adminRemoveDeco('${data.id}','${d.id}')">Remove</button>`
                   : `<button class="action-btn ghost" style="font-size:10px;padding:3px 8px" onclick="adminGiveDeco('${data.id}','${d.id}')">Give</button>`}
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- Fonts -->
+        <div style="background:var(--bg-surface);border-radius:8px;padding:12px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Fonts</div>
+          <div style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow-y:auto">
+            ${(data.fonts||[]).map(f=>`
+              <div style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;background:var(--bg-hover)">
+                <span style="font-size:11px;font-weight:700;flex:1">${esc(f.name)} ${f.active ? '<span style="color:var(--green)">• active</span>' : ''}</span>
+                ${f.owned
+                  ? `<button class="action-btn danger" style="font-size:10px;padding:3px 8px" onclick="adminRemoveFont('${data.id}','${f.id}')">Remove</button>`
+                  : `<button class="action-btn ghost" style="font-size:10px;padding:3px 8px" onclick="adminGiveFont('${data.id}','${f.id}')">Give</button>`}
               </div>`).join('')}
           </div>
         </div>
@@ -3227,6 +3256,31 @@
     if (r.error) return toast(r.error, 'error');
     toast('Decoration removed', 'info');
     await adminLookupUser();
+  };
+
+  window.adminGiveFont = async function(userId, fontId) {
+    const r = await api('POST', '/api/admin/users/' + userId + '/fonts', { fontId });
+    if (r.error) return toast(r.error, 'error');
+    toast('✓ Font granted', 'success');
+    await adminLookupUser();
+  };
+
+  window.adminRemoveFont = async function(userId, fontId) {
+    if (!confirm('Remove this font from user?')) return;
+    const r = await api('DELETE', '/api/admin/users/' + userId + '/fonts/' + fontId);
+    if (r.error) return toast(r.error, 'error');
+    toast('Font removed', 'info');
+    await adminLookupUser();
+  };
+
+  window.adminWarnUser = async function(userId) {
+    const reason = ($('admin-warn-reason')?.value || '').trim();
+    showError('admin-warn-error', '');
+    if (!reason) return showError('admin-warn-error', 'Please enter a warning reason');
+    const r = await api('POST', '/api/admin/users/' + userId + '/warn', { reason });
+    if (r.error) return showError('admin-warn-error', r.error);
+    if ($('admin-warn-reason')) $('admin-warn-reason').value = '';
+    toast('Warning sent via NexusGuard DM', 'success');
   };
 
   async function adminLoadHistory() {

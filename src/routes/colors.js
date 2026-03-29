@@ -103,3 +103,5 @@ router.post('/fonts/equip', async (req, res) => {
   await pool.query('UPDATE users SET active_font=$1 WHERE id=$2', [fontId || null, req.session.userId]);
   res.json({ success: true, active: fontId || null });
 });
+
+module.exports.FONTS = FONTS;

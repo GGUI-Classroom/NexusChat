@@ -66,6 +66,58 @@ const userInCall = new Map();
 let redisClient = null;
 const CALL_USER_KEY_PREFIX = 'nexus:call:user:';
 const CALL_ROOM_KEY_PREFIX = 'nexus:call:room:';
+const NEXUS_BOT_ID = '00000000-0000-0000-0000-000000000001';
+const NEXUS_BOT_NAME = 'NexusGuard';
+const spamTracker = new Map();
+const NEXUS_BOT_AUTHOR = {
+  username: 'nexusguard',
+  displayName: NEXUS_BOT_NAME,
+  avatarDataUrl: null,
+  roleColor: '#f4b942',
+  roleName: 'Bot',
+  activeDecoration: null,
+  activeColor: '#f4b942',
+  activeFont: null
+};
+
+async function getServerBotConfig(serverId) {
+  const blockedWordsRes = await pool.query(
+    'SELECT word FROM server_blocked_words WHERE server_id=$1 ORDER BY word ASC',
+    [serverId]
+  );
+  const blockedWords = blockedWordsRes.rows.map(r => String(r.word || '').trim().toLowerCase()).filter(Boolean);
+
+  const r = await pool.query(
+    `SELECT bot_prefix, bot_enabled, bot_auto_mod, bot_block_links,
+            bot_caps_threshold, bot_spam_window
+     FROM servers WHERE id=$1`,
+    [serverId]
+  );
+  if (!r.rows.length) {
+    return {
+      botName: NEXUS_BOT_NAME,
+      botPrefix: '/',
+      botEnabled: true,
+      botAutoMod: true,
+      botBlockLinks: false,
+      botCapsThreshold: 90,
+      botSpamWindow: 6,
+      blockedWords
+    };
+  }
+  const row = r.rows[0];
+  const prefix = (row.bot_prefix || '/').toString();
+  return {
+    botName: NEXUS_BOT_NAME,
+    botPrefix: prefix.length ? prefix.slice(0, 2) : '/',
+    botEnabled: row.bot_enabled !== false,
+    botAutoMod: row.bot_auto_mod !== false,
+    botBlockLinks: !!row.bot_block_links,
+    botCapsThreshold: Math.min(100, Math.max(50, parseInt(row.bot_caps_threshold, 10) || 90)),
+    botSpamWindow: Math.min(20, Math.max(3, parseInt(row.bot_spam_window, 10) || 6)),
+    blockedWords
+  };
+}
 
 async function setupRedisBackplane() {
   if (!REDIS_URL) {
@@ -186,6 +238,525 @@ async function trackAchievement(userId, fields) {
   } catch(e) { console.error('Achievement track error:', e.message); }
 }
 
+function parseDurationToSeconds(raw) {
+  const m = String(raw || '').trim().match(/^(\d+)([smhd])$/i);
+  if (!m) return 0;
+  const n = parseInt(m[1], 10);
+  const unit = m[2].toLowerCase();
+  if (!n || n < 1) return 0;
+  if (unit === 's') return n;
+  if (unit === 'm') return n * 60;
+  if (unit === 'h') return n * 60 * 60;
+  return n * 60 * 60 * 24;
+}
+
+function humanDuration(seconds) {
+  const s = Math.max(0, parseInt(seconds, 10) || 0);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.ceil(s / 60)}m`;
+  if (s < 86400) return `${Math.ceil(s / 3600)}h`;
+  return `${Math.ceil(s / 86400)}d`;
+}
+
+async function emitBotChannelMessage({ serverId, channelId, content, botName = null }) {
+  let resolvedBotName = botName;
+  if (!resolvedBotName) {
+    const cfg = await getServerBotConfig(serverId);
+    resolvedBotName = cfg.botName;
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const msg = {
+    id: uuidv4(),
+    serverId,
+    channelId,
+    fromId: NEXUS_BOT_ID,
+    content,
+    createdAt: now,
+    author: {
+      ...NEXUS_BOT_AUTHOR,
+      displayName: resolvedBotName || NEXUS_BOT_NAME
+    }
+  };
+  io.to(`server:${serverId}`).emit('new_channel_message', msg);
+  pool.query(
+    'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
+    [msg.id, channelId, NEXUS_BOT_ID, content, now]
+  ).catch(e => console.error('NexusBot msg insert error:', e));
+}
+
+async function ensureBotFriendship(userId) {
+  const existing = await pool.query(
+    `SELECT id FROM friendships
+     WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)
+     LIMIT 1`,
+    [NEXUS_BOT_ID, userId]
+  );
+  if (existing.rows.length) return;
+  await pool.query(
+    'INSERT INTO friendships (id, user1_id, user2_id) VALUES ($1,$2,$3)',
+    [uuidv4(), NEXUS_BOT_ID, userId]
+  );
+}
+
+async function sendBotDirectMessage({ toUserId, content }) {
+  const trimmed = String(content || '').trim().slice(0, 4000);
+  if (!trimmed || !toUserId) return;
+  const now = Math.floor(Date.now() / 1000);
+  const msg = {
+    id: uuidv4(),
+    fromId: NEXUS_BOT_ID,
+    toId: toUserId,
+    content: trimmed,
+    createdAt: now,
+    author: {
+      username: NEXUS_BOT_AUTHOR.username,
+      displayName: NEXUS_BOT_NAME,
+      avatarDataUrl: null,
+      activeDecoration: null,
+      activeColor: '#f4b942',
+      activeFont: null
+    }
+  };
+  await ensureBotFriendship(toUserId);
+  io.to(`user:${toUserId}`).emit('new_message', msg);
+  await pool.query(
+    'INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
+    [msg.id, NEXUS_BOT_ID, toUserId, trimmed, now]
+  );
+}
+
+async function logModerationAction({ serverId, channelId, action, actorUserId, targetUserId = null, details = null }) {
+  const now = Math.floor(Date.now() / 1000);
+  await pool.query(
+    `INSERT INTO moderation_logs (id, server_id, channel_id, action, actor_user_id, target_user_id, details, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [uuidv4(), serverId, channelId || null, action, actorUserId, targetUserId, details, now]
+  );
+}
+
+async function getServerActorPerms(serverId, actorUserId) {
+  const r = await pool.query(
+    `SELECT s.owner_id,
+            sm.role as member_role,
+            sm.role_id,
+            sr.is_admin,
+            sr.can_delete_messages,
+            u.username,
+            u.display_name
+     FROM servers s
+     LEFT JOIN server_members sm ON sm.server_id=s.id AND sm.user_id=$2
+     LEFT JOIN server_roles sr ON sr.id=sm.role_id
+     LEFT JOIN users u ON u.id=$2
+     WHERE s.id=$1`,
+    [serverId, actorUserId]
+  );
+  if (!r.rows.length || !r.rows[0].member_role) return null;
+  const row = r.rows[0];
+  const isOwner = row.owner_id === actorUserId;
+  const isAdmin = isOwner || row.member_role === 'admin' || !!row.is_admin;
+  const canModerate = isAdmin || !!row.can_delete_messages;
+  return {
+    row,
+    isOwner,
+    isAdmin,
+    canModerate,
+    actorName: row.display_name || row.username || 'Unknown'
+  };
+}
+
+async function getMuteState(serverId, userId) {
+  const r = await pool.query(
+    'SELECT id, muted_until FROM server_mutes WHERE server_id=$1 AND user_id=$2',
+    [serverId, userId]
+  );
+  if (!r.rows.length) return null;
+  const mute = r.rows[0];
+  const now = Math.floor(Date.now() / 1000);
+  if (parseInt(mute.muted_until, 10) <= now) {
+    await pool.query('DELETE FROM server_mutes WHERE id=$1', [mute.id]);
+    return null;
+  }
+  return { id: mute.id, mutedUntil: parseInt(mute.muted_until, 10) };
+}
+
+async function runChannelCommand({ socket, serverId, channelId, actorUserId, actorDisplayName, input, botConfig }) {
+  const raw = String(input || '').trim();
+  const prefix = (botConfig?.botPrefix || '/').toString();
+  if (!raw.startsWith(prefix)) return false;
+  const cmdToken = raw.split(/\s+/)[0].toLowerCase();
+  const cmd = cmdToken.slice(prefix.length);
+  const perms = await getServerActorPerms(serverId, actorUserId);
+  if (!perms) return true;
+
+  const targetFromMention = raw.match(/<@user:([a-f0-9-]+)>/i)?.[1] || null;
+  const serverMeta = await pool.query('SELECT owner_id, mod_log_channel_id FROM servers WHERE id=$1', [serverId]);
+  const ownerId = serverMeta.rows[0]?.owner_id;
+  const modLogChannelId = serverMeta.rows[0]?.mod_log_channel_id || null;
+
+  if (cmd === 'help') {
+    await emitBotChannelMessage({
+      serverId,
+      channelId,
+      botName: botConfig?.botName,
+      content: [
+        `**${NEXUS_BOT_NAME} Commands**`,
+        `\`${prefix}help\` \`${prefix}serverstats\` \`${prefix}poll question | option1 | option2 ...\``,
+        `\`${prefix}warn @user reason\` \`${prefix}mute @user 10m reason\` \`${prefix}unmute @user\``,
+        `\`${prefix}kick @user reason\` \`${prefix}ban @user reason\` \`${prefix}unban @user\``,
+        `\`${prefix}setmodlog\` (sets current channel as moderation log)`,
+        `\`${prefix}modlog 10\` (show recent moderation actions)`,
+        `\`${prefix}botconfig show|prefix|enabled|automod|links|caps|spam|words\``
+      ].join('\n')
+    });
+    return true;
+  }
+
+  if (cmd === 'serverstats') {
+    const [memberCount, channelCount, banCount] = await Promise.all([
+      pool.query('SELECT COUNT(*) FROM server_members WHERE server_id=$1', [serverId]),
+      pool.query('SELECT COUNT(*) FROM channels WHERE server_id=$1', [serverId]),
+      pool.query('SELECT COUNT(*) FROM server_bans WHERE server_id=$1', [serverId])
+    ]);
+    await emitBotChannelMessage({
+      serverId,
+      channelId,
+      botName: botConfig?.botName,
+      content: `**Server Stats**\nMembers: ${memberCount.rows[0].count}\nChannels: ${channelCount.rows[0].count}\nBanned users: ${banCount.rows[0].count}`
+    });
+    return true;
+  }
+
+  if (cmd === 'poll') {
+    const pollPayload = raw.replace(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}poll\\s+`, 'i'), '');
+    const parts = pollPayload.split('|').map(p => p.trim()).filter(Boolean);
+    if (parts.length < 3) {
+      socket.emit('channel_error', { channelId, error: `Usage: ${prefix}poll Question | Option 1 | Option 2` });
+      return true;
+    }
+    const question = parts[0];
+    const options = parts.slice(1, 7);
+    const lines = options.map((opt, i) => `${i + 1}. ${opt}`);
+    await emitBotChannelMessage({
+      serverId,
+      channelId,
+      botName: botConfig?.botName,
+      content: `**Poll by ${perms.actorName || actorDisplayName || 'member'}**\n${question}\n${lines.join('\n')}`
+    });
+    return true;
+  }
+
+  if (cmd === 'setmodlog') {
+    if (!perms.isAdmin) {
+      socket.emit('channel_error', { channelId, error: 'Admins only' });
+      return true;
+    }
+    await pool.query('UPDATE servers SET mod_log_channel_id=$1 WHERE id=$2', [channelId, serverId]);
+    await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: 'Moderation log channel set to this channel.' });
+    await logModerationAction({ serverId, channelId, action: 'set_mod_log', actorUserId, details: `channel:${channelId}` });
+    return true;
+  }
+
+  if (cmd === 'botconfig') {
+    if (!perms.isAdmin) {
+      socket.emit('channel_error', { channelId, error: 'Admins only' });
+      return true;
+    }
+    const tokens = raw.split(/\s+/).slice(1);
+    const action = (tokens[0] || 'show').toLowerCase();
+    const value = tokens.slice(1).join(' ').trim();
+
+    if (action === 'show') {
+      await emitBotChannelMessage({
+        serverId,
+        channelId,
+        botName: botConfig?.botName,
+        content: [
+          '**Bot Config**',
+          `Name: ${NEXUS_BOT_NAME} (locked)`,
+          `Prefix: ${prefix}`,
+          `Enabled: ${botConfig?.botEnabled ? 'on' : 'off'}`,
+          `Automod: ${botConfig?.botAutoMod ? 'on' : 'off'}`,
+          `Block links: ${botConfig?.botBlockLinks ? 'on' : 'off'}`,
+          `Caps threshold: ${botConfig?.botCapsThreshold || 90}%`,
+          `Spam window: ${botConfig?.botSpamWindow || 6} msgs/6s`,
+          `Blocked words: ${(botConfig?.blockedWords || []).length}`
+        ].join('\n')
+      });
+      return true;
+    }
+
+    if (action === 'name') {
+      await emitBotChannelMessage({ serverId, channelId, botName: NEXUS_BOT_NAME, content: `Bot name is locked to ${NEXUS_BOT_NAME}.` });
+      return true;
+    }
+
+    if (action === 'prefix') {
+      const nextPrefix = (value || '/').trim().slice(0, 2);
+      if (!nextPrefix) {
+        socket.emit('channel_error', { channelId, error: `Usage: ${prefix}botconfig prefix !` });
+        return true;
+      }
+      await pool.query('UPDATE servers SET bot_prefix=$1 WHERE id=$2', [nextPrefix, serverId]);
+      await logModerationAction({ serverId, channelId, action: 'bot_config_prefix', actorUserId, details: nextPrefix });
+      await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `Bot prefix updated to ${nextPrefix}` });
+      return true;
+    }
+
+    if (['enabled', 'automod', 'links'].includes(action)) {
+      const on = ['on', 'true', '1', 'yes'].includes((tokens[1] || '').toLowerCase());
+      const off = ['off', 'false', '0', 'no'].includes((tokens[1] || '').toLowerCase());
+      if (!on && !off) {
+        socket.emit('channel_error', { channelId, error: `Usage: ${prefix}botconfig ${action} on|off` });
+        return true;
+      }
+      if (action === 'enabled') await pool.query('UPDATE servers SET bot_enabled=$1 WHERE id=$2', [on, serverId]);
+      if (action === 'automod') await pool.query('UPDATE servers SET bot_auto_mod=$1 WHERE id=$2', [on, serverId]);
+      if (action === 'links') await pool.query('UPDATE servers SET bot_block_links=$1 WHERE id=$2', [on, serverId]);
+      await logModerationAction({ serverId, channelId, action: `bot_config_${action}`, actorUserId, details: on ? 'on' : 'off' });
+      await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `${action} is now ${on ? 'on' : 'off'}.` });
+      return true;
+    }
+
+    if (action === 'caps') {
+      const pct = parseInt(tokens[1], 10);
+      if (!pct || pct < 50 || pct > 100) {
+        socket.emit('channel_error', { channelId, error: `Usage: ${prefix}botconfig caps 50-100` });
+        return true;
+      }
+      await pool.query('UPDATE servers SET bot_caps_threshold=$1 WHERE id=$2', [pct, serverId]);
+      await logModerationAction({ serverId, channelId, action: 'bot_config_caps', actorUserId, details: String(pct) });
+      await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `Caps threshold set to ${pct}%` });
+      return true;
+    }
+
+    if (action === 'spam') {
+      const count = parseInt(tokens[1], 10);
+      if (!count || count < 3 || count > 20) {
+        socket.emit('channel_error', { channelId, error: `Usage: ${prefix}botconfig spam 3-20` });
+        return true;
+      }
+      await pool.query('UPDATE servers SET bot_spam_window=$1 WHERE id=$2', [count, serverId]);
+      await logModerationAction({ serverId, channelId, action: 'bot_config_spam', actorUserId, details: String(count) });
+      await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `Spam threshold set to ${count} messages/6s` });
+      return true;
+    }
+
+    if (action === 'words') {
+      const sub = (tokens[1] || '').toLowerCase();
+      const word = (tokens[2] || '').trim().toLowerCase();
+      if (sub === 'list') {
+        const words = botConfig?.blockedWords || [];
+        await emitBotChannelMessage({
+          serverId,
+          channelId,
+          botName: NEXUS_BOT_NAME,
+          content: words.length
+            ? `**Blocked words**\n${words.map(w => `- ${w}`).join('\n')}`
+            : 'No blocked words configured.'
+        });
+        return true;
+      }
+      if (sub === 'clear') {
+        await pool.query('DELETE FROM server_blocked_words WHERE server_id=$1', [serverId]);
+        await logModerationAction({ serverId, channelId, action: 'bot_config_words_clear', actorUserId });
+        await emitBotChannelMessage({ serverId, channelId, botName: NEXUS_BOT_NAME, content: 'Blocked words list cleared.' });
+        return true;
+      }
+      if ((sub === 'add' || sub === 'remove') && (!word || word.length < 2 || word.length > 40)) {
+        socket.emit('channel_error', { channelId, error: `Usage: ${prefix}botconfig words add|remove <word>` });
+        return true;
+      }
+      if (sub === 'add') {
+        await pool.query(
+          `INSERT INTO server_blocked_words (id, server_id, word, created_by)
+           VALUES ($1,$2,$3,$4)
+           ON CONFLICT (server_id, word) DO NOTHING`,
+          [uuidv4(), serverId, word, actorUserId]
+        );
+        await logModerationAction({ serverId, channelId, action: 'bot_config_words_add', actorUserId, details: word });
+        await emitBotChannelMessage({ serverId, channelId, botName: NEXUS_BOT_NAME, content: `Added blocked word: ${word}` });
+        return true;
+      }
+      if (sub === 'remove') {
+        await pool.query('DELETE FROM server_blocked_words WHERE server_id=$1 AND word=$2', [serverId, word]);
+        await logModerationAction({ serverId, channelId, action: 'bot_config_words_remove', actorUserId, details: word });
+        await emitBotChannelMessage({ serverId, channelId, botName: NEXUS_BOT_NAME, content: `Removed blocked word: ${word}` });
+        return true;
+      }
+      socket.emit('channel_error', { channelId, error: `Usage: ${prefix}botconfig words add|remove|list|clear` });
+      return true;
+    }
+
+    socket.emit('channel_error', { channelId, error: `Usage: ${prefix}botconfig show|prefix|enabled|automod|links|caps|spam|words` });
+    return true;
+  }
+
+  if (cmd === 'modlog') {
+    if (!perms.canModerate) {
+      socket.emit('channel_error', { channelId, error: 'Moderators only' });
+      return true;
+    }
+    const n = Math.min(20, Math.max(1, parseInt(raw.split(/\s+/)[1], 10) || 8));
+    const r = await pool.query(
+      `SELECT ml.action, ml.details, ml.created_at,
+              au.display_name as actor_display, au.username as actor_username,
+              tu.display_name as target_display, tu.username as target_username
+       FROM moderation_logs ml
+       LEFT JOIN users au ON au.id=ml.actor_user_id
+       LEFT JOIN users tu ON tu.id=ml.target_user_id
+       WHERE ml.server_id=$1
+       ORDER BY ml.created_at DESC
+       LIMIT $2`,
+      [serverId, n]
+    );
+    if (!r.rows.length) {
+      await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: 'No moderation logs yet.' });
+      return true;
+    }
+    const lines = r.rows.map(l => {
+      const actor = l.actor_display || l.actor_username || 'unknown';
+      const target = l.target_display || l.target_username ? ` -> ${l.target_display || l.target_username}` : '';
+      const details = l.details ? ` (${l.details})` : '';
+      return `- ${l.action}${target} by ${actor}${details}`;
+    });
+    await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `**Recent Mod Actions**\n${lines.join('\n')}` });
+    return true;
+  }
+
+  if (['warn', 'mute', 'unmute', 'kick', 'ban', 'unban'].includes(cmd) && !perms.canModerate) {
+    socket.emit('channel_error', { channelId, error: 'Moderators only' });
+    return true;
+  }
+
+  if (['warn', 'mute', 'unmute', 'kick', 'ban', 'unban'].includes(cmd) && !targetFromMention) {
+    socket.emit('channel_error', { channelId, error: 'Mention a user like <@user:...>' });
+    return true;
+  }
+
+  if (targetFromMention && targetFromMention === ownerId && !perms.isOwner) {
+    socket.emit('channel_error', { channelId, error: 'Only the owner can moderate the owner.' });
+    return true;
+  }
+
+  if (cmd === 'warn') {
+    const reason = raw.replace(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}warn\\s+<@user:[a-f0-9-]+>\\s*`, 'i'), '').trim() || 'No reason provided';
+    await logModerationAction({ serverId, channelId, action: 'warn', actorUserId, targetUserId: targetFromMention, details: reason });
+    await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `Warned <@user:${targetFromMention}>. Reason: ${reason}` });
+    await sendBotDirectMessage({
+      toUserId: targetFromMention,
+      content: `[${NEXUS_BOT_NAME}] You were warned in server ${serverId}. Reason: ${reason}`
+    });
+    if (modLogChannelId && modLogChannelId !== channelId) {
+      await emitBotChannelMessage({ serverId, channelId: modLogChannelId, botName: botConfig?.botName, content: `[MOD LOG] ${perms.actorName} warned <@user:${targetFromMention}> (${reason})` });
+    }
+    return true;
+  }
+
+  if (cmd === 'mute') {
+    const durationRaw = raw.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}mute\\s+<@user:[a-f0-9-]+>\\s+(\\S+)`, 'i'))?.[1];
+    const durationSeconds = parseDurationToSeconds(durationRaw);
+    if (!durationSeconds) {
+      socket.emit('channel_error', { channelId, error: `Usage: ${prefix}mute <@user:id> 10m optional reason` });
+      return true;
+    }
+    const reason = raw.replace(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}mute\\s+<@user:[a-f0-9-]+>\\s+\\S+\\s*`, 'i'), '').trim() || 'No reason provided';
+    const mutedUntil = Math.floor(Date.now() / 1000) + durationSeconds;
+    await pool.query(
+      `INSERT INTO server_mutes (id, server_id, user_id, muted_by, reason, muted_until)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (server_id, user_id) DO UPDATE SET muted_by=$4, reason=$5, muted_until=$6`,
+      [uuidv4(), serverId, targetFromMention, actorUserId, reason, mutedUntil]
+    );
+    await logModerationAction({ serverId, channelId, action: 'mute', actorUserId, targetUserId: targetFromMention, details: `${humanDuration(durationSeconds)} | ${reason}` });
+    await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `Muted <@user:${targetFromMention}> for ${humanDuration(durationSeconds)}. Reason: ${reason}` });
+    await sendBotDirectMessage({
+      toUserId: targetFromMention,
+      content: `[${NEXUS_BOT_NAME}] You were muted in server ${serverId} for ${humanDuration(durationSeconds)}. Reason: ${reason}`
+    });
+    if (modLogChannelId && modLogChannelId !== channelId) {
+      await emitBotChannelMessage({ serverId, channelId: modLogChannelId, botName: botConfig?.botName, content: `[MOD LOG] ${perms.actorName} muted <@user:${targetFromMention}> for ${humanDuration(durationSeconds)} (${reason})` });
+    }
+    return true;
+  }
+
+  if (cmd === 'unmute') {
+    await pool.query('DELETE FROM server_mutes WHERE server_id=$1 AND user_id=$2', [serverId, targetFromMention]);
+    await logModerationAction({ serverId, channelId, action: 'unmute', actorUserId, targetUserId: targetFromMention });
+    await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `Unmuted <@user:${targetFromMention}>.` });
+    await sendBotDirectMessage({
+      toUserId: targetFromMention,
+      content: `[${NEXUS_BOT_NAME}] You were unmuted in server ${serverId}.`
+    });
+    if (modLogChannelId && modLogChannelId !== channelId) {
+      await emitBotChannelMessage({ serverId, channelId: modLogChannelId, botName: botConfig?.botName, content: `[MOD LOG] ${perms.actorName} unmuted <@user:${targetFromMention}>` });
+    }
+    return true;
+  }
+
+  if (cmd === 'kick') {
+    if (targetFromMention === actorUserId) {
+      socket.emit('channel_error', { channelId, error: 'You cannot kick yourself.' });
+      return true;
+    }
+    const reason = raw.replace(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}kick\\s+<@user:[a-f0-9-]+>\\s*`, 'i'), '').trim() || 'No reason provided';
+    await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, targetFromMention]);
+    io.to(`user:${targetFromMention}`).emit('kicked_from_server', { serverId });
+    await logModerationAction({ serverId, channelId, action: 'kick', actorUserId, targetUserId: targetFromMention, details: reason });
+    await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `Kicked <@user:${targetFromMention}>. Reason: ${reason}` });
+    await sendBotDirectMessage({
+      toUserId: targetFromMention,
+      content: `[${NEXUS_BOT_NAME}] You were kicked from server ${serverId}. Reason: ${reason}`
+    });
+    if (modLogChannelId && modLogChannelId !== channelId) {
+      await emitBotChannelMessage({ serverId, channelId: modLogChannelId, botName: botConfig?.botName, content: `[MOD LOG] ${perms.actorName} kicked <@user:${targetFromMention}> (${reason})` });
+    }
+    return true;
+  }
+
+  if (cmd === 'ban') {
+    if (targetFromMention === actorUserId) {
+      socket.emit('channel_error', { channelId, error: 'You cannot ban yourself.' });
+      return true;
+    }
+    const reason = raw.replace(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}ban\\s+<@user:[a-f0-9-]+>\\s*`, 'i'), '').trim() || 'No reason provided';
+    await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, targetFromMention]);
+    await pool.query(
+      `INSERT INTO server_bans (id, server_id, user_id, banned_by, reason)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (server_id, user_id) DO UPDATE SET banned_by=$4, reason=$5`,
+      [uuidv4(), serverId, targetFromMention, actorUserId, reason]
+    );
+    io.to(`user:${targetFromMention}`).emit('banned_from_server', { serverId });
+    await logModerationAction({ serverId, channelId, action: 'ban', actorUserId, targetUserId: targetFromMention, details: reason });
+    await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `Banned <@user:${targetFromMention}>. Reason: ${reason}` });
+    await sendBotDirectMessage({
+      toUserId: targetFromMention,
+      content: `[${NEXUS_BOT_NAME}] You were banned from server ${serverId}. Reason: ${reason}`
+    });
+    if (modLogChannelId && modLogChannelId !== channelId) {
+      await emitBotChannelMessage({ serverId, channelId: modLogChannelId, botName: botConfig?.botName, content: `[MOD LOG] ${perms.actorName} banned <@user:${targetFromMention}> (${reason})` });
+    }
+    return true;
+  }
+
+  if (cmd === 'unban') {
+    await pool.query('DELETE FROM server_bans WHERE server_id=$1 AND user_id=$2', [serverId, targetFromMention]);
+    await logModerationAction({ serverId, channelId, action: 'unban', actorUserId, targetUserId: targetFromMention });
+    await emitBotChannelMessage({ serverId, channelId, botName: botConfig?.botName, content: `Unbanned <@user:${targetFromMention}>.` });
+    await sendBotDirectMessage({
+      toUserId: targetFromMention,
+      content: `[${NEXUS_BOT_NAME}] You were unbanned in server ${serverId}.`
+    });
+    if (modLogChannelId && modLogChannelId !== channelId) {
+      await emitBotChannelMessage({ serverId, channelId: modLogChannelId, botName: botConfig?.botName, content: `[MOD LOG] ${perms.actorName} unbanned <@user:${targetFromMention}>` });
+    }
+    return true;
+  }
+
+  socket.emit('channel_error', { channelId, error: `Unknown command. Try ${prefix}help` });
+  return true;
+}
+
 io.on('connection', (socket) => {
   const userId = socket.userId;
   if (!userSockets.has(userId)) userSockets.set(userId, new Set());
@@ -262,11 +833,26 @@ io.on('connection', (socket) => {
     const trimmed = content.trim().slice(0, 4000);
     if (!trimmed) return;
 
+    const botConfig = await getServerBotConfig(serverId);
+
+    if (trimmed.startsWith(botConfig.botPrefix || '/')) {
+      const handled = await runChannelCommand({
+        socket,
+        serverId,
+        channelId,
+        actorUserId: userId,
+        actorDisplayName: null,
+        input: trimmed,
+        botConfig
+      });
+      if (handled) return;
+    }
+
     // Single query: get member info, role info, channel validity, and permission check
     const check = await pool.query(
       `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color,
-        sr.is_admin,
-        u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration,
+        sr.is_admin, sr.can_delete_messages,
+        u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
         ch.id as ch_id, ch.locked, ch.private as ch_private,
         (SELECT allow_send FROM channel_permissions cp
          WHERE cp.channel_id=$2 AND (cp.role_id=sm.role_id OR cp.role_id IS NULL)
@@ -285,6 +871,62 @@ io.on('connection', (socket) => {
     if (row.locked && !row.is_admin && row.member_role !== 'admin' && !row.perm_allow) {
       socket.emit('channel_error', { channelId, error: 'You do not have permission to send messages in this channel' });
       return;
+    }
+
+    const mute = await getMuteState(serverId, userId);
+    if (mute) {
+      const secondsLeft = Math.max(0, mute.mutedUntil - Math.floor(Date.now() / 1000));
+      socket.emit('channel_error', {
+        channelId,
+        error: `You are muted in this server for ${humanDuration(secondsLeft)} more.`
+      });
+      return;
+    }
+
+    if (botConfig.botEnabled && botConfig.botAutoMod) {
+      const lower = trimmed.toLowerCase();
+      const blockedWord = (botConfig.blockedWords || []).find(w => lower.includes(w));
+      if (blockedWord) {
+        socket.emit('channel_error', { channelId, error: `Message blocked: contains blocked word "${blockedWord}".` });
+        await sendBotDirectMessage({
+          toUserId: userId,
+          content: `[${NEXUS_BOT_NAME}] Your message in server ${serverId} was blocked for using a filtered word: ${blockedWord}`
+        });
+        return;
+      }
+
+      const linkHit = botConfig.botBlockLinks && /(https?:\/\/|www\.)/i.test(trimmed);
+      if (linkHit) {
+        socket.emit('channel_error', { channelId, error: 'Links are blocked by server automod.' });
+        await emitBotChannelMessage({
+          serverId,
+          channelId,
+          botName: botConfig.botName,
+          content: `<@user:${userId}> message blocked: links are not allowed here.`
+        });
+        return;
+      }
+
+      const lettersOnly = trimmed.replace(/[^a-z]/gi, '');
+      const upperOnly = trimmed.replace(/[^A-Z]/g, '');
+      if (lettersOnly.length >= 12) {
+        const capsPct = Math.round((upperOnly.length / lettersOnly.length) * 100);
+        if (capsPct >= botConfig.botCapsThreshold) {
+          socket.emit('channel_error', { channelId, error: `Message blocked: too much caps (${capsPct}%).` });
+          return;
+        }
+      }
+
+      const spamKey = `${serverId}:${userId}`;
+      const nowMs = Date.now();
+      const prev = spamTracker.get(spamKey) || [];
+      const recent = prev.filter(ts => nowMs - ts < 6000);
+      recent.push(nowMs);
+      spamTracker.set(spamKey, recent);
+      if (recent.length > botConfig.botSpamWindow) {
+        socket.emit('channel_error', { channelId, error: 'Slow down. Automod detected message spam.' });
+        return;
+      }
     }
 
     const msgId = uuidv4();
@@ -367,12 +1009,12 @@ io.on('connection', (socket) => {
   });
 
   // Admin: force-suspend an active user
-  socket.on('admin_suspend_user', async ({ targetUserId, suspendedUntil }) => {
+  socket.on('admin_suspend_user', async ({ targetUserId, suspendedUntil, reason }) => {
     // Verify the requesting socket is an admin
     const { ADMIN_IDS } = require('./routes/admin');
     if (!ADMIN_IDS.has(userId)) return;
     // Emit suspended event to all of that user's sockets
-    io.to(`user:${targetUserId}`).emit('account_suspended', { suspendedUntil });
+    io.to(`user:${targetUserId}`).emit('account_suspended', { suspendedUntil, reason: reason || null });
   });
 
   socket.on('call_invite', async ({ toId }) => {
