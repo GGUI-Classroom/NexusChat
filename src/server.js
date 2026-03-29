@@ -68,11 +68,12 @@ const CALL_USER_KEY_PREFIX = 'nexus:call:user:';
 const CALL_ROOM_KEY_PREFIX = 'nexus:call:room:';
 const NEXUS_BOT_ID = '00000000-0000-0000-0000-000000000001';
 const NEXUS_BOT_NAME = 'NexusGuard';
+const NEXUS_BOT_AVATAR_DATA_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmNTllMGIiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmOTczMTYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgY3k9IjQ4IiByPSI0NiIgZmlsbD0idXJsKCNnKSIvPjxwYXRoIGQ9Ik00OCAxNmwyNCA4djIyYzAgMTgtMTAgMzAtMjQgMzYtMTQtNi0yNC0xOC0yNC0zNlYyNHoiIGZpbGw9InVybCgjYSkiLz48cGF0aCBkPSJNNDggMjZsMTQgNXYxNWMwIDExLTYgMTktMTQgMjMtOC00LTE0LTEyLTE0LTIzVjMxeiIgZmlsbD0iIzExMTgyNyIgb3BhY2l0eT0iLjY1Ii8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0NSIgcj0iNyIgZmlsbD0iI2ZkZTY4YSIvPjxwYXRoIGQ9Ik0zNiA1OWgyNHY1SDM2eiIgZmlsbD0iI2ZkZTY4YSIvPjwvc3ZnPg==';
 const spamTracker = new Map();
 const NEXUS_BOT_AUTHOR = {
   username: 'nexusguard',
   displayName: NEXUS_BOT_NAME,
-  avatarDataUrl: null,
+  avatarDataUrl: NEXUS_BOT_AVATAR_DATA_URL,
   roleColor: '#f4b942',
   roleName: 'Bot',
   activeDecoration: null,
@@ -311,7 +312,7 @@ async function sendBotDirectMessage({ toUserId, content }) {
     author: {
       username: NEXUS_BOT_AUTHOR.username,
       displayName: NEXUS_BOT_NAME,
-      avatarDataUrl: null,
+      avatarDataUrl: NEXUS_BOT_AVATAR_DATA_URL,
       activeDecoration: null,
       activeColor: '#f4b942',
       activeFont: null

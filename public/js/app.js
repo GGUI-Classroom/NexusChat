@@ -1717,6 +1717,7 @@
       $('settings-icon-preview').textContent = s.name[0].toUpperCase();
     }
     switchSettingsTab('overview');
+    await loadNexusGuardSettings();
     renderRolesList(activeServerData.roles || []);
     loadBansList();
     $('server-settings-modal').classList.add('active');
@@ -1730,6 +1731,58 @@
       p.classList.toggle('active', p.id === 'settings-tab-' + tab);
     });
   };
+
+  async function loadNexusGuardSettings() {
+    if (!activeServerId) return;
+    const r = await api('GET', `/api/servers/${activeServerId}/bot-config`);
+    if (r.error || !r.config) {
+      showError('ng-settings-error', r.error || 'Failed to load NexusGuard settings');
+      return;
+    }
+    const cfg = r.config;
+    const botAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmNTllMGIiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmOTczMTYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgY3k9IjQ4IiByPSI0NiIgZmlsbD0idXJsKCNnKSIvPjxwYXRoIGQ9Ik00OCAxNmwyNCA4djIyYzAgMTgtMTAgMzAtMjQgMzYtMTQtNi0yNC0xOC0yNC0zNlYyNHoiIGZpbGw9InVybCgjYSkiLz48cGF0aCBkPSJNNDggMjZsMTQgNXYxNWMwIDExLTYgMTktMTQgMjMtOC00LTE0LTEyLTE0LTIzVjMxeiIgZmlsbD0iIzExMTgyNyIgb3BhY2l0eT0iLjY1Ii8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0NSIgcj0iNyIgZmlsbD0iI2ZkZTY4YSIvPjxwYXRoIGQ9Ik0zNiA1OWgyNHY1SDM2eiIgZmlsbD0iI2ZkZTY4YSIvPjwvc3ZnPg==';
+    const avatarEl = $('ng-avatar-preview');
+    if (avatarEl) avatarEl.innerHTML = `<img src="${botAvatar}" alt="NexusGuard" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    $('ng-prefix-input').value = cfg.prefix || '/';
+    $('ng-enabled-toggle').checked = cfg.enabled !== false;
+    $('ng-automod-toggle').checked = cfg.automod !== false;
+    $('ng-block-links-toggle').checked = !!cfg.blockLinks;
+    $('ng-caps-threshold').value = cfg.capsThreshold || 90;
+    $('ng-spam-window').value = cfg.spamWindow || 6;
+    $('ng-blocked-words').value = (cfg.blockedWords || []).join('\n');
+    showError('ng-settings-error', '');
+  }
+
+  $('save-ng-settings-btn').addEventListener('click', async () => {
+    if (!activeServerId) return;
+    const prefix = (($('ng-prefix-input').value || '/').trim().slice(0, 2) || '/');
+    const capsThreshold = parseInt($('ng-caps-threshold').value, 10);
+    const spamWindow = parseInt($('ng-spam-window').value, 10);
+    const blockedWords = ($('ng-blocked-words').value || '')
+      .split('\n')
+      .map(w => w.trim().toLowerCase())
+      .filter(Boolean);
+    if (!capsThreshold || capsThreshold < 50 || capsThreshold > 100) {
+      return showError('ng-settings-error', 'Caps threshold must be between 50 and 100');
+    }
+    if (!spamWindow || spamWindow < 3 || spamWindow > 20) {
+      return showError('ng-settings-error', 'Spam threshold must be between 3 and 20');
+    }
+
+    const r = await api('PATCH', `/api/servers/${activeServerId}/bot-config`, {
+      prefix,
+      enabled: $('ng-enabled-toggle').checked,
+      automod: $('ng-automod-toggle').checked,
+      blockLinks: $('ng-block-links-toggle').checked,
+      capsThreshold,
+      spamWindow,
+      blockedWords
+    });
+
+    if (r.error) return showError('ng-settings-error', r.error);
+    showError('ng-settings-error', '');
+    toast('NexusGuard settings saved!', 'success');
+  });
 
   function renderRolesList(roles) {
     $('roles-list').innerHTML = roles.length
