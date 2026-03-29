@@ -6,6 +6,49 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireAuth);
 const NEXUS_GUARD_AVATAR = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmNTllMGIiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmOTczMTYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgY3k9IjQ4IiByPSI0NiIgZmlsbD0idXJsKCNnKSIvPjxwYXRoIGQ9Ik00OCAxNmwyNCA4djIyYzAgMTgtMTAgMzAtMjQgMzYtMTQtNi0yNC0xOC0yNC0zNlYyNHoiIGZpbGw9InVybCgjYSkiLz48cGF0aCBkPSJNNDggMjZsMTQgNXYxNWMwIDExLTYgMTktMTQgMjMtOC00LTE0LTEyLTE0LTIzVjMxeiIgZmlsbD0iIzExMTgyNyIgb3BhY2l0eT0iLjY1Ii8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0NSIgcj0iNyIgZmlsbD0iI2ZkZTY4YSIvPjxwYXRoIGQ9Ik0zNiA1OWgyNHY1SDM2eiIgZmlsbD0iI2ZkZTY4YSIvPjwvc3ZnPg==';
+const NEXUS_GUARD_ID = '00000000-0000-0000-0000-000000000001';
+
+async function ensureNexusGuardExists() {
+  await pool.query(
+    `INSERT INTO users (id, username, display_name, password_hash, status, active_color, avatar_mime, avatar_data)
+     VALUES ($1,'nexusguard','NexusGuard','nexusguard-local-only','online','#f4b942','image/svg+xml',$2)
+     ON CONFLICT (id) DO UPDATE SET
+       username='nexusguard',
+       display_name='NexusGuard',
+       status='online',
+       active_color='#f4b942',
+       avatar_mime='image/svg+xml',
+       avatar_data=$2`,
+    [NEXUS_GUARD_ID, NEXUS_GUARD_AVATAR.replace(/^data:image\/svg\+xml;base64,/, '')]
+  );
+}
+
+async function sendNexusGuardDM(req, userId, content) {
+  await ensureNexusGuardExists();
+  const now = Math.floor(Date.now() / 1000);
+  await pool.query(
+    'INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
+    [uuidv4(), NEXUS_GUARD_ID, userId, content, now]
+  );
+
+  if (req.io) {
+    req.io.to(`user:${userId}`).emit('new_message', {
+      id: uuidv4(),
+      fromId: NEXUS_GUARD_ID,
+      toId: userId,
+      content,
+      createdAt: now,
+      author: {
+        username: 'nexusguard',
+        displayName: 'NexusGuard',
+        avatarDataUrl: NEXUS_GUARD_AVATAR,
+        activeDecoration: null,
+        activeColor: '#f4b942',
+        activeFont: null
+      }
+    });
+  }
+}
 
 // Hardcoded admin user IDs
 const ADMIN_IDS = new Set([
@@ -75,43 +118,14 @@ router.post('/suspend', async (req, res) => {
     });
   }
 
-  // Send DM from NexusGuard bot so user has a written notice.
-  const BOT_ID = '00000000-0000-0000-0000-000000000001';
-  const existingFriend = await pool.query(
-    `SELECT id FROM friendships
-     WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)
-     LIMIT 1`,
-    [BOT_ID, user.rows[0].id]
-  );
-  if (!existingFriend.rows.length) {
-    await pool.query('INSERT INTO friendships (id, user1_id, user2_id) VALUES ($1,$2,$3)', [uuidv4(), BOT_ID, user.rows[0].id]);
-  }
-  await pool.query(
-    'INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
-    [
-      uuidv4(),
-      BOT_ID,
+  try {
+    await sendNexusGuardDM(
+      req,
       user.rows[0].id,
-      `[NexusGuard] Your account was suspended until ${new Date(until * 1000).toLocaleString()}. Reason: ${reason || 'No reason provided'}`,
-      Math.floor(Date.now() / 1000)
-    ]
-  );
-  if (req.io) {
-    req.io.to(`user:${user.rows[0].id}`).emit('new_message', {
-      id: uuidv4(),
-      fromId: BOT_ID,
-      toId: user.rows[0].id,
-      content: `[NexusGuard] Your account was suspended until ${new Date(until * 1000).toLocaleString()}. Reason: ${reason || 'No reason provided'}`,
-      createdAt: Math.floor(Date.now() / 1000),
-      author: {
-        username: 'nexusguard',
-        displayName: 'NexusGuard',
-        avatarDataUrl: NEXUS_GUARD_AVATAR,
-        activeDecoration: null,
-        activeColor: '#f4b942',
-        activeFont: null
-      }
-    });
+      `[NexusGuard] Your account was suspended until ${new Date(until * 1000).toLocaleString()}. Reason: ${reason || 'No reason provided'}`
+    );
+  } catch (dmErr) {
+    console.error('NexusGuard suspension DM failed:', dmErr.message);
   }
 
   res.json({ success: true, username: user.rows[0].username, userId: user.rows[0].id, suspendedUntil: until, reason: reason || null });
@@ -307,41 +321,8 @@ router.post('/users/:userId/warn', async (req, res) => {
   if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
   if (ADMIN_IDS.has(target.rows[0].id)) return res.status(403).json({ error: 'Cannot warn an admin' });
 
-  const BOT_ID = '00000000-0000-0000-0000-000000000001';
-  const existingFriend = await pool.query(
-    `SELECT id FROM friendships
-     WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)
-     LIMIT 1`,
-    [BOT_ID, userId]
-  );
-  if (!existingFriend.rows.length) {
-    await pool.query('INSERT INTO friendships (id, user1_id, user2_id) VALUES ($1,$2,$3)', [uuidv4(), BOT_ID, userId]);
-  }
-
-  const now = Math.floor(Date.now() / 1000);
   const content = `[NexusGuard] You have received an admin warning. Reason: ${reason}`;
-  await pool.query(
-    'INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
-    [uuidv4(), BOT_ID, userId, content, now]
-  );
-
-  if (req.io) {
-    req.io.to(`user:${userId}`).emit('new_message', {
-      id: uuidv4(),
-      fromId: BOT_ID,
-      toId: userId,
-      content,
-      createdAt: now,
-      author: {
-        username: 'nexusguard',
-        displayName: 'NexusGuard',
-        avatarDataUrl: NEXUS_GUARD_AVATAR,
-        activeDecoration: null,
-        activeColor: '#f4b942',
-        activeFont: null
-      }
-    });
-  }
+  await sendNexusGuardDM(req, userId, content);
 
   res.json({ success: true });
 });

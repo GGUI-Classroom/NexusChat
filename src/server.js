@@ -62,7 +62,10 @@ io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
 
 const userSockets = new Map();
 const voiceRooms = new Map();
+const callTypes = new Map();
 const userInCall = new Map();
+const groupCallRooms = new Map(); // roomId -> Set<userId>
+const userGroupCallRoom = new Map(); // userId -> roomId
 let redisClient = null;
 const CALL_USER_KEY_PREFIX = 'nexus:call:user:';
 const CALL_ROOM_KEY_PREFIX = 'nexus:call:room:';
@@ -80,6 +83,21 @@ const NEXUS_BOT_AUTHOR = {
   activeColor: '#f4b942',
   activeFont: null
 };
+
+async function ensureNexusGuardExists() {
+  await pool.query(
+    `INSERT INTO users (id, username, display_name, password_hash, status, active_color, avatar_mime, avatar_data)
+     VALUES ($1,'nexusguard','NexusGuard','nexusguard-local-only','online','#f4b942','image/svg+xml',$2)
+     ON CONFLICT (id) DO UPDATE SET
+       username='nexusguard',
+       display_name='NexusGuard',
+       status='online',
+       active_color='#f4b942',
+       avatar_mime='image/svg+xml',
+       avatar_data=$2`,
+    [NEXUS_BOT_ID, NEXUS_BOT_AVATAR_DATA_URL.replace(/^data:image\/svg\+xml;base64,/, '')]
+  );
+}
 
 async function getServerBotConfig(serverId) {
   const blockedWordsRes = await pool.query(
@@ -144,6 +162,19 @@ function getCallUserKey(userId) {
 
 function getCallRoomKey(roomId) {
   return `${CALL_ROOM_KEY_PREFIX}${roomId}`;
+}
+
+function getGroupCallRoomId(serverId, channelId) {
+  return `${serverId}:${channelId || 'general'}`;
+}
+
+function mapUserForClient(row) {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null
+  };
 }
 
 async function getUserCallRoom(userId) {
@@ -285,23 +316,10 @@ async function emitBotChannelMessage({ serverId, channelId, content, botName = n
   ).catch(e => console.error('NexusBot msg insert error:', e));
 }
 
-async function ensureBotFriendship(userId) {
-  const existing = await pool.query(
-    `SELECT id FROM friendships
-     WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)
-     LIMIT 1`,
-    [NEXUS_BOT_ID, userId]
-  );
-  if (existing.rows.length) return;
-  await pool.query(
-    'INSERT INTO friendships (id, user1_id, user2_id) VALUES ($1,$2,$3)',
-    [uuidv4(), NEXUS_BOT_ID, userId]
-  );
-}
-
 async function sendBotDirectMessage({ toUserId, content }) {
   const trimmed = String(content || '').trim().slice(0, 4000);
   if (!trimmed || !toUserId) return;
+  await ensureNexusGuardExists();
   const now = Math.floor(Date.now() / 1000);
   const msg = {
     id: uuidv4(),
@@ -318,7 +336,6 @@ async function sendBotDirectMessage({ toUserId, content }) {
       activeFont: null
     }
   };
-  await ensureBotFriendship(toUserId);
   io.to(`user:${toUserId}`).emit('new_message', msg);
   await pool.query(
     'INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
@@ -829,9 +846,10 @@ io.on('connection', (socket) => {
     socket.join(`server:${serverId}`);
   });
 
-  socket.on('send_channel_message', async ({ serverId, channelId, content }) => {
+  socket.on('send_channel_message', async ({ serverId, channelId, content, replyToMessageId }) => {
     if (!content || typeof content !== 'string') return;
     const trimmed = content.trim().slice(0, 4000);
+    const normalizedReplyId = typeof replyToMessageId === 'string' && replyToMessageId.trim() ? replyToMessageId.trim() : null;
     if (!trimmed) return;
 
     const botConfig = await getServerBotConfig(serverId);
@@ -854,7 +872,7 @@ io.on('connection', (socket) => {
       `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color,
         sr.is_admin, sr.can_delete_messages,
         u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
-        ch.id as ch_id, ch.locked, ch.private as ch_private,
+        ch.id as ch_id, ch.locked, ch.private as ch_private, ch.slowmode_seconds, ch.channel_type,
         (SELECT allow_send FROM channel_permissions cp
          WHERE cp.channel_id=$2 AND (cp.role_id=sm.role_id OR cp.role_id IS NULL)
          ORDER BY cp.role_id NULLS LAST LIMIT 1) as perm_allow
@@ -868,10 +886,38 @@ io.on('connection', (socket) => {
     if (!check.rows.length) return; // not a member or channel doesn't belong to server
     const row = check.rows[0];
 
+    if ((row.channel_type || 'text') === 'voice') {
+      socket.emit('channel_error', { channelId, error: 'This is a voice channel. Join voice to communicate here.' });
+      return;
+    }
+
     // Check send permission (already fetched in initial query as perm_allow)
     if (row.locked && !row.is_admin && row.member_role !== 'admin' && !row.perm_allow) {
       socket.emit('channel_error', { channelId, error: 'You do not have permission to send messages in this channel' });
       return;
+    }
+
+    const slowmodeSeconds = Math.max(0, parseInt(row.slowmode_seconds, 10) || 0);
+    const bypassSlowmode = row.is_admin || row.member_role === 'admin';
+    if (slowmodeSeconds > 0 && !bypassSlowmode) {
+      const lastMsg = await pool.query(
+        `SELECT created_at FROM channel_messages
+         WHERE channel_id=$1 AND from_id=$2
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [channelId, userId]
+      );
+      if (lastMsg.rows.length) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const elapsed = nowSec - parseInt(lastMsg.rows[0].created_at, 10);
+        if (elapsed < slowmodeSeconds) {
+          socket.emit('channel_error', {
+            channelId,
+            error: `Slowmode is enabled. Wait ${slowmodeSeconds - elapsed}s before sending again.`
+          });
+          return;
+        }
+      }
     }
 
     const mute = await getMuteState(serverId, userId);
@@ -930,11 +976,35 @@ io.on('connection', (socket) => {
       }
     }
 
+    let replyTo = null;
+    if (normalizedReplyId) {
+      const replyRes = await pool.query(
+        `SELECT cm.id, cm.from_id, cm.content, u.display_name, u.username
+         FROM channel_messages cm
+         JOIN users u ON u.id=cm.from_id
+         WHERE cm.id=$1 AND cm.channel_id=$2`,
+        [normalizedReplyId, channelId]
+      );
+      if (!replyRes.rows.length) {
+        socket.emit('channel_error', { channelId, error: 'Reply target was not found in this channel.' });
+        return;
+      }
+      const r = replyRes.rows[0];
+      replyTo = {
+        id: r.id,
+        fromId: r.from_id,
+        displayName: r.display_name || r.username,
+        content: String(r.content || '').slice(0, 160)
+      };
+    }
+
     const msgId = uuidv4();
     const now = Math.floor(Date.now() / 1000);
     const msg = {
       id: msgId, channelId, serverId, fromId: userId,
       content: trimmed, createdAt: now,
+      isPinned: false,
+      replyTo,
       author: {
         username: row.username, displayName: row.display_name,
         avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null,
@@ -984,8 +1054,8 @@ io.on('connection', (socket) => {
     socket.to(`server:${serverId}`).emit('new_channel_message', msg);
     // Persist non-blocking
     pool.query(
-      'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
-      [msgId, channelId, userId, trimmed, now]
+      'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at, reply_to_id) VALUES ($1,$2,$3,$4,$5,$6)',
+      [msgId, channelId, userId, trimmed, now, normalizedReplyId]
     ).catch(e => console.error('Channel msg insert error:', e));
 
     // Achievement tracking
@@ -1009,6 +1079,63 @@ io.on('connection', (socket) => {
     io.to(`server:${serverId}`).emit('channel_message_deleted', { channelId, messageId });
   });
 
+  socket.on('toggle_channel_reaction', async ({ serverId, channelId, messageId, emoji }) => {
+    const normalizedEmoji = String(emoji || '').trim().slice(0, 16);
+    if (!normalizedEmoji) return;
+
+    const member = await pool.query(
+      'SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2',
+      [serverId, userId]
+    );
+    if (!member.rows.length) return;
+
+    const msg = await pool.query(
+      `SELECT cm.id
+       FROM channel_messages cm
+       JOIN channels ch ON ch.id=cm.channel_id
+       WHERE cm.id=$1 AND cm.channel_id=$2 AND ch.server_id=$3`,
+      [messageId, channelId, serverId]
+    );
+    if (!msg.rows.length) return;
+
+    const existing = await pool.query(
+      `SELECT id FROM channel_message_reactions
+       WHERE message_id=$1 AND user_id=$2 AND emoji=$3
+       LIMIT 1`,
+      [messageId, userId, normalizedEmoji]
+    );
+
+    if (existing.rows.length) {
+      await pool.query('DELETE FROM channel_message_reactions WHERE id=$1', [existing.rows[0].id]);
+    } else {
+      await pool.query(
+        `INSERT INTO channel_message_reactions (id, message_id, user_id, emoji)
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (message_id, user_id, emoji) DO NOTHING`,
+        [uuidv4(), messageId, userId, normalizedEmoji]
+      );
+    }
+
+    const agg = await pool.query(
+      `SELECT emoji, COUNT(*)::int as count, BOOL_OR(user_id=$2) as reacted
+       FROM channel_message_reactions
+       WHERE message_id=$1
+       GROUP BY emoji
+       ORDER BY count DESC, emoji ASC`,
+      [messageId, userId]
+    );
+
+    io.to(`server:${serverId}`).emit('channel_message_reaction_updated', {
+      channelId,
+      messageId,
+      reactions: agg.rows.map(r => ({
+        emoji: r.emoji,
+        count: parseInt(r.count, 10) || 0,
+        reacted: !!r.reacted
+      }))
+    });
+  });
+
   // Admin: force-suspend an active user
   socket.on('admin_suspend_user', async ({ targetUserId, suspendedUntil, reason }) => {
     // Verify the requesting socket is an admin
@@ -1018,32 +1145,37 @@ io.on('connection', (socket) => {
     io.to(`user:${targetUserId}`).emit('account_suspended', { suspendedUntil, reason: reason || null });
   });
 
-  socket.on('call_invite', async ({ toId }) => {
+  socket.on('call_invite', async ({ toId, callType }) => {
     const targetRoom = await getUserCallRoom(toId);
     if (targetRoom) { socket.emit('call_busy', { userId: toId }); return; }
     const roomId = uuidv4();
+    const normalizedCallType = callType === 'video' ? 'video' : 'voice';
+    callTypes.set(roomId, normalizedCallType);
     const caller = await pool.query('SELECT username, display_name, avatar_data, avatar_mime FROM users WHERE id=$1', [userId]);
     const c = caller.rows[0];
     io.to(`user:${toId}`).emit('incoming_call', {
       roomId, fromId: userId,
+      callType: normalizedCallType,
       caller: {
         username: c.username, displayName: c.display_name,
         avatarDataUrl: c.avatar_data ? `data:${c.avatar_mime};base64,${c.avatar_data}` : null
       }
     });
-    socket.emit('call_ringing', { roomId, toId });
+    socket.emit('call_ringing', { roomId, toId, callType: normalizedCallType });
   });
 
   socket.on('call_accept', async ({ roomId, toId }) => {
+    const callType = callTypes.get(roomId) || 'voice';
     await setRoomParticipants(roomId, [userId, toId]);
     await setUserCallRoom(userId, roomId);
     await setUserCallRoom(toId, roomId);
     socket.join(`call:${roomId}`);
-    io.to(`user:${toId}`).emit('call_accepted', { roomId, byId: userId });
-    socket.emit('call_joined', { roomId });
+    io.to(`user:${toId}`).emit('call_accepted', { roomId, byId: userId, callType });
+    socket.emit('call_joined', { roomId, callType });
   });
 
   socket.on('call_decline', ({ roomId, toId }) => {
+    callTypes.delete(roomId);
     io.to(`user:${toId}`).emit('call_declined', { roomId, byId: userId });
   });
 
@@ -1070,11 +1202,14 @@ io.on('connection', (socket) => {
         io.to(`user:${uid}`).emit('call_ended', { roomId });
       }
       await clearRoomParticipants(roomId);
+      callTypes.delete(roomId);
     }
     socket.leave(`call:${roomId}`);
   });
 
-  socket.on('call_cancel', ({ toId }) => {
+  socket.on('call_cancel', ({ toId, roomId }) => {
+    if (roomId) callTypes.delete(roomId);
+    // Receiver will ignore if there is no pending call.
     io.to(`user:${toId}`).emit('call_cancelled', { fromId: userId });
   });
 
@@ -1084,6 +1219,101 @@ io.on('connection', (socket) => {
 
   socket.on('screenshare_stopped', ({ roomId, toId }) => {
     io.to(`user:${toId}`).emit('screenshare_stopped', { fromId: userId });
+  });
+
+  socket.on('join_group_call', async ({ serverId, channelId }) => {
+    if (!serverId || !channelId) return;
+
+    const member = await pool.query(
+      'SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2',
+      [serverId, userId]
+    );
+    if (!member.rows.length) return;
+
+    const channel = await pool.query(
+      `SELECT id, channel_type FROM channels WHERE id=$1 AND server_id=$2`,
+      [channelId, serverId]
+    );
+    if (!channel.rows.length) return;
+    if ((channel.rows[0].channel_type || 'text') !== 'voice') return;
+
+    const roomId = getGroupCallRoomId(serverId, channelId);
+    const previousRoomId = userGroupCallRoom.get(userId);
+    if (previousRoomId && previousRoomId !== roomId) {
+      const prevRoom = groupCallRooms.get(previousRoomId);
+      if (prevRoom) {
+        prevRoom.delete(userId);
+        io.to(`groupcall:${previousRoomId}`).emit('group_call_user_left', { roomId: previousRoomId, userId });
+        if (!prevRoom.size) groupCallRooms.delete(previousRoomId);
+      }
+      userGroupCallRoom.delete(userId);
+      socket.leave(`groupcall:${previousRoomId}`);
+    }
+
+    if (!groupCallRooms.has(roomId)) groupCallRooms.set(roomId, new Set());
+    const roomSet = groupCallRooms.get(roomId);
+    roomSet.add(userId);
+    userGroupCallRoom.set(userId, roomId);
+    socket.join(`groupcall:${roomId}`);
+
+    const participantIds = [...roomSet];
+    const users = await pool.query(
+      `SELECT id, username, display_name, avatar_data, avatar_mime
+       FROM users WHERE id = ANY($1)`,
+      [participantIds]
+    );
+    const participantMap = new Map(users.rows.map(u => [u.id, mapUserForClient(u)]));
+    const participants = participantIds.map(id => participantMap.get(id)).filter(Boolean);
+
+    socket.emit('group_call_joined', {
+      roomId,
+      serverId,
+      channelId,
+      participants
+    });
+
+    const joinedUser = participantMap.get(userId);
+    if (joinedUser) {
+      socket.to(`groupcall:${roomId}`).emit('group_call_user_joined', {
+        roomId,
+        user: joinedUser
+      });
+    }
+  });
+
+  socket.on('leave_group_call', () => {
+    const roomId = userGroupCallRoom.get(userId);
+    if (!roomId) return;
+
+    const roomSet = groupCallRooms.get(roomId);
+    if (roomSet) {
+      roomSet.delete(userId);
+      io.to(`groupcall:${roomId}`).emit('group_call_user_left', { roomId, userId });
+      if (!roomSet.size) groupCallRooms.delete(roomId);
+    }
+    userGroupCallRoom.delete(userId);
+    socket.leave(`groupcall:${roomId}`);
+  });
+
+  socket.on('group_webrtc_offer', ({ roomId, toId, offer }) => {
+    const myRoom = userGroupCallRoom.get(userId);
+    const peerRoom = userGroupCallRoom.get(toId);
+    if (!roomId || myRoom !== roomId || peerRoom !== roomId) return;
+    io.to(`user:${toId}`).emit('group_webrtc_offer', { roomId, fromId: userId, offer });
+  });
+
+  socket.on('group_webrtc_answer', ({ roomId, toId, answer }) => {
+    const myRoom = userGroupCallRoom.get(userId);
+    const peerRoom = userGroupCallRoom.get(toId);
+    if (!roomId || myRoom !== roomId || peerRoom !== roomId) return;
+    io.to(`user:${toId}`).emit('group_webrtc_answer', { roomId, fromId: userId, answer });
+  });
+
+  socket.on('group_webrtc_ice', ({ roomId, toId, candidate }) => {
+    const myRoom = userGroupCallRoom.get(userId);
+    const peerRoom = userGroupCallRoom.get(toId);
+    if (!roomId || myRoom !== roomId || peerRoom !== roomId) return;
+    io.to(`user:${toId}`).emit('group_webrtc_ice', { roomId, fromId: userId, candidate });
   });
 
   socket.on('disconnect', async () => {
@@ -1105,8 +1335,20 @@ io.on('connection', (socket) => {
               }
             }
             await clearRoomParticipants(roomId);
+            callTypes.delete(roomId);
           }
           await clearUserCallRoom(userId);
+        }
+
+        const gRoomId = userGroupCallRoom.get(userId);
+        if (gRoomId) {
+          const gRoom = groupCallRooms.get(gRoomId);
+          if (gRoom) {
+            gRoom.delete(userId);
+            io.to(`groupcall:${gRoomId}`).emit('group_call_user_left', { roomId: gRoomId, userId });
+            if (!gRoom.size) groupCallRooms.delete(gRoomId);
+          }
+          userGroupCallRoom.delete(userId);
         }
       }
     }

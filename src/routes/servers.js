@@ -154,7 +154,7 @@ router.post('/', upload.single('icon'), async (req, res) => {
       console.error('Role creation failed (table may not exist yet):', roleErr.message);
     }
     // Default channel
-    await pool.query(`INSERT INTO channels (id, server_id, name, position) VALUES ($1,$2,'general',0)`, [uuidv4(), id]);
+    await pool.query(`INSERT INTO channels (id, server_id, name, position, channel_type) VALUES ($1,$2,'general',0,'text')`, [uuidv4(), id]);
     const s = await pool.query('SELECT * FROM servers WHERE id=$1', [id]);
     res.json({ server: fmtServer(s.rows[0]) });
   } catch(e) {
@@ -214,7 +214,16 @@ router.get('/:id', async (req, res) => {
       blockedWords: blockedWordsRes.rows.map(w => w.word),
       modLogChannelId: sRes.rows[0].mod_log_channel_id || null
     },
-    channels: chRes.rows.filter(c => c.can_view).map(c => ({ id: c.id, name: c.name, position: c.position, locked: !!c.locked, private: !!c.private })),
+    channels: chRes.rows.filter(c => c.can_view).map(c => ({
+      id: c.id,
+      name: c.name,
+      type: c.channel_type || 'text',
+      position: c.position,
+      locked: !!c.locked,
+      private: !!c.private,
+      topic: c.topic || null,
+      slowmodeSeconds: Math.max(0, parseInt(c.slowmode_seconds, 10) || 0)
+    })),
     members: memRes.rows.map(m => ({
       id: m.id, username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
@@ -329,13 +338,18 @@ router.patch('/:id', upload.single('icon'), async (req, res) => {
 router.post('/:id/channels', async (req, res) => {
   const { id } = req.params;
   const { name } = req.body;
+  const rawType = String(req.body.type || 'text').toLowerCase();
+  const channelType = rawType === 'voice' ? 'voice' : 'text';
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
   if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
   const pos = await pool.query('SELECT COUNT(*) FROM channels WHERE server_id=$1', [id]);
   const chId = uuidv4();
   const chName = name.trim().toLowerCase().replace(/\s+/g,'-');
-  await pool.query('INSERT INTO channels (id, server_id, name, position) VALUES ($1,$2,$3,$4)', [chId, id, chName, parseInt(pos.rows[0].count)]);
-  res.json({ channel: { id: chId, name: chName, serverId: id } });
+  await pool.query(
+    'INSERT INTO channels (id, server_id, name, position, channel_type) VALUES ($1,$2,$3,$4,$5)',
+    [chId, id, chName, parseInt(pos.rows[0].count), channelType]
+  );
+  res.json({ channel: { id: chId, name: chName, type: channelType, serverId: id } });
 });
 
 // Delete channel
@@ -580,6 +594,40 @@ router.patch('/:id/channels/:chId/private', async (req, res) => {
   res.json({ success: true, private: !!isPrivate });
 });
 
+// Update channel settings (topic + slowmode)
+router.patch('/:id/channels/:chId/settings', async (req, res) => {
+  const { id, chId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+
+  const topicRaw = typeof req.body.topic === 'string' ? req.body.topic.trim() : '';
+  const topic = topicRaw.length ? topicRaw.slice(0, 200) : null;
+  const slowmodeSeconds = Math.min(120, Math.max(0, parseInt(req.body.slowmodeSeconds, 10) || 0));
+
+  const updated = await pool.query(
+    `UPDATE channels
+     SET topic=$1, slowmode_seconds=$2
+     WHERE id=$3 AND server_id=$4
+     RETURNING id, name, position, locked, private, channel_type, topic, slowmode_seconds`,
+    [topic, slowmodeSeconds, chId, id]
+  );
+  if (!updated.rows.length) return res.status(404).json({ error: 'Channel not found' });
+
+  const ch = updated.rows[0];
+  res.json({
+    success: true,
+    channel: {
+      id: ch.id,
+      name: ch.name,
+      type: ch.channel_type || 'text',
+      position: ch.position,
+      locked: !!ch.locked,
+      private: !!ch.private,
+      topic: ch.topic || null,
+      slowmodeSeconds: Math.max(0, parseInt(ch.slowmode_seconds, 10) || 0)
+    }
+  });
+});
+
 // Set role permission for a channel
 router.put('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
   const { id, chId, roleId } = req.params;
@@ -611,15 +659,44 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   const { before, limit = 50 } = req.query;
   const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
-  let q = `SELECT cm.id, cm.channel_id, cm.from_id, cm.content, cm.created_at,
+  const channelMeta = await pool.query('SELECT channel_type FROM channels WHERE id=$1 AND server_id=$2', [chId, id]);
+  if (!channelMeta.rows.length) return res.status(404).json({ error: 'Channel not found' });
+  if ((channelMeta.rows[0].channel_type || 'text') === 'voice') return res.json({ messages: [] });
+  let q = `SELECT cm.id, cm.channel_id, cm.from_id, cm.content, cm.created_at, cm.reply_to_id,
     u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
-    sm.role_id, sr.name as role_name, sr.color as role_color
+    sm.role_id, sr.name as role_name, sr.color as role_color,
+    rm.content as reply_content,
+    rm.from_id as reply_from_id,
+    ru.display_name as reply_display_name,
+    ru.username as reply_username,
+    COALESCE(react.reactions, '[]'::json) as reactions,
+    EXISTS (
+      SELECT 1 FROM channel_pins cp
+      WHERE cp.channel_id=cm.channel_id AND cp.message_id=cm.id
+    ) as is_pinned
     FROM channel_messages cm
+    JOIN channels chv ON chv.id=cm.channel_id AND chv.server_id=$1
     JOIN users u ON u.id=cm.from_id
     LEFT JOIN server_members sm ON sm.server_id=$1 AND sm.user_id=cm.from_id
     LEFT JOIN server_roles sr ON sr.id=sm.role_id
+    LEFT JOIN channel_messages rm ON rm.id=cm.reply_to_id
+    LEFT JOIN users ru ON ru.id=rm.from_id
+    LEFT JOIN LATERAL (
+      SELECT json_agg(
+        json_build_object('emoji', r.emoji, 'count', r.cnt, 'reacted', r.reacted)
+        ORDER BY r.cnt DESC, r.emoji ASC
+      ) as reactions
+      FROM (
+        SELECT cmr.emoji,
+               COUNT(*)::int as cnt,
+               BOOL_OR(cmr.user_id=$3) as reacted
+        FROM channel_message_reactions cmr
+        WHERE cmr.message_id = cm.id
+        GROUP BY cmr.emoji
+      ) r
+    ) react ON true
     WHERE cm.channel_id=$2`;
-  const params = [id, chId];
+  const params = [id, chId, req.session.userId];
   if (before) { params.push(parseInt(before)); q += ` AND cm.created_at < $${params.length}`; }
   q += ` ORDER BY cm.created_at DESC LIMIT $${params.length+1}`;
   params.push(parseInt(limit));
@@ -628,6 +705,14 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   res.json({ messages: messages.map(m => ({
     id: m.id, channelId: m.channel_id, fromId: m.from_id,
     content: m.content, createdAt: parseInt(m.created_at),
+    isPinned: !!m.is_pinned,
+    reactions: Array.isArray(m.reactions) ? m.reactions : [],
+    replyTo: m.reply_to_id ? {
+      id: m.reply_to_id,
+      fromId: m.reply_from_id || null,
+      displayName: m.reply_display_name || m.reply_username || 'Unknown user',
+      content: m.reply_content || '[Original message unavailable]'
+    } : null,
     author: {
       username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
@@ -638,6 +723,83 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
       activeFont: m.active_font || null
     }
   }))});
+});
+
+// Get pinned messages for a channel
+router.get('/:id/channels/:chId/pins', async (req, res) => {
+  const { id, chId } = req.params;
+  const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+
+  const r = await pool.query(
+    `SELECT cp.message_id, cp.pinned_at, cp.pinned_by,
+            cm.from_id, cm.content, cm.created_at,
+            u.username, u.display_name
+     FROM channel_pins cp
+     JOIN channels ch ON ch.id=cp.channel_id AND ch.server_id=$2
+     JOIN channel_messages cm ON cm.id=cp.message_id
+     JOIN users u ON u.id=cm.from_id
+     WHERE cp.channel_id=$1
+     ORDER BY cp.pinned_at DESC
+     LIMIT 50`,
+    [chId, id]
+  );
+
+  res.json({
+    pins: r.rows.map(p => ({
+      messageId: p.message_id,
+      pinnedAt: parseInt(p.pinned_at),
+      pinnedBy: p.pinned_by,
+      fromId: p.from_id,
+      content: p.content,
+      createdAt: parseInt(p.created_at),
+      author: {
+        username: p.username,
+        displayName: p.display_name
+      }
+    }))
+  });
+});
+
+// Pin a message (admins only)
+router.post('/:id/channels/:chId/messages/:msgId/pin', async (req, res) => {
+  const { id, chId, msgId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+
+  const msg = await pool.query(
+    `SELECT cm.id
+     FROM channel_messages cm
+     JOIN channels ch ON ch.id=cm.channel_id
+     WHERE cm.id=$1 AND cm.channel_id=$2 AND ch.server_id=$3`,
+    [msgId, chId, id]
+  );
+  if (!msg.rows.length) return res.status(404).json({ error: 'Message not found' });
+
+  const now = Math.floor(Date.now() / 1000);
+  await pool.query(
+    `INSERT INTO channel_pins (id, channel_id, message_id, pinned_by, pinned_at)
+     VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (channel_id, message_id)
+     DO UPDATE SET pinned_by=$4, pinned_at=$5`,
+    [uuidv4(), chId, msgId, req.session.userId, now]
+  );
+  res.json({ success: true, pinnedAt: now });
+});
+
+// Unpin a message (admins only)
+router.delete('/:id/channels/:chId/messages/:msgId/pin', async (req, res) => {
+  const { id, chId, msgId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  await pool.query(
+    `DELETE FROM channel_pins cp
+     USING channels ch
+     WHERE cp.channel_id=ch.id
+       AND cp.channel_id=$1
+       AND cp.message_id=$2
+       AND ch.server_id=$3`,
+    [chId, msgId, id]
+  );
+  res.json({ success: true });
 });
 
 // Delete a channel message

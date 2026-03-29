@@ -231,6 +231,9 @@
                 <button class="icon-btn call-btn" id="start-call-btn" title="Voice Call">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.76a16 16 0 0 0 6.29 6.29l.95-.9a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                 </button>
+                <button class="icon-btn call-btn" id="start-video-call-btn" title="Video Call">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><rect x="3" y="6" width="13" height="12" rx="2"/><polygon points="16 10 21 7 21 17 16 14"/></svg>
+                </button>
               </div>
             </div>
             <div class="messages-wrap" id="messages-wrap"><div id="messages-list" class="messages-list"></div><div class="typing-indicator" id="typing-indicator" style="display:none"><span id="typing-name">Someone</span> is typing<span class="typing-dots"><span></span><span></span><span></span></span></div></div>
@@ -247,17 +250,40 @@
             <div class="chat-header">
               <div class="chat-peer-info">
                 <span class="channel-hash">#</span>
-                <div><div class="display-name" id="channel-name-header">–</div></div>
+                <div>
+                  <div class="display-name" id="channel-name-header">–</div>
+                  <div id="channel-topic-header" class="channel-topic-header" style="display:none"></div>
+                </div>
               </div>
               <div class="chat-actions">
+                <button class="icon-btn" id="group-call-btn" title="Join Group Voice Chat">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M3 10v4"/><path d="M7 8v8"/><path d="M11 6v12"/><path d="M15 8v8"/><path d="M19 10v4"/></svg>
+                </button>
+                <button class="icon-btn" id="group-camera-btn" title="Turn camera on" style="display:none">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><rect x="3" y="6" width="13" height="12" rx="2"/><polygon points="16 10 21 7 21 17 16 14"/></svg>
+                </button>
+                <button class="icon-btn" id="group-screen-btn" title="Share screen" style="display:none">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M9 9l3-3 3 3M12 6v7"/></svg>
+                </button>
+                <button class="icon-btn" id="channel-pins-btn" title="Pinned Messages">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M16 3l5 5-4 4-2-2-5 5v4h-2v-4l5-5-2-2z"/></svg>
+                </button>
+                <button class="icon-btn" id="channel-edit-btn" title="Channel Settings" style="display:none">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/></svg>
+                </button>
                 <button class="icon-btn" id="invite-btn" title="Invite Friends">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
                 </button>
               </div>
             </div>
+            <div id="group-call-stage" class="group-call-stage" style="display:none">
+              <video id="group-local-video" autoplay muted playsinline></video>
+              <div id="group-video-grid" class="group-video-grid"></div>
+            </div>
             <div class="messages-wrap" id="channel-messages-wrap"><div id="channel-messages-list" class="messages-list"></div><div class="typing-indicator" id="channel-typing-indicator" style="display:none"><span id="channel-typing-name">Someone</span> is typing<span class="typing-dots"><span></span><span></span><span></span></span></div></div>
             <div class="message-input-wrap" style="position:relative">
               <div class="mention-autocomplete" id="channel-mention-autocomplete" style="display:none"></div>
+              <div id="channel-reply-preview" class="channel-reply-preview" style="display:none"></div>
               <textarea id="channel-message-input" placeholder="Message #general…" rows="1" maxlength="4000"></textarea>
               <button class="send-btn" id="channel-send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
             </div>
@@ -544,11 +570,17 @@
       <div class="call-hud-timer" id="call-timer">0:00</div>
       <div class="call-hud-controls">
         <button class="hud-btn" id="mute-btn" title="Mute mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+        <button class="hud-btn" id="video-toggle-btn" title="Toggle camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="3" y="6" width="13" height="12" rx="2"/><polygon points="16 10 21 7 21 17 16 14"/></svg></button>
         <button class="hud-btn" id="screenshare-btn" title="Share screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M9 9l3-3 3 3M12 6v7"/></svg></button>
         <button class="hud-btn" id="view-screen-btn" title="View shared screen" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10" r="3"/></svg></button>
         <button class="hud-btn end" id="end-call-btn" title="End Call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg></button>
       </div>
     </div>
+  </div>
+
+  <div class="call-video-stage" id="call-video-stage" style="display:none">
+    <video id="call-remote-video" autoplay playsinline></video>
+    <video id="call-local-video" autoplay playsinline muted></video>
   </div>
 
   <!-- Mythical Claim Animation -->

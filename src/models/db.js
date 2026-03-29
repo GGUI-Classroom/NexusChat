@@ -127,6 +127,41 @@ async function initDb() {
 
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT FALSE`, 'alter_channels_locked');
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS private BOOLEAN DEFAULT FALSE`, 'alter_channels_private');
+  await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS channel_type TEXT DEFAULT 'text'`, 'alter_channels_channel_type');
+  await runSql(`UPDATE channels SET channel_type='text' WHERE channel_type IS NULL OR channel_type NOT IN ('text','voice')`, 'normalize_channels_channel_type');
+  await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS topic TEXT DEFAULT NULL`, 'alter_channels_topic');
+  await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS slowmode_seconds INTEGER DEFAULT 0`, 'alter_channels_slowmode');
+  await runSql(`ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT DEFAULT NULL`, 'alter_channel_messages_reply_to');
+  await runSql(`DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'channel_messages_reply_to_fk'
+    ) THEN
+      ALTER TABLE channel_messages
+      ADD CONSTRAINT channel_messages_reply_to_fk
+      FOREIGN KEY (reply_to_id) REFERENCES channel_messages(id) ON DELETE SET NULL;
+    END IF;
+  END $$;`, 'channel_messages_reply_to_fk');
+  await runSql(`CREATE TABLE IF NOT EXISTS channel_pins (
+    id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    message_id TEXT NOT NULL REFERENCES channel_messages(id) ON DELETE CASCADE,
+    pinned_by TEXT NOT NULL REFERENCES users(id),
+    pinned_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(channel_id, message_id)
+  )`, 'channel_pins');
+  await runSql(`CREATE TABLE IF NOT EXISTS channel_message_reactions (
+    id TEXT PRIMARY KEY,
+    message_id TEXT NOT NULL REFERENCES channel_messages(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    emoji TEXT NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(message_id, user_id, emoji)
+  )`, 'channel_message_reactions');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_channel_messages_reply_to ON channel_messages(reply_to_id)`, 'idx_channel_messages_reply_to');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_channel_pins_channel_time ON channel_pins(channel_id, pinned_at DESC)`, 'idx_channel_pins_channel_time');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_channel_reactions_message ON channel_message_reactions(message_id)`, 'idx_channel_reactions_message');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_channel_reactions_user ON channel_message_reactions(user_id)`, 'idx_channel_reactions_user');
   await runSql(`ALTER TABLE channel_permissions ADD COLUMN IF NOT EXISTS allow_view BOOLEAN DEFAULT TRUE`, 'alter_cp_allow_view');
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_delete_messages BOOLEAN DEFAULT FALSE`, 'alter_roles_delete');
 
@@ -242,6 +277,18 @@ async function initDb() {
         avatar_data='PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmNTllMGIiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmOTczMTYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgY3k9IjQ4IiByPSI0NiIgZmlsbD0idXJsKCNnKSIvPjxwYXRoIGQ9Ik00OCAxNmwyNCA4djIyYzAgMTgtMTAgMzAtMjQgMzYtMTQtNi0yNC0xOC0yNC0zNlYyNHoiIGZpbGw9InVybCgjYSkiLz48cGF0aCBkPSJNNDggMjZsMTQgNXYxNWMwIDExLTYgMTktMTQgMjMtOC00LTE0LTEyLTE0LTIzVjMxeiIgZmlsbD0iIzExMTgyNyIgb3BhY2l0eT0iLjY1Ii8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0NSIgcj0iNyIgZmlsbD0iI2ZkZTY4YSIvPjxwYXRoIGQ9Ik0zNiA1OWgyNHY1SDM2eiIgZmlsbD0iI2ZkZTY4YSIvPjwvc3ZnPg=='
     WHERE id='00000000-0000-0000-0000-000000000001'
   `, 'normalize_nexusguard_user');
+
+  await runSql(`
+    DELETE FROM friend_requests
+    WHERE from_id='00000000-0000-0000-0000-000000000001'
+       OR to_id='00000000-0000-0000-0000-000000000001'
+  `, 'cleanup_nexusguard_friend_requests');
+
+  await runSql(`
+    DELETE FROM friendships
+    WHERE user1_id='00000000-0000-0000-0000-000000000001'
+       OR user2_id='00000000-0000-0000-0000-000000000001'
+  `, 'cleanup_nexusguard_friendships');
 
   console.log('Database initialized');
 }

@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(requireAuth);
+const NEXUS_GUARD_ID = '00000000-0000-0000-0000-000000000001';
 
 router.get('/:userId', async (req, res) => {
   const { userId } = req.params;
@@ -12,7 +13,8 @@ router.get('/:userId', async (req, res) => {
     `SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)`,
     [req.session.userId, userId]
   );
-  if (!isFriend.rows.length) return res.status(403).json({ error: 'Not friends' });
+  const isNexusGuardThread = userId === NEXUS_GUARD_ID;
+  if (!isFriend.rows.length && !isNexusGuardThread) return res.status(403).json({ error: 'Not friends' });
 
   let query = `SELECT m.id, m.from_id, m.to_id, m.content, m.created_at,
     u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font

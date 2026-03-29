@@ -20,15 +20,26 @@
   let isScreenSharing = false;
   let screenStream = null;
   let outgoingCallTo = null;
+  let outgoingCallRoomId = null;
+  let outgoingCallType = 'voice';
   let remoteScreenActive = false; // true when peer is sharing their screen
+  let expectingRemoteScreenTrack = false;
 
   // Server state
   let servers = [];
   let activeServerId = null;
   let activeChannelId = null;
   let activeServerData = null; // { server, channels, members }
+  let isCurrentServerAdmin = false;
+  let pendingChannelReply = null;
+  let activeChannelTopic = null;
+  let activeChannelSlowmode = 0;
+  let activeChannelType = 'text';
   let channelTypingTimer = null;
   let isChannelTyping = false;
+  let groupCallState = null;
+  let groupCameraStream = null;
+  let groupScreenStream = null;
 
   // ---- Helpers ----
   const $ = id => document.getElementById(id);
@@ -1087,6 +1098,7 @@
 
   window.logoutFromSuspension = async function() {
     await api('POST', '/api/auth/logout');
+    leaveGroupCall(false);
     showScreen('auth-screen');
   };
 
@@ -1275,9 +1287,11 @@
 
     // Show settings + add-channel only for admin/owner
     const me = r.members.find(m => m.id === currentUser.id);
-    const isAdmin = me && me.role === 'admin';
+    const isAdmin = me && (me.role === 'admin' || me.isAdmin);
+    isCurrentServerAdmin = !!isAdmin;
     $('server-settings-btn').style.display = isAdmin ? 'flex' : 'none';
     $('add-channel-btn').style.display = isAdmin ? 'flex' : 'none';
+    if ($('channel-edit-btn')) $('channel-edit-btn').style.display = isAdmin ? 'flex' : 'none';
 
     renderChannelList(r.channels, isAdmin);
     renderMemberList(r.members);
@@ -1294,8 +1308,11 @@
       <div class="channel-item ${activeChannelId === c.id ? 'active' : ''} ${c.locked ? 'locked' : ''}"
            data-channel-id="${c.id}"
            data-channel-name="${esc(c.name)}"
-           data-channel-locked="${c.locked ? '1' : '0'}">
-        <span class="ch-hash">${c.locked ? '🔒' : c.private ? '👁' : '#'}</span>
+         data-channel-type="${esc(c.type || 'text')}"
+         data-channel-locked="${c.locked ? '1' : '0'}"
+         data-channel-topic="${esc(c.topic || '')}"
+         data-channel-slowmode="${parseInt(c.slowmodeSeconds || 0, 10)}">
+        <span class="ch-hash">${(c.type === 'voice') ? '🔊' : (c.locked ? '🔒' : c.private ? '👁' : '#')}</span>
         <span class="ch-name">${esc(c.name)}</span>
         ${isAdmin ? `
           <button class="ch-perms" data-ch-id="${c.id}" data-ch-name="${esc(c.name)}" title="Permissions">
@@ -1312,8 +1329,11 @@
       el.addEventListener('click', () => {
         const chId = el.dataset.channelId;
         const chName = el.dataset.channelName;
+        const type = el.dataset.channelType || 'text';
         const locked = el.dataset.channelLocked === '1';
-        openChannel({ id: chId, name: chName, locked });
+        const topic = el.dataset.channelTopic || null;
+        const slowmodeSeconds = parseInt(el.dataset.channelSlowmode || '0', 10) || 0;
+        openChannel({ id: chId, name: chName, type, locked, topic, slowmodeSeconds });
       });
     });
     $('channel-list').querySelectorAll('.ch-perms').forEach(btn => {
@@ -1404,18 +1424,51 @@
   };
 
   window.openChannel = function(channel) {
+    if (groupCallState && groupCallState.roomId) {
+      const switchingAway = groupCallState.channelId !== channel.id || (channel.type || 'text') !== 'voice';
+      if (switchingAway) leaveGroupCall(true);
+    }
+
     // Clear messages immediately before switching so old messages never bleed through
     $('channel-messages-list').innerHTML = '';
     $('channel-typing-indicator').style.display = 'none';
     chLoadingOlder = false;
 
     activeChannelId = channel.id;
+    activeChannelType = channel.type || 'text';
+    activeChannelTopic = channel.topic || null;
+    activeChannelSlowmode = Math.max(0, parseInt(channel.slowmodeSeconds, 10) || 0);
+    setChannelReply(null);
 
     document.querySelectorAll('.channel-item').forEach(el => {
       el.classList.toggle('active', el.dataset.channelId === channel.id);
     });
     $('channel-name-header').textContent = channel.name;
-    $('channel-message-input').placeholder = 'Message #' + channel.name + '…';
+    if ($('channel-topic-header')) {
+      if (activeChannelTopic) {
+        $('channel-topic-header').textContent = activeChannelTopic;
+        $('channel-topic-header').style.display = 'block';
+      } else {
+        $('channel-topic-header').textContent = '';
+        $('channel-topic-header').style.display = 'none';
+      }
+    }
+    const slowmodeHint = activeChannelSlowmode > 0 ? ` (slowmode ${activeChannelSlowmode}s)` : '';
+    if (activeChannelType === 'voice') {
+      $('channel-message-input').placeholder = 'Voice channel - use voice controls in header';
+      $('channel-message-input').disabled = true;
+      $('channel-send-btn').style.display = 'none';
+      if ($('group-call-btn')) $('group-call-btn').style.display = 'inline-flex';
+      if ($('group-camera-btn')) $('group-camera-btn').style.display = 'inline-flex';
+      if ($('group-screen-btn')) $('group-screen-btn').style.display = 'inline-flex';
+    } else {
+      $('channel-message-input').placeholder = 'Message #' + channel.name + slowmodeHint + '…';
+      $('channel-message-input').disabled = false;
+      $('channel-send-btn').style.display = 'inline-flex';
+      if ($('group-call-btn')) $('group-call-btn').style.display = 'none';
+      if ($('group-camera-btn')) $('group-camera-btn').style.display = 'none';
+      if ($('group-screen-btn')) $('group-screen-btn').style.display = 'none';
+    }
     setMobileTitle('#' + channel.name);
     if (isMobile()) closeMobileSidebar();
     $('channel-placeholder').style.display = 'none';
@@ -1432,7 +1485,9 @@
     const s = await api('GET', `/api/servers/${activeServerId}`);
     activeServerData = s;
     const me = s.members.find(m => m.id === currentUser.id);
-    renderChannelList(s.channels, me && me.role === 'admin');
+    const isAdmin = me && (me.role === 'admin' || me.isAdmin);
+    isCurrentServerAdmin = !!isAdmin;
+    renderChannelList(s.channels, isAdmin);
     if (activeChannelId === channelId) {
       activeChannelId = null;
       $('channel-placeholder').style.display = 'flex';
@@ -1502,16 +1557,207 @@
     handleChannelTyping();
   });
   $('channel-send-btn').addEventListener('click', sendChannelMessage);
+  if ($('channel-edit-btn')) $('channel-edit-btn').addEventListener('click', () => window.openChannelSettingsQuick());
+  if ($('channel-pins-btn')) $('channel-pins-btn').addEventListener('click', () => window.openChannelPins());
+  if ($('group-call-btn')) $('group-call-btn').addEventListener('click', async () => {
+    if (!socket || !activeServerId || !activeChannelId) return;
+    if (activeChannelType !== 'voice') return toast('Join a voice channel to start voice chat', 'error');
+    if (callState || outgoingCallTo) return toast('Finish your direct call first', 'error');
+
+    if (groupCallState && groupCallState.roomId) {
+      leaveGroupCall(true);
+      return;
+    }
+
+    try {
+      const local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      groupCallState = {
+        roomId: null,
+        serverId: activeServerId,
+        channelId: activeChannelId,
+        localStream: local,
+        users: new Map(),
+        localVideoTrack: null,
+        localVideoMode: 'off',
+        peers: new Map(),
+        audios: new Map()
+      };
+      socket.emit('join_group_call', { serverId: activeServerId, channelId: activeChannelId });
+      $('group-call-btn').classList.add('active');
+      $('group-call-btn').title = 'Leave Group Voice Chat';
+      toast('Joining group voice…', 'info');
+    } catch (e) {
+      groupCallState = null;
+      toast('Microphone access is required for group voice', 'error');
+    }
+  });
+
+  if ($('group-camera-btn')) $('group-camera-btn').addEventListener('click', async () => {
+    if (!groupCallState || !groupCallState.roomId) return toast('Join voice channel first', 'info');
+    if (groupCallState.localVideoMode === 'camera') {
+      await stopGroupVideoMode();
+      $('group-camera-btn').classList.remove('active');
+      return;
+    }
+    try {
+      if (groupScreenStream) {
+        groupScreenStream.getTracks().forEach(t => t.stop());
+        groupScreenStream = null;
+      }
+      groupCameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      const track = groupCameraStream.getVideoTracks()[0];
+      await applyGroupVideoTrack(track, 'camera');
+      $('group-camera-btn').classList.add('active');
+      if ($('group-screen-btn')) $('group-screen-btn').classList.remove('active');
+      track.onended = async () => {
+        await stopGroupVideoMode();
+        if ($('group-camera-btn')) $('group-camera-btn').classList.remove('active');
+      };
+    } catch (e) {
+      toast('Camera permission denied', 'error');
+    }
+  });
+
+  if ($('group-screen-btn')) $('group-screen-btn').addEventListener('click', async () => {
+    if (!groupCallState || !groupCallState.roomId) return toast('Join voice channel first', 'info');
+    if (groupCallState.localVideoMode === 'screen') {
+      await stopGroupVideoMode();
+      $('group-screen-btn').classList.remove('active');
+      return;
+    }
+    try {
+      if (groupCameraStream) {
+        groupCameraStream.getTracks().forEach(t => t.stop());
+        groupCameraStream = null;
+      }
+      groupScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const track = groupScreenStream.getVideoTracks()[0];
+      await applyGroupVideoTrack(track, 'screen');
+      $('group-screen-btn').classList.add('active');
+      if ($('group-camera-btn')) $('group-camera-btn').classList.remove('active');
+      track.onended = async () => {
+        await stopGroupVideoMode();
+        if ($('group-screen-btn')) $('group-screen-btn').classList.remove('active');
+      };
+    } catch (e) {
+      toast('Screen share was cancelled', 'info');
+    }
+  });
 
   function sendChannelMessage() {
+    if (activeChannelType === 'voice') return;
     const input = $('channel-message-input');
     const content = input.value.trim();
     if (!content || !activeChannelId || !activeServerId || !socket) return;
-    socket.emit('send_channel_message', { serverId: activeServerId, channelId: activeChannelId, content });
+    socket.emit('send_channel_message', {
+      serverId: activeServerId,
+      channelId: activeChannelId,
+      content,
+      replyToMessageId: pendingChannelReply ? pendingChannelReply.id : null
+    });
     input.value = '';
     input.style.height = 'auto';
+    setChannelReply(null);
     stopChannelTyping();
   }
+
+  function setChannelReply(reply) {
+    pendingChannelReply = reply;
+    const box = $('channel-reply-preview');
+    if (!box) return;
+    if (!reply) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    box.style.display = 'flex';
+    box.innerHTML = `<span>Replying to <strong>${esc(reply.displayName)}</strong>: ${esc(reply.content)}</span>
+      <button type="button" onclick="cancelChannelReply()" title="Cancel reply">✕</button>`;
+  }
+
+  window.startChannelReply = function(msgId, encodedName, encodedContent) {
+    const displayName = decodeURIComponent(encodedName || 'User');
+    const content = decodeURIComponent(encodedContent || '').slice(0, 120);
+    setChannelReply({ id: msgId, displayName, content });
+    $('channel-message-input').focus();
+  };
+
+  window.cancelChannelReply = function() {
+    setChannelReply(null);
+  };
+
+  window.openChannelSettingsQuick = async function() {
+    if (!activeServerId || !activeChannelId || !isCurrentServerAdmin) return;
+    const activeChannel = (activeServerData && activeServerData.channels || []).find(c => c.id === activeChannelId);
+    if (!activeChannel) return;
+
+    const topicInput = prompt('Channel topic (leave blank to clear):', activeChannel.topic || '');
+    if (topicInput === null) return;
+    const slowmodeInput = prompt('Slowmode seconds (0-120):', String(parseInt(activeChannel.slowmodeSeconds || 0, 10)));
+    if (slowmodeInput === null) return;
+
+    const slowmodeSeconds = Math.min(120, Math.max(0, parseInt(slowmodeInput, 10) || 0));
+    const r = await api('PATCH', `/api/servers/${activeServerId}/channels/${activeChannelId}/settings`, {
+      topic: topicInput,
+      slowmodeSeconds
+    });
+    if (r.error) return toast(r.error, 'error');
+
+    if (activeServerData && Array.isArray(activeServerData.channels)) {
+      activeServerData.channels = activeServerData.channels.map(c => c.id === activeChannelId ? {
+        ...c,
+        topic: r.channel.topic,
+        slowmodeSeconds: r.channel.slowmodeSeconds
+      } : c);
+      renderChannelList(activeServerData.channels, isCurrentServerAdmin);
+      openChannel(r.channel);
+    }
+    toast('Channel settings updated', 'success');
+  };
+
+  window.openChannelPins = async function() {
+    if (!activeServerId || !activeChannelId) return;
+    const r = await api('GET', `/api/servers/${activeServerId}/channels/${activeChannelId}/pins`);
+    if (r.error) return toast(r.error, 'error');
+    const pins = r.pins || [];
+    if (!pins.length) return toast('No pinned messages yet', 'info');
+
+    const lines = pins.slice(0, 15).map((p, idx) => (
+      `${idx + 1}. ${p.author.displayName}: ${String(p.content || '').slice(0, 64)}`
+    )).join('\n');
+    const choice = prompt(`Pinned messages (latest first):\n${lines}\n\nType a number to jump to it.`);
+    if (!choice) return;
+
+    const idx = parseInt(choice, 10) - 1;
+    if (idx < 0 || idx >= pins.length) return toast('Invalid selection', 'error');
+    const target = pins[idx];
+    const existing = document.querySelector(`.message[data-id="${target.messageId}"]`);
+    if (existing) {
+      existing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      existing.classList.add('mentioned-me');
+      setTimeout(() => existing.classList.remove('mentioned-me'), 1400);
+      return;
+    }
+
+    await loadChannelMessages(activeChannelId);
+    const afterLoad = document.querySelector(`.message[data-id="${target.messageId}"]`);
+    if (afterLoad) {
+      afterLoad.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      afterLoad.classList.add('mentioned-me');
+      setTimeout(() => afterLoad.classList.remove('mentioned-me'), 1400);
+    } else {
+      toast('Pinned message is older than the loaded range', 'info');
+    }
+  };
+
+  window.toggleChannelPin = async function(msgId, channelId, isPinned) {
+    if (!activeServerId || !channelId) return;
+    const method = isPinned ? 'DELETE' : 'POST';
+    const r = await api(method, `/api/servers/${activeServerId}/channels/${channelId}/messages/${msgId}/pin`);
+    if (r.error) return toast(r.error, 'error');
+    await loadChannelMessages(channelId);
+    toast(isPinned ? 'Message unpinned' : 'Message pinned', 'success');
+  };
 
   function handleChannelTyping() {
     if (!activeChannelId || !socket) return;
@@ -1637,7 +1883,10 @@
   $('add-channel-btn').addEventListener('click', async () => {
     const name = prompt('Channel name:');
     if (!name || !name.trim()) return;
-    const r = await api('POST', `/api/servers/${activeServerId}/channels`, { name: name.trim() });
+    const typeRaw = prompt('Channel type? Type "text" or "voice"', 'text');
+    if (typeRaw === null) return;
+    const type = String(typeRaw || 'text').trim().toLowerCase() === 'voice' ? 'voice' : 'text';
+    const r = await api('POST', `/api/servers/${activeServerId}/channels`, { name: name.trim(), type });
     if (r.error) return toast(r.error, 'error');
     const s = await api('GET', `/api/servers/${activeServerId}`);
     activeServerData = s;
@@ -2301,6 +2550,35 @@
     list.prepend(el);
   }
 
+  function renderReactionChips(msgId, channelId, reactions) {
+    const safe = Array.isArray(reactions) ? reactions : [];
+    const chips = safe.map(r => {
+      const emoji = String(r.emoji || '');
+      const count = Math.max(1, parseInt(r.count, 10) || 1);
+      const reacted = !!r.reacted;
+      return `<button class="msg-reaction-chip${reacted ? ' reacted' : ''}" onclick="toggleChannelReaction('${msgId}','${channelId}','${encodeURIComponent(emoji)}')">${esc(emoji)} ${count}</button>`;
+    }).join('');
+    return `${chips}<button class="msg-reaction-add" onclick="promptChannelReaction('${msgId}','${channelId}')">+</button>`;
+  }
+
+  window.promptChannelReaction = function(msgId, channelId) {
+    const emoji = prompt('React with emoji (examples: 👍 🔥 😂)');
+    if (!emoji || !emoji.trim()) return;
+    window.toggleChannelReaction(msgId, channelId, encodeURIComponent(emoji.trim().slice(0, 16)));
+  };
+
+  window.toggleChannelReaction = function(msgId, channelId, encodedEmoji) {
+    if (!socket || !activeServerId) return;
+    const emoji = decodeURIComponent(encodedEmoji || '');
+    if (!emoji) return;
+    socket.emit('toggle_channel_reaction', {
+      serverId: activeServerId,
+      channelId,
+      messageId: msgId,
+      emoji
+    });
+  };
+
   function buildMessageEl(msg, prevEl) {
     const el = document.createElement('div');
     const prevTs = prevEl ? parseInt(prevEl.dataset.ts) : 0;
@@ -2335,6 +2613,25 @@
     const myRole = meInServer && activeServerData.roles && activeServerData.roles.find(r => r.id === meInServer.roleId);
     const canDeleteThisMsg = isOwnMsg || (meInServer && (meInServer.role === 'admin' || meInServer.isAdmin)) || (myRole && myRole.canDeleteMessages);
     const isChannelMsg = !!msg.channelId;
+    const canManagePins = isChannelMsg && meInServer && (meInServer.role === 'admin' || meInServer.isAdmin);
+
+    const replyPreviewHtml = msg.replyTo
+      ? `<div class="msg-reply-preview"><strong>${esc(msg.replyTo.displayName || 'User')}</strong>: ${esc(String(msg.replyTo.content || '').slice(0, 120))}</div>`
+      : '';
+    const pinBadge = msg.isPinned ? '<span class="msg-pinned-badge">PINNED</span>' : '';
+    const replyAction = isChannelMsg
+      ? `<button class="msg-action-btn" onclick="startChannelReply('${msg.id}','${encodeURIComponent(author.displayName || author.username || 'User')}','${encodeURIComponent(String(msg.content || '').slice(0, 160))}')" title="Reply">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="9 17 4 12 9 7"/><line x1="4" y1="12" x2="20" y2="12"/></svg>
+        </button>`
+      : '';
+    const pinAction = canManagePins
+      ? `<button class="msg-action-btn" onclick="toggleChannelPin('${msg.id}','${msg.channelId}',${msg.isPinned ? 'true' : 'false'})" title="${msg.isPinned ? 'Unpin message' : 'Pin message'}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M16 3l5 5-4 4-2-2-5 5v4h-2v-4l5-5-2-2z"/></svg>
+        </button>`
+      : '';
+    const reactionBar = isChannelMsg
+      ? `<div class="msg-reactions" id="reactions-${msg.id}">${renderReactionChips(msg.id, msg.channelId, msg.reactions || [])}</div>`
+      : '';
 
     el.innerHTML = `
       <div class="avatar-wrap" style="flex-shrink:0;align-self:flex-start;margin-top:2px"><div class="avatar" id="mav-${msg.id}"></div></div>
@@ -2342,8 +2639,13 @@
         <div class="msg-header">
           <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>
           <span class="msg-time">${formatTime(msg.createdAt)}</span>
+          ${pinBadge}
         </div>
+        ${replyPreviewHtml}
         <div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(msg.content, msg.mentions, author.activeColor || null)}</div>
+        ${reactionBar}
+        ${replyAction}
+        ${pinAction}
         ${(isChannelMsg && canDeleteThisMsg) ? `<button class="msg-delete-btn" onclick="deleteChannelMessage('${msg.id}','${msg.channelId}',this)" title="Delete message">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
         </button>` : ''}
@@ -2500,33 +2802,40 @@
     });
 
     // ---- CALL EVENTS ----
-    socket.on('incoming_call', ({ roomId, fromId, caller }) => {
+    socket.on('incoming_call', ({ roomId, fromId, caller, callType }) => {
       if (callState) {
         socket.emit('call_decline', { roomId, toId: fromId });
         return;
       }
-      pendingCallData = { roomId, fromId, caller };
+      const normalizedType = callType === 'video' ? 'video' : 'voice';
+      pendingCallData = { roomId, fromId, caller, callType: normalizedType };
       $('incoming-caller-name').textContent = caller.displayName;
+      const callLabel = document.querySelector('#incoming-call-modal .call-label');
+      if (callLabel) callLabel.textContent = normalizedType === 'video' ? 'Incoming Video Call' : 'Incoming Voice Call';
       renderAvatar($('incoming-caller-avatar'), { id: fromId, ...caller });
       $('incoming-call-modal').classList.add('active');
       playRingtone(true); // incoming — pulsing tone
     });
 
-    socket.on('call_ringing', ({ roomId, toId }) => {
+    socket.on('call_ringing', ({ roomId, toId, callType }) => {
+      outgoingCallRoomId = roomId || null;
+      outgoingCallType = callType === 'video' ? 'video' : 'voice';
       playRingtone(false); // outgoing — gentle beep
     });
 
-    socket.on('call_accepted', async ({ roomId, byId }) => {
+    socket.on('call_accepted', async ({ roomId, byId, callType }) => {
       stopRingtone();
       outgoingCallTo = null;
+      outgoingCallRoomId = null;
       const friend = friends.find(f => f.id === byId);
       if (!friend) return;
-      await startWebRTCCall(roomId, byId, friend, true);
+      await startWebRTCCall(roomId, byId, friend, true, callType || outgoingCallType || 'voice');
     });
 
     socket.on('call_declined', () => {
       stopRingtone();
       outgoingCallTo = null;
+      outgoingCallRoomId = null;
       $('call-hud').style.display = 'none';
       $('call-timer').textContent = '0:00';
       toast('Call declined', 'info');
@@ -2601,11 +2910,99 @@
       if (channelId === activeChannelId) removeMessageFromDOM(messageId);
     });
 
+    socket.on('channel_message_reaction_updated', ({ channelId, messageId, reactions }) => {
+      if (channelId !== activeChannelId) return;
+      const el = $(`reactions-${messageId}`);
+      if (!el) return;
+      el.innerHTML = renderReactionChips(messageId, channelId, reactions || []);
+    });
+
+    socket.on('group_call_joined', async ({ roomId, serverId, channelId, participants }) => {
+      if (!groupCallState) return;
+      groupCallState.roomId = roomId;
+      groupCallState.serverId = serverId;
+      groupCallState.channelId = channelId;
+      groupCallState.users.clear();
+      (participants || []).forEach(p => groupCallState.users.set(p.id, p));
+
+      if ($('group-video-grid')) $('group-video-grid').innerHTML = '';
+      if ($('group-local-video')) $('group-local-video').srcObject = null;
+
+      const others = (participants || []).filter(p => p.id !== currentUser.id);
+      for (const p of others) {
+        await ensureGroupPeerConnection(p.id, true);
+      }
+      const count = others.length + 1;
+      if ($('group-call-btn')) $('group-call-btn').title = `Leave Group Voice Chat (${count} in call)`;
+      toast(`Joined group voice (${count} in call)`, 'success');
+    });
+
+    socket.on('group_call_user_joined', ({ roomId, user }) => {
+      if (!groupCallState || groupCallState.roomId !== roomId) return;
+      groupCallState.users.set(user.id, user);
+      const peerCount = groupCallState.peers.size + 2;
+      if ($('group-call-btn')) $('group-call-btn').title = `Leave Group Voice Chat (${peerCount} in call)`;
+      toast(`${user.displayName} joined group voice`, 'info');
+    });
+
+    socket.on('group_call_user_left', ({ roomId, userId }) => {
+      if (!groupCallState || groupCallState.roomId !== roomId) return;
+      const pc = groupCallState.peers.get(userId);
+      if (pc) {
+        try { pc.close(); } catch (_) {}
+        groupCallState.peers.delete(userId);
+      }
+      const audio = groupCallState.audios.get(userId);
+      if (audio) {
+        audio.remove();
+        groupCallState.audios.delete(userId);
+      }
+      const tile = $(`group-remote-video-${userId}`);
+      if (tile && tile.parentElement) tile.parentElement.remove();
+      groupCallState.users.delete(userId);
+      const count = groupCallState.peers.size + 1;
+      if ($('group-call-btn')) $('group-call-btn').title = `Leave Group Voice Chat (${count} in call)`;
+    });
+
+    socket.on('group_webrtc_offer', async ({ roomId, fromId, offer }) => {
+      if (!groupCallState || groupCallState.roomId !== roomId) return;
+      const pc = await ensureGroupPeerConnection(fromId, false);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('group_webrtc_answer', { roomId, toId: fromId, answer });
+      } catch (e) {
+        console.error('group offer handling error:', e);
+      }
+    });
+
+    socket.on('group_webrtc_answer', async ({ roomId, fromId, answer }) => {
+      if (!groupCallState || groupCallState.roomId !== roomId) return;
+      const pc = groupCallState.peers.get(fromId);
+      if (!pc) return;
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      } catch (e) {
+        console.error('group answer handling error:', e);
+      }
+    });
+
+    socket.on('group_webrtc_ice', async ({ roomId, fromId, candidate }) => {
+      if (!groupCallState || groupCallState.roomId !== roomId) return;
+      const pc = groupCallState.peers.get(fromId);
+      if (!pc) return;
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (_) {}
+    });
+
     socket.on('channel_error', ({ channelId, error }) => {
       if (channelId === activeChannelId) toast(error, 'error');
     });
 
     socket.on('screenshare_started', ({ fromId }) => {
+      expectingRemoteScreenTrack = true;
       // The ontrack handler deals with showing the video; this is just for notification
       const peer = callState && callState.peerUser;
       toast((peer ? peer.displayName : 'Peer') + ' started screen sharing', 'info');
@@ -2615,6 +3012,7 @@
       // Immediately show suspension screen and log out
       api('POST', '/api/auth/logout').then(() => {
         currentUser = null;
+        leaveGroupCall(false);
         if (socket) { socket.disconnect(); socket = null; }
         showSuspensionScreen(null, suspendedUntil, reason || null);
       });
@@ -2626,6 +3024,7 @@
     });
 
     socket.on('screenshare_stopped', () => {
+      expectingRemoteScreenTrack = false;
       remoteScreenActive = false;
       $('screenshare-overlay').style.display = 'none';
       $('screenshare-video').srcObject = null;
@@ -2663,19 +3062,32 @@
     if (!activeDmUserId) return;
     if (callState || outgoingCallTo) return toast('Already in a call', 'error');
     outgoingCallTo = activeDmUserId;
-    socket.emit('call_invite', { toId: activeDmUserId });
+    outgoingCallType = 'voice';
+    socket.emit('call_invite', { toId: activeDmUserId, callType: 'voice' });
     const friend = friends.find(f => f.id === activeDmUserId);
     if (friend) showCallHud(friend, false);
   });
 
+  if ($('start-video-call-btn')) {
+    $('start-video-call-btn').addEventListener('click', () => {
+      if (!activeDmUserId) return;
+      if (callState || outgoingCallTo) return toast('Already in a call', 'error');
+      outgoingCallTo = activeDmUserId;
+      outgoingCallType = 'video';
+      socket.emit('call_invite', { toId: activeDmUserId, callType: 'video' });
+      const friend = friends.find(f => f.id === activeDmUserId);
+      if (friend) showCallHud(friend, false);
+    });
+  }
+
   $('accept-call-btn').addEventListener('click', async () => {
     if (!pendingCallData) return;
     stopRingtone();
-    const { roomId, fromId, caller } = pendingCallData;
+    const { roomId, fromId, caller, callType } = pendingCallData;
     $('incoming-call-modal').classList.remove('active');
     socket.emit('call_accept', { roomId, toId: fromId });
     const friend = friends.find(f => f.id === fromId) || { id: fromId, ...caller };
-    await startWebRTCCall(roomId, fromId, friend, false);
+    await startWebRTCCall(roomId, fromId, friend, false, callType || 'voice');
     pendingCallData = null;
   });
 
@@ -2693,8 +3105,9 @@
       endCallLocal();
     } else if (outgoingCallTo) {
       // Still ringing — cancel it
-      socket.emit('call_cancel', { toId: outgoingCallTo });
+      socket.emit('call_cancel', { toId: outgoingCallTo, roomId: outgoingCallRoomId });
       outgoingCallTo = null;
+      outgoingCallRoomId = null;
       stopRingtone();
       $('call-hud').style.display = 'none';
       $('call-timer').textContent = '0:00';
@@ -2708,6 +3121,51 @@
     track.enabled = !track.enabled;
     $('mute-btn').classList.toggle('muted', !track.enabled);
   });
+
+  if ($('video-toggle-btn')) {
+    $('video-toggle-btn').addEventListener('click', async () => {
+      if (!callState || !callState.localStream) return;
+      const pc = callState.peerConnection;
+      const currentVideo = callState.localStream.getVideoTracks()[0] || null;
+
+      if (currentVideo) {
+        currentVideo.stop();
+        callState.localStream.removeTrack(currentVideo);
+        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) {
+          await sender.replaceTrack(null);
+          try { pc.removeTrack(sender); } catch (_) {}
+        }
+        $('video-toggle-btn').classList.add('video-off');
+        $('call-local-video').srcObject = null;
+        if (!$('call-remote-video').srcObject) $('call-video-stage').style.display = 'none';
+      } else {
+        try {
+          const cam = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          const camTrack = cam.getVideoTracks()[0];
+          callState.localStream.addTrack(camTrack);
+          const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+          if (sender) await sender.replaceTrack(camTrack);
+          else pc.addTrack(camTrack, callState.localStream);
+
+          $('video-toggle-btn').classList.remove('video-off');
+          $('call-local-video').srcObject = new MediaStream([camTrack]);
+          $('call-video-stage').style.display = 'block';
+
+          camTrack.onended = () => {
+            $('video-toggle-btn').classList.add('video-off');
+            $('call-local-video').srcObject = null;
+          };
+
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('webrtc_offer', { roomId: callState.roomId, toId: callState.peerId, offer });
+        } catch (e) {
+          toast('Camera access was denied', 'error');
+        }
+      }
+    });
+  }
 
   $('screenshare-btn').addEventListener('click', async () => {
     if (!callState) return;
@@ -2855,9 +3313,10 @@
     }
   }
 
-  async function startWebRTCCall(roomId, peerId, peerUser, isCaller) {
+  async function startWebRTCCall(roomId, peerId, peerUser, isCaller, callType = 'voice') {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const wantsVideo = callType === 'video';
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: wantsVideo });
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
@@ -2876,24 +3335,33 @@
           document.body.appendChild(audio);
           if (callState) callState.remoteAudio = audio;
         } else if (track.kind === 'video') {
-          // Remote screen share incoming
-          remoteScreenActive = true;
           const peerName = callState && callState.peerUser ? callState.peerUser.displayName : 'Peer';
-          $('screenshare-who').textContent = peerName + ' is sharing their screen';
-          const vid = $('screenshare-video');
-          vid.srcObject = e.streams[0];
-          vid.muted = false;
-          $('screenshare-overlay').style.display = 'flex';
-          $('view-screen-btn').style.display = 'flex';
-          $('view-screen-btn').classList.add('viewing');
-          toast((peerName) + ' is sharing their screen — click 👁 to view', 'info', 5000);
-          track.onended = () => {
-            remoteScreenActive = false;
-            $('screenshare-overlay').style.display = 'none';
-            vid.srcObject = null;
-            $('view-screen-btn').style.display = 'none';
-            $('view-screen-btn').classList.remove('viewing');
-          };
+          if (expectingRemoteScreenTrack) {
+            remoteScreenActive = true;
+            $('screenshare-who').textContent = peerName + ' is sharing their screen';
+            const vid = $('screenshare-video');
+            vid.srcObject = e.streams[0];
+            vid.muted = false;
+            $('screenshare-overlay').style.display = 'flex';
+            $('view-screen-btn').style.display = 'flex';
+            $('view-screen-btn').classList.add('viewing');
+            toast((peerName) + ' is sharing their screen — click 👁 to view', 'info', 5000);
+            track.onended = () => {
+              remoteScreenActive = false;
+              expectingRemoteScreenTrack = false;
+              $('screenshare-overlay').style.display = 'none';
+              vid.srcObject = null;
+              $('view-screen-btn').style.display = 'none';
+              $('view-screen-btn').classList.remove('viewing');
+            };
+          } else {
+            $('call-remote-video').srcObject = e.streams[0];
+            $('call-video-stage').style.display = 'block';
+            track.onended = () => {
+              $('call-remote-video').srcObject = null;
+              if (!$('call-local-video').srcObject) $('call-video-stage').style.display = 'none';
+            };
+          }
         }
       };
 
@@ -2913,7 +3381,17 @@
         }
       };
 
-      callState = { roomId, peerId, peerUser, peerConnection: pc, localStream: stream };
+      callState = { roomId, peerId, peerUser, peerConnection: pc, localStream: stream, callType };
+
+      const localVideoTrack = stream.getVideoTracks()[0] || null;
+      if (localVideoTrack) {
+        $('video-toggle-btn').classList.remove('video-off');
+        $('call-local-video').srcObject = new MediaStream([localVideoTrack]);
+        $('call-video-stage').style.display = 'block';
+      } else {
+        $('video-toggle-btn').classList.add('video-off');
+        $('call-local-video').srcObject = null;
+      }
 
       socket.emit('join_call', { roomId });
 
@@ -2926,7 +3404,7 @@
       showCallHud(peerUser, true);
     } catch (e) {
       console.error('WebRTC error:', e);
-      toast('Could not access microphone', 'error');
+      toast('Could not access microphone/camera', 'error');
     }
   }
 
@@ -2959,13 +3437,184 @@
     }
     $('call-hud').style.display = 'none';
     $('call-timer').textContent = '0:00';
+    $('call-video-stage').style.display = 'none';
+    $('call-local-video').srcObject = null;
+    $('call-remote-video').srcObject = null;
     $('screenshare-overlay').style.display = 'none';
     $('screenshare-video').srcObject = null;
     isScreenSharing = false;
+    expectingRemoteScreenTrack = false;
     remoteScreenActive = false;
     $('screenshare-btn').classList.remove('sharing');
+    $('video-toggle-btn').classList.remove('video-off');
     $('view-screen-btn').style.display = 'none';
     $('view-screen-btn').classList.remove('viewing');
+  }
+
+  async function ensureGroupPeerConnection(peerId, initiateOffer) {
+    if (!groupCallState) return null;
+    if (groupCallState.peers.has(peerId)) return groupCallState.peers.get(peerId);
+
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+
+    groupCallState.localStream.getTracks().forEach(t => pc.addTrack(t, groupCallState.localStream));
+
+    pc.onicecandidate = e => {
+      if (e.candidate && groupCallState && groupCallState.roomId) {
+        socket.emit('group_webrtc_ice', {
+          roomId: groupCallState.roomId,
+          toId: peerId,
+          candidate: e.candidate
+        });
+      }
+    };
+
+    pc.ontrack = e => {
+      const stream = e.streams[0];
+      if (!stream) return;
+      if (e.track && e.track.kind === 'audio') {
+        let audio = groupCallState.audios.get(peerId);
+        if (!audio) {
+          audio = document.createElement('audio');
+          audio.autoplay = true;
+          audio.dataset.peerId = peerId;
+          document.body.appendChild(audio);
+          groupCallState.audios.set(peerId, audio);
+        }
+        audio.srcObject = stream;
+      } else if (e.track && e.track.kind === 'video') {
+        ensureGroupRemoteVideoTile(peerId, stream);
+      }
+    };
+
+    groupCallState.peers.set(peerId, pc);
+
+    if (initiateOffer && groupCallState.roomId) {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('group_webrtc_offer', {
+        roomId: groupCallState.roomId,
+        toId: peerId,
+        offer
+      });
+    }
+
+    return pc;
+  }
+
+  function ensureGroupRemoteVideoTile(peerId, stream) {
+    const grid = $('group-video-grid');
+    if (!grid) return;
+    if ($('group-call-stage')) $('group-call-stage').style.display = 'block';
+    let wrap = $(`group-remote-wrap-${peerId}`);
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = `group-remote-wrap-${peerId}`;
+      const user = groupCallState && groupCallState.users ? groupCallState.users.get(peerId) : null;
+      const label = user ? user.displayName : 'User';
+      wrap.innerHTML = `<video class="group-remote-video" id="group-remote-video-${peerId}" autoplay playsinline></video>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">${esc(label)}</div>`;
+      grid.appendChild(wrap);
+    }
+    const vid = $(`group-remote-video-${peerId}`);
+    if (vid) vid.srcObject = stream;
+  }
+
+  async function renegotiateAllGroupPeers() {
+    if (!groupCallState || !groupCallState.roomId) return;
+    for (const [peerId, pc] of groupCallState.peers.entries()) {
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('group_webrtc_offer', { roomId: groupCallState.roomId, toId: peerId, offer });
+      } catch (e) {
+        console.warn('Group renegotiate failed for peer', peerId, e && e.message ? e.message : e);
+      }
+    }
+  }
+
+  async function applyGroupVideoTrack(track, mode) {
+    if (!groupCallState || !groupCallState.localStream) return;
+
+    const oldTracks = groupCallState.localStream.getVideoTracks();
+    oldTracks.forEach(t => {
+      try { t.stop(); } catch (_) {}
+      groupCallState.localStream.removeTrack(t);
+    });
+
+    if (track) {
+      groupCallState.localStream.addTrack(track);
+      groupCallState.localVideoTrack = track;
+      groupCallState.localVideoMode = mode;
+      if ($('group-local-video')) $('group-local-video').srcObject = new MediaStream([track]);
+      if ($('group-call-stage')) $('group-call-stage').style.display = 'block';
+    } else {
+      groupCallState.localVideoTrack = null;
+      groupCallState.localVideoMode = 'off';
+      if ($('group-local-video')) $('group-local-video').srcObject = null;
+    }
+
+    for (const pc of groupCallState.peers.values()) {
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+      if (sender) {
+        await sender.replaceTrack(track || null);
+      } else if (track) {
+        pc.addTrack(track, groupCallState.localStream);
+      }
+    }
+
+    await renegotiateAllGroupPeers();
+  }
+
+  async function stopGroupVideoMode() {
+    await applyGroupVideoTrack(null, 'off');
+    if (groupCameraStream) {
+      groupCameraStream.getTracks().forEach(t => t.stop());
+      groupCameraStream = null;
+    }
+    if (groupScreenStream) {
+      groupScreenStream.getTracks().forEach(t => t.stop());
+      groupScreenStream = null;
+    }
+    if ($('group-camera-btn')) $('group-camera-btn').classList.remove('active');
+    if ($('group-screen-btn')) $('group-screen-btn').classList.remove('active');
+  }
+
+  function leaveGroupCall(emitToServer) {
+    if (!groupCallState) return;
+    if (emitToServer && socket && groupCallState.roomId) {
+      socket.emit('leave_group_call');
+    }
+    groupCallState.peers.forEach(pc => {
+      try { pc.close(); } catch (_) {}
+    });
+    groupCallState.audios.forEach(a => a.remove());
+    if (groupCallState.localStream) {
+      groupCallState.localStream.getTracks().forEach(t => t.stop());
+    }
+    if (groupCameraStream) {
+      groupCameraStream.getTracks().forEach(t => t.stop());
+      groupCameraStream = null;
+    }
+    if (groupScreenStream) {
+      groupScreenStream.getTracks().forEach(t => t.stop());
+      groupScreenStream = null;
+    }
+    if ($('group-video-grid')) $('group-video-grid').innerHTML = '';
+    if ($('group-local-video')) $('group-local-video').srcObject = null;
+    if ($('group-call-stage')) $('group-call-stage').style.display = 'none';
+    groupCallState = null;
+    if ($('group-call-btn')) {
+      $('group-call-btn').classList.remove('active');
+      $('group-call-btn').title = 'Join Group Voice Chat';
+    }
+    if ($('group-camera-btn')) $('group-camera-btn').classList.remove('active');
+    if ($('group-screen-btn')) $('group-screen-btn').classList.remove('active');
   }
 
   // ---- Profile ----
@@ -3029,6 +3678,7 @@
   $('logout-btn').addEventListener('click', async () => {
     if (!confirm('Sign out?')) return;
     await api('POST', '/api/auth/logout');
+    leaveGroupCall(false);
     if (socket) socket.disconnect();
     currentUser = null; socket = null; friends = [];
     activeDmUserId = null; activeDmUser = null;
