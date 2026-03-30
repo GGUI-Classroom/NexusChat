@@ -49,7 +49,7 @@ const RINGTONES = [
     price: 5000,
     description: 'Explosive bass bloom with stuttering starship alert bursts.'
   }
-];s
+];
 
 router.get('/', async (req, res) => {
   const [owned, user] = await Promise.all([

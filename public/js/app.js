@@ -3408,7 +3408,9 @@
     stopRingtone();
     try {
       ringtoneCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const chosen = getRingtonePreset(opts.ringtoneId || (currentUser && currentUser.activeRingtone));
+      // Custom ringtone is only for the receiver side (incoming calls).
+      const activeRingtoneId = isIncoming ? (currentUser && currentUser.activeRingtone) : null;
+      const chosen = getRingtonePreset(opts.ringtoneId || activeRingtoneId);
       const preset = chosen || (isIncoming ? DEFAULT_INCOMING_RINGTONE : DEFAULT_OUTGOING_RINGTONE);
       const schedule = preset.pattern || [];
       const waveType = preset.wave || 'sine';
