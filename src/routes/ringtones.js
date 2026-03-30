@@ -36,8 +36,20 @@ const RINGTONES = [
     name: 'Velvet Alarm',
     price: 5000,
     description: 'Smooth warm synth chime that still cuts through noise.'
+  },
+  {
+    id: 'quantum_drift',
+    name: 'Quantum Drift',
+    price: 5000,
+    description: 'Crazy stuff'
+  },
+  {
+    id: 'nova_breaker',
+    name: 'Nova Breaker',
+    price: 5000,
+    description: 'Explosive bass bloom with stuttering starship alert bursts.'
   }
-];
+];s
 
 router.get('/', async (req, res) => {
   const [owned, user] = await Promise.all([
