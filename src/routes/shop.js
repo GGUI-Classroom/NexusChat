@@ -158,13 +158,13 @@ const DECORATIONS = [
   { id: 'aether_mist',  nexalPrice: 10000, name: 'Aether Mist',   description: 'Iridescent mist swirls with astral sparks in a premium aura.', rarity: 'mythical', preview: 'aether_mist' },
   { id: 'magma',        nexalPrice: 10000, name: 'Magma',         description: 'Molten lava drips from above your profile in a fiery flow.', rarity: 'mythical', preview: 'magma' },
   {
-    id: 'eclipsed_lantern',
+    id: 'stormveil',
     nexalPrice: null,
-    name: 'The Eclipsed Lantern',
-    description: 'Forged at the boundary between what is seen and what is forgotten.',
-    flavorText: 'Forged at the boundary between what is seen and what is forgotten.',
+    name: 'The Stormveil',
+    description: "It doesn't rain here. It hunts.",
+    flavorText: "It doesn't rain here. It hunts.",
     rarity: '??SECRET??',
-    preview: 'eclipsed_lantern',
+    preview: 'stormveil',
     category: SECRET_CATEGORY,
     hidden: true
   },
@@ -230,7 +230,7 @@ router.get('/', async (req, res) => {
   const nexalsRes = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
   res.json({
     decorations: DECORATIONS
-      .filter(d => !d.hidden)
+      .filter(d => !d.hidden || (d.hidden && ownedIds.has(d.id)))
       .map(d => toClientDecoration(d, ownedIds.has(d.id))),
     active: user.rows[0]?.active_decoration || null,
     nexals: nexalsRes.rows[0]?.nexals || 0

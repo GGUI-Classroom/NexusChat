@@ -19,7 +19,7 @@
   let secretClaimRunning = false;
 
   const SECRET_CATEGORY = '???SECRET???';
-  const SECRET_DECORATION_ID = 'eclipsed_lantern';
+  const SECRET_DECORATION_ID = 'stormveil';
   const SECRET_UNLOCK_PASSPHRASE = 'void';
 
   // Call state
@@ -4466,7 +4466,50 @@
   function renderShop(decorations, active) {
     const grid = $('shop-grid');
     if (!grid) return;
-    const visibleDecorations = (decorations || []).filter(d => d.category !== SECRET_CATEGORY);
+    const all = decorations || [];
+    const normalDecorations = all.filter(d => d.category !== SECRET_CATEGORY);
+    const secretDecorations = all.filter(d => d.category === SECRET_CATEGORY && d.owned);
+    const hasSecretUnlocked = secretDecorations.length > 0;
+
+    if (!shopData) shopData = {};
+    if (hasSecretUnlocked && !shopData.activeDecoTab) {
+      shopData.activeDecoTab = (active === SECRET_DECORATION_ID) ? 'secret' : 'all';
+    }
+    if (!hasSecretUnlocked) {
+      shopData.activeDecoTab = 'all';
+    }
+
+    const tabsHost = $('shop-dynamic-tabs');
+    if (tabsHost) {
+      if (hasSecretUnlocked) {
+        const activeTab = shopData.activeDecoTab === 'secret' ? 'secret' : 'all';
+        tabsHost.innerHTML = `
+          <div class="shop-secret-tabs">
+            <button class="shop-tab ${activeTab === 'all' ? 'active' : ''}" id="shop-tab-all">Decorations</button>
+            <button class="shop-tab ${activeTab === 'secret' ? 'active' : ''}" id="shop-tab-secret">???SECRET???</button>
+          </div>`;
+        const allBtn = $('shop-tab-all');
+        const secretBtn = $('shop-tab-secret');
+        if (allBtn) {
+          allBtn.onclick = () => {
+            shopData.activeDecoTab = 'all';
+            renderShop(all, active);
+          };
+        }
+        if (secretBtn) {
+          secretBtn.onclick = () => {
+            shopData.activeDecoTab = 'secret';
+            renderShop(all, active);
+          };
+        }
+      } else {
+        tabsHost.innerHTML = '';
+      }
+    }
+
+    const visibleDecorations = (hasSecretUnlocked && shopData.activeDecoTab === 'secret')
+      ? secretDecorations
+      : normalDecorations;
     // Stop any existing storm canvases in the shop before re-rendering
     grid.querySelectorAll('.avatar-wrap').forEach(w => stopStormCanvas(w));
 
@@ -4474,6 +4517,7 @@
       const isEquipped = active === d.id;
       const isOwned = d.owned;
       const isMythical = d.rarity === 'mythical';
+      const rarityClass = 'rarity-' + String(d.rarity || 'common').toLowerCase().replace(/[^a-z0-9_-]/g, '');
 
       // Mythical unowned — show full card with preview (no more mystery hiding)
 
@@ -4494,7 +4538,7 @@
               <div class="avatar-deco deco-${d.id}"></div>
             </div>
           </div>
-          <span class="shop-rarity rarity-${d.rarity}">${d.rarity}</span>
+          <span class="shop-rarity ${rarityClass}">${d.rarity}</span>
           <div class="shop-card-name">${esc(d.name)}</div>
           <div class="shop-card-desc">${esc(d.description)}</div>
           ${(!isOwned && priceLabel) ? `<div class="shop-card-price">${priceLabel}</div>` : ''}
@@ -4907,9 +4951,9 @@
     try {
       await showSecretClaimAnimation(r.decoration || {
         id: SECRET_DECORATION_ID,
-        name: 'The Eclipsed Lantern',
+        name: 'The Stormveil',
         rarity: '??SECRET??',
-        flavorText: 'Forged at the boundary between what is seen and what is forgotten.'
+        flavorText: "It doesn't rain here. It hunts."
       });
     } finally {
       secretClaimRunning = false;
@@ -4926,7 +4970,7 @@
   window.claimSecret = async function(secretId) {
     const target = String(secretId || '').trim() || SECRET_DECORATION_ID;
     if (target !== SECRET_DECORATION_ID) {
-      const err = 'Unknown secret id. Try claimSecret("eclipsed_lantern")';
+      const err = 'Unknown secret id. Try claimSecret("stormveil")';
       console.warn(err);
       return { error: err };
     }
@@ -5169,33 +5213,65 @@
 
       const totalMs = 20000;
       const steps = [
-        { cls: 'stage-dark', ms: 2000 },
-        { cls: 'stage-walk', ms: 3000 },
-        { cls: 'stage-arrive', ms: 3000 },
-        { cls: 'stage-shatter', ms: 2000 },
-        { cls: 'stage-erupt', ms: 3000 },
-        { cls: 'stage-ascend', ms: 3000 },
-        { cls: 'stage-cosmos', ms: 3000 },
-        { cls: 'stage-collapse', ms: 1000 }
+        { cls: 'stage-blackout', ms: 2000 },
+        { cls: 'stage-sky', ms: 3000 },
+        { cls: 'stage-descent', ms: 3000 },
+        { cls: 'stage-silhouette', ms: 2000 },
+        { cls: 'stage-strike', ms: 3000 },
+        { cls: 'stage-reveal', ms: 3000 },
+        { cls: 'stage-engulf', ms: 3000 },
+        { cls: 'stage-finalflash', ms: 1000 }
       ];
 
       let disposed = false;
       let raf = null;
       let phaseStart = performance.now();
-      let currentPhase = 'stage-dark';
+      let currentPhase = 'stage-blackout';
+      let phaseFxDone = false;
+
+      const rain = [];
+      for (let i = 0; i < 220; i++) {
+        rain.push({
+          x: Math.random() * (window.innerWidth || 1200),
+          y: Math.random() * (window.innerHeight || 700),
+          len: 8 + Math.random() * 22,
+          speed: 4 + Math.random() * 10,
+          drift: 1.6 + Math.random() * 2.2,
+          alpha: 0.14 + Math.random() * 0.26
+        });
+      }
+
+      function thunder(hit = false) {
+        try {
+          const ac = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ac.createOscillator();
+          const gain = ac.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(hit ? 76 : 58, ac.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(hit ? 36 : 30, ac.currentTime + (hit ? 0.95 : 1.4));
+          gain.gain.setValueAtTime(0.0001, ac.currentTime);
+          gain.gain.exponentialRampToValueAtTime(hit ? 0.2 : 0.11, ac.currentTime + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + (hit ? 1.3 : 1.9));
+          osc.connect(gain);
+          gain.connect(ac.destination);
+          osc.start();
+          osc.stop(ac.currentTime + (hit ? 1.4 : 2.0));
+          setTimeout(() => { try { ac.close(); } catch (_) {} }, hit ? 1800 : 2300);
+        } catch (_) {}
+      }
 
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
       overlay.style.display = 'flex';
-      overlay.classList.remove('stage-dark', 'stage-walk', 'stage-arrive', 'stage-shatter', 'stage-erupt', 'stage-ascend', 'stage-cosmos', 'stage-collapse', 'stage-card');
-      overlay.classList.add('stage-dark');
+      overlay.classList.remove('stage-blackout', 'stage-sky', 'stage-descent', 'stage-silhouette', 'stage-strike', 'stage-reveal', 'stage-engulf', 'stage-finalflash', 'stage-card');
+      overlay.classList.add('stage-blackout');
       card.style.opacity = '0';
       card.style.transform = 'translateY(22px) scale(0.93)';
 
-      if (nameEl) nameEl.textContent = decoration && decoration.name ? decoration.name : 'The Eclipsed Lantern';
+      if (nameEl) nameEl.textContent = decoration && decoration.name ? decoration.name : 'The Stormveil';
       if (descEl) descEl.textContent = decoration && (decoration.flavorText || decoration.description)
         ? (decoration.flavorText || decoration.description)
-        : 'Forged at the boundary between what is seen and what is forgotten.';
+        : "It doesn't rain here. It hunts.";
       if (rarityEl) rarityEl.textContent = decoration && decoration.rarity ? decoration.rarity : '??SECRET??';
 
       wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
@@ -5204,46 +5280,120 @@
       wrap.appendChild(decoEl);
 
       const particles = [];
-      function spawnBurst(amount, hueStart = 42, hueRange = 40) {
+      function spawnBurst(amount, hueStart = 210, hueRange = 60, spread = 3.8) {
         const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
+        const cy = canvas.height * 0.56;
         for (let i = 0; i < amount; i++) {
           const a = Math.random() * Math.PI * 2;
-          const speed = 0.8 + Math.random() * 3.6;
+          const speed = 0.8 + Math.random() * spread;
           particles.push({
             x: cx,
             y: cy,
             vx: Math.cos(a) * speed,
             vy: Math.sin(a) * speed,
             life: 1,
-            decay: 0.006 + Math.random() * 0.016,
-            size: 1 + Math.random() * 3,
+            decay: 0.006 + Math.random() * 0.018,
+            size: 1 + Math.random() * 3.5,
             hue: hueStart + Math.random() * hueRange
           });
         }
       }
+
+      thunder(false);
 
       function draw(now) {
         if (disposed) return;
         const t = now - phaseStart;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (currentPhase === 'stage-walk') {
-          for (let i = 0; i < 8; i++) {
-            const y = (now * 0.02 + i * 90) % canvas.height;
-            ctx.fillStyle = 'rgba(230,236,255,0.04)';
-            ctx.fillRect((i * 121 + now * 0.01) % canvas.width, y, 1, 18);
+        const inStorm = currentPhase !== 'stage-blackout' && currentPhase !== 'stage-finalflash';
+        if (inStorm) {
+          const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+          sky.addColorStop(0, 'rgba(14,21,33,0.96)');
+          sky.addColorStop(0.45, 'rgba(24,34,48,0.94)');
+          sky.addColorStop(1, 'rgba(17,21,30,0.98)');
+          ctx.fillStyle = sky;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        if (currentPhase === 'stage-sky' || currentPhase === 'stage-descent' || currentPhase === 'stage-engulf') {
+          ctx.save();
+          ctx.globalAlpha = currentPhase === 'stage-engulf' ? 0.9 : 0.55;
+          const cloudWobble = Math.sin(now * 0.0012) * 18;
+          const cloud = ctx.createRadialGradient(canvas.width * 0.42 + cloudWobble, canvas.height * 0.25, 20, canvas.width * 0.5, canvas.height * 0.36, canvas.width * 0.54);
+          cloud.addColorStop(0, 'rgba(78,96,120,0.40)');
+          cloud.addColorStop(0.55, 'rgba(45,58,74,0.45)');
+          cloud.addColorStop(1, 'rgba(10,14,22,0.0)');
+          ctx.fillStyle = cloud;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.restore();
+        }
+
+        if (inStorm) {
+          const heavyRain = currentPhase === 'stage-descent' || currentPhase === 'stage-strike' || currentPhase === 'stage-engulf';
+          for (const drop of rain) {
+            drop.y += drop.speed * (heavyRain ? 1.7 : 1);
+            drop.x -= drop.drift * (heavyRain ? 1.35 : 1);
+            if (drop.y > canvas.height + 30) {
+              drop.y = -20;
+              drop.x = Math.random() * canvas.width;
+            }
+            if (drop.x < -40) drop.x = canvas.width + 20;
+            ctx.strokeStyle = 'rgba(196,220,255,' + (drop.alpha + (heavyRain ? 0.18 : 0)) + ')';
+            ctx.lineWidth = heavyRain ? 1.2 : 0.9;
+            ctx.beginPath();
+            ctx.moveTo(drop.x, drop.y);
+            ctx.lineTo(drop.x - 6, drop.y + drop.len);
+            ctx.stroke();
           }
         }
 
-        if (currentPhase === 'stage-shatter' && t < 280) {
-          spawnBurst(22, 36, 28);
+        if (currentPhase === 'stage-silhouette') {
+          ctx.save();
+          ctx.globalAlpha = 0.62;
+          ctx.fillStyle = 'rgba(9, 12, 18, 0.82)';
+          ctx.beginPath();
+          ctx.ellipse(canvas.width * 0.5, canvas.height * 0.63, 110, 126, 0, 0, Math.PI * 2);
+          ctx.fill();
+          if (Math.sin(now * 0.010) > 0.92) {
+            ctx.globalAlpha = 0.7;
+            ctx.fillStyle = 'rgba(237,248,255,0.34)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          ctx.restore();
         }
-        if (currentPhase === 'stage-erupt' && t < 260) {
-          spawnBurst(42, 36, 290);
+
+        if (currentPhase === 'stage-strike' && !phaseFxDone) {
+          spawnBurst(52, 188, 85, 5.0);
+          thunder(true);
+          phaseFxDone = true;
         }
-        if (currentPhase === 'stage-ascend' && Math.random() < 0.32) {
-          spawnBurst(3, 180, 110);
+        if ((currentPhase === 'stage-reveal' || currentPhase === 'stage-engulf') && Math.random() < 0.22) {
+          spawnBurst(4, 195, 95, 3.8);
+        }
+
+        if (currentPhase === 'stage-strike') {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0.15, 1 - (t / 1200));
+          ctx.fillStyle = 'rgba(239,248,255,0.95)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.restore();
+        }
+
+        if (currentPhase === 'stage-reveal') {
+          const spin = (t / 3000) * Math.PI * 2;
+          ctx.save();
+          ctx.translate(canvas.width * 0.5, canvas.height * 0.58);
+          ctx.rotate(spin * 0.08);
+          ctx.strokeStyle = 'rgba(169,212,255,0.75)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 92, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(0, 0, 58, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
         }
 
         for (let i = particles.length - 1; i >= 0; i--) {
@@ -5272,10 +5422,36 @@
       function setPhase(cls) {
         currentPhase = cls;
         phaseStart = performance.now();
-        overlay.classList.remove('stage-dark', 'stage-walk', 'stage-arrive', 'stage-shatter', 'stage-erupt', 'stage-ascend', 'stage-cosmos', 'stage-collapse', 'stage-card');
+        phaseFxDone = false;
+        overlay.classList.remove('stage-blackout', 'stage-sky', 'stage-descent', 'stage-silhouette', 'stage-strike', 'stage-reveal', 'stage-engulf', 'stage-finalflash', 'stage-card');
         overlay.classList.add(cls);
-        if (cls === 'stage-dark') {
+        if (cls === 'stage-blackout') {
           stageLight.style.opacity = '0';
+          silhouette.style.opacity = '0';
+          constellation.style.opacity = '0';
+          glyphs.style.opacity = '0';
+        } else if (cls === 'stage-sky' || cls === 'stage-descent') {
+          stageLight.style.opacity = '0.3';
+          silhouette.style.opacity = '0';
+          constellation.style.opacity = '0.15';
+          glyphs.style.opacity = '0';
+        } else if (cls === 'stage-silhouette') {
+          stageLight.style.opacity = '0.42';
+          silhouette.style.opacity = '0.74';
+          constellation.style.opacity = '0.2';
+          glyphs.style.opacity = '0.08';
+        } else if (cls === 'stage-strike' || cls === 'stage-reveal') {
+          stageLight.style.opacity = '0.85';
+          silhouette.style.opacity = '0.55';
+          constellation.style.opacity = '0.45';
+          glyphs.style.opacity = '0.5';
+        } else if (cls === 'stage-engulf') {
+          stageLight.style.opacity = '1';
+          silhouette.style.opacity = '0.3';
+          constellation.style.opacity = '0.72';
+          glyphs.style.opacity = '0.58';
+        } else if (cls === 'stage-finalflash') {
+          stageLight.style.opacity = '1';
           silhouette.style.opacity = '0';
           constellation.style.opacity = '0';
           glyphs.style.opacity = '0';
@@ -5295,7 +5471,7 @@
         }
         if (elapsed < totalMs) await wait(totalMs - elapsed);
         overlay.classList.add('stage-card');
-        await wait(2200);
+        await wait(1900);
         overlay.addEventListener('click', dismiss, { once: true });
         setTimeout(dismiss, 5200);
       }
@@ -5306,7 +5482,7 @@
         if (raf) cancelAnimationFrame(raf);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         overlay.style.display = 'none';
-        overlay.classList.remove('stage-dark', 'stage-walk', 'stage-arrive', 'stage-shatter', 'stage-erupt', 'stage-ascend', 'stage-cosmos', 'stage-collapse', 'stage-card');
+        overlay.classList.remove('stage-blackout', 'stage-sky', 'stage-descent', 'stage-silhouette', 'stage-strike', 'stage-reveal', 'stage-engulf', 'stage-finalflash', 'stage-card');
         wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
         resolve();
       }
