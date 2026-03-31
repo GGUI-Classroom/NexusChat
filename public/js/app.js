@@ -145,6 +145,17 @@
   const $ = id => document.getElementById(id);
   const qs = sel => document.querySelector(sel);
 
+  function pauseNexusClient(message) {
+    nexusClientLocked = true;
+    $('nexus-lock-message').textContent = (message || '').trim() || 'This Nexus client is temporarily paused.';
+    $('nexus-lock-overlay').style.display = 'flex';
+  }
+
+  function unpauseNexusClient() {
+    nexusClientLocked = false;
+    $('nexus-lock-overlay').style.display = 'none';
+  }
+
   function renderAvatar(el, user, showDeco = true) {
     const url = user && user.avatarDataUrl;
     // Don't show deco on grouped messages (avatar is hidden anyway)
@@ -3150,16 +3161,13 @@
     socket.on('nexus_admin_control', ({ action, message, view, by }) => {
       const actorName = (by && (by.displayName || by.username)) || 'Admin';
       if (action === 'lock') {
-        nexusClientLocked = true;
         const lockMessage = message || 'This Nexus client is temporarily locked by an administrator.';
-        $('nexus-lock-message').textContent = lockMessage;
-        $('nexus-lock-overlay').style.display = 'flex';
+        pauseNexusClient(lockMessage);
         toast(`Nexus client locked by ${actorName}`, 'error', 5000);
         return;
       }
       if (action === 'unlock') {
-        nexusClientLocked = false;
-        $('nexus-lock-overlay').style.display = 'none';
+        unpauseNexusClient();
         toast(`Nexus client unlocked by ${actorName}`, 'success', 4000);
         return;
       }
@@ -3854,6 +3862,20 @@
   });
 
   // ---- Admin Panel ----
+  const REQUIRED_ADMIN_QR_CODE = 'JJKLOL12DAJWUDIUWQ';
+  let adminQrScanStream = null;
+  let adminQrScanCancelled = false;
+
+  function stopAdminQrScanner() {
+    adminQrScanCancelled = true;
+    if (adminQrScanStream) {
+      adminQrScanStream.getTracks().forEach(t => t.stop());
+      adminQrScanStream = null;
+    }
+    if ($('admin-qr-video')) $('admin-qr-video').srcObject = null;
+    if ($('admin-qr-scan-modal')) $('admin-qr-scan-modal').classList.remove('active');
+  }
+
   async function checkAdminStatus() {
     const btn = $('rail-admin-btn');
     if (!btn) return;
@@ -4208,6 +4230,28 @@
     });
   }
 
+  if ($('nexus-local-pause-btn')) {
+    $('nexus-local-pause-btn').addEventListener('click', () => {
+      const message = ($('admin-control-message')?.value || '').trim();
+      pauseNexusClient(message || 'This Nexus client is paused.');
+      toast('Nexus client paused', 'info');
+    });
+  }
+
+  if ($('nexus-local-unpause-btn')) {
+    $('nexus-local-unpause-btn').addEventListener('click', () => {
+      unpauseNexusClient();
+      toast('Nexus client unpaused', 'success');
+    });
+  }
+
+  if ($('nexus-lock-unpause-btn')) {
+    $('nexus-lock-unpause-btn').addEventListener('click', () => {
+      unpauseNexusClient();
+      toast('Nexus client unpaused', 'success');
+    });
+  }
+
   async function adminLoadAdmins() {
     const list = $('admin-admin-list');
     if (!list) return;
@@ -4260,34 +4304,64 @@
 
   if ($('admin-scan-qr-btn')) {
     $('admin-scan-qr-btn').addEventListener('click', async () => {
-      if ('BarcodeDetector' in window) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-          const video = document.createElement('video');
-          video.srcObject = stream;
-          await video.play();
-          const detector = new BarcodeDetector({ formats: ['qr_code'] });
-          const started = Date.now();
-          let found = null;
-          while (!found && Date.now() - started < 15000) {
-            const codes = await detector.detect(video);
-            if (codes && codes.length) found = codes[0].rawValue || '';
-            if (!found) await new Promise(resolve => setTimeout(resolve, 250));
-          }
-          stream.getTracks().forEach(t => t.stop());
-          if (!found) {
-            toast('No QR code detected. You can paste it manually.', 'info');
-            return;
-          }
-          $('admin-qr-code').value = found.trim();
-          toast('QR code scanned', 'success');
-          return;
-        } catch (e) {
-          toast('QR scan failed. You can paste code manually.', 'error');
-        }
+      showError('admin-add-error', '');
+      if (!('BarcodeDetector' in window)) {
+        showError('admin-add-error', 'This browser does not support camera QR scanning.');
+        return;
       }
-      const manual = prompt('Paste scanned QR code:');
-      if (manual) $('admin-qr-code').value = manual.trim();
+
+      adminQrScanCancelled = false;
+      $('admin-qr-scan-modal').classList.add('active');
+      $('admin-qr-scan-status').textContent = 'Opening camera...';
+      try {
+        const video = $('admin-qr-video');
+        adminQrScanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = adminQrScanStream;
+        video.playsInline = true;
+        await video.play();
+
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        const started = Date.now();
+        let matched = false;
+        $('admin-qr-scan-status').textContent = 'Align the QR inside the frame.';
+
+        while (!matched && !adminQrScanCancelled && Date.now() - started < 30000) {
+          const codes = await detector.detect(video);
+          if (codes && codes.length) {
+            const raw = String(codes[0].rawValue || '').trim();
+            if (raw === REQUIRED_ADMIN_QR_CODE) {
+              matched = true;
+              $('admin-qr-code').value = raw;
+              showError('admin-add-error', '');
+              $('admin-qr-scan-status').textContent = 'Verified. QR code matches.';
+              toast('Required QR code verified', 'success');
+              break;
+            }
+            $('admin-qr-scan-status').textContent = 'Scanned QR does not match required code. Try again.';
+          }
+          if (!matched) await new Promise(resolve => setTimeout(resolve, 220));
+        }
+
+        if (!matched && !adminQrScanCancelled) {
+          showError('admin-add-error', 'Scanner timed out. Try scanning the required QR code again.');
+        }
+      } catch (e) {
+        showError('admin-add-error', 'QR scan failed. Camera permission may be blocked.');
+      } finally {
+        stopAdminQrScanner();
+      }
+    });
+  }
+
+  if ($('admin-qr-scan-cancel')) {
+    $('admin-qr-scan-cancel').addEventListener('click', () => stopAdminQrScanner());
+  }
+  if ($('admin-qr-scan-close')) {
+    $('admin-qr-scan-close').addEventListener('click', () => stopAdminQrScanner());
+  }
+  if ($('admin-qr-scan-modal')) {
+    $('admin-qr-scan-modal').addEventListener('click', e => {
+      if (e.target === $('admin-qr-scan-modal')) stopAdminQrScanner();
     });
   }
 

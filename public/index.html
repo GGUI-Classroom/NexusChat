@@ -721,6 +721,10 @@
               </div>
               <button class="btn-secondary" id="admin-force-view-btn">Apply View</button>
             </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:12px">
+              <button class="btn-primary" id="nexus-local-pause-btn">Pause This Nexus Client</button>
+              <button class="btn-secondary" id="nexus-local-unpause-btn">Unpause This Nexus Client</button>
+            </div>
             <div class="form-error" id="admin-control-error"></div>
           </div>
         </div>
@@ -745,6 +749,28 @@
       <h2>Nexus Client Locked</h2>
       <p id="nexus-lock-message">An administrator has temporarily locked this Nexus client.</p>
       <p class="nexus-lock-sub">This affects only Nexus and not your device.</p>
+      <div class="nexus-lock-actions">
+        <button class="btn-secondary" id="nexus-lock-unpause-btn">Unpause</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="admin-qr-scan-modal">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <h2>Scan Admin QR</h2>
+        <button class="modal-close" id="admin-qr-scan-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body" style="gap:10px">
+        <div class="admin-qr-scan-wrap">
+          <video id="admin-qr-video" autoplay playsinline muted></video>
+          <div class="admin-qr-scan-frame"></div>
+        </div>
+        <div id="admin-qr-scan-status" style="font-size:12px;color:var(--text-muted)">Point your camera at the required QR code.</div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="admin-qr-scan-cancel">Cancel</button>
+        </div>
+      </div>
     </div>
   </div>
 
