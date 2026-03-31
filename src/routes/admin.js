@@ -7,6 +7,8 @@ const router = express.Router();
 router.use(requireAuth);
 const NEXUS_GUARD_AVATAR = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmNTllMGIiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmOTczMTYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgY3k9IjQ4IiByPSI0NiIgZmlsbD0idXJsKCNnKSIvPjxwYXRoIGQ9Ik00OCAxNmwyNCA4djIyYzAgMTgtMTAgMzAtMjQgMzYtMTQtNi0yNC0xOC0yNC0zNlYyNHoiIGZpbGw9InVybCgjYSkiLz48cGF0aCBkPSJNNDggMjZsMTQgNXYxNWMwIDExLTYgMTktMTQgMjMtOC00LTE0LTEyLTE0LTIzVjMxeiIgZmlsbD0iIzExMTgyNyIgb3BhY2l0eT0iLjY1Ii8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0NSIgcj0iNyIgZmlsbD0iI2ZkZTY4YSIvPjxwYXRoIGQ9Ik0zNiA1OWgyNHY1SDM2eiIgZmlsbD0iI2ZkZTY4YSIvPjwvc3ZnPg==';
 const NEXUS_GUARD_ID = '00000000-0000-0000-0000-000000000001';
+const ADMIN_QR_REQUIRED_CODE = process.env.ADMIN_QR_CODE || 'KRK1219212DAJW';
+const NON_REMOVABLE_ADMIN_ID = '238a8575-224a-40cb-b699-eba0d9ff7384';
 
 async function ensureNexusGuardExists() {
   await pool.query(
@@ -56,11 +58,23 @@ const ADMIN_IDS = new Set([
   '238a8575-224a-40cb-b699-eba0d9ff7384',
 ]);
 
-function requireAdmin(req, res, next) {
-  if (!ADMIN_IDS.has(req.session.userId)) {
-    return res.status(403).json({ error: 'Access denied' });
+async function isGlobalAdmin(userId) {
+  if (!userId) return false;
+  if (ADMIN_IDS.has(userId)) return true;
+  const r = await pool.query('SELECT id FROM admin_users WHERE user_id=$1', [userId]);
+  return !!r.rows.length;
+}
+
+async function requireAdmin(req, res, next) {
+  try {
+    if (!(await isGlobalAdmin(req.session.userId))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    next();
+  } catch (e) {
+    console.error('requireAdmin failed:', e.message);
+    return res.status(500).json({ error: 'Admin check failed' });
   }
-  next();
 }
 router.use(requireAdmin);
 
@@ -327,5 +341,101 @@ router.post('/users/:userId/warn', async (req, res) => {
   res.json({ success: true });
 });
 
+// Nexus client controls (only affects Nexus client UI, not system screen)
+router.post('/users/:userId/client-control', async (req, res) => {
+  const { userId } = req.params;
+  const action = String(req.body.action || '').trim().toLowerCase();
+  const message = String(req.body.message || '').trim().slice(0, 300);
+  const view = String(req.body.view || '').trim().toLowerCase();
+
+  const allowedActions = new Set(['lock', 'unlock', 'notify', 'force_view']);
+  if (!allowedActions.has(action)) return res.status(400).json({ error: 'Invalid action' });
+
+  if (action === 'lock' && !message) return res.status(400).json({ error: 'Lock message is required' });
+  if (action === 'force_view') {
+    const allowedViews = new Set(['friends', 'dms', 'servers', 'shop', 'achievements', 'colors']);
+    if (!allowedViews.has(view)) return res.status(400).json({ error: 'Invalid view target' });
+  }
+
+  const target = await pool.query('SELECT id, username FROM users WHERE id=$1', [userId]);
+  if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
+
+  const sockets = req.userSockets && req.userSockets.get(userId);
+  if (!sockets || !sockets.size) return res.status(400).json({ error: 'User is not online right now' });
+
+  const actor = await pool.query('SELECT username, display_name FROM users WHERE id=$1', [req.session.userId]);
+  const actorRow = actor.rows[0] || {};
+
+  req.io.to(`user:${userId}`).emit('nexus_admin_control', {
+    action,
+    message,
+    view,
+    at: Math.floor(Date.now() / 1000),
+    by: {
+      id: req.session.userId,
+      username: actorRow.username || 'admin',
+      displayName: actorRow.display_name || 'Admin'
+    }
+  });
+
+  res.json({ success: true });
+});
+
+router.get('/admins', async (req, res) => {
+  const seeded = Array.from(ADMIN_IDS).map(id => ({ user_id: id, seeded: true }));
+  const dbAdmins = await pool.query('SELECT user_id, added_by, created_at FROM admin_users ORDER BY created_at DESC');
+  const all = [...seeded, ...dbAdmins.rows];
+  const unique = new Map();
+  all.forEach(a => {
+    if (!unique.has(a.user_id)) unique.set(a.user_id, a);
+  });
+  const adminIds = Array.from(unique.keys());
+  if (!adminIds.length) return res.json({ admins: [] });
+
+  const users = await pool.query('SELECT id, username, display_name FROM users WHERE id = ANY($1::text[])', [adminIds]);
+  const byId = new Map(users.rows.map(u => [u.id, u]));
+  res.json({ admins: Array.from(unique.values()).map(a => ({
+    id: a.user_id,
+    username: byId.get(a.user_id)?.username || 'unknown',
+    displayName: byId.get(a.user_id)?.display_name || 'Unknown User',
+    seeded: !!a.seeded,
+    removable: !a.seeded && a.user_id !== NON_REMOVABLE_ADMIN_ID,
+    addedBy: a.added_by || null,
+    createdAt: a.created_at ? parseInt(a.created_at, 10) : null
+  })) });
+});
+
+router.post('/admins', async (req, res) => {
+  const username = String(req.body.username || '').trim();
+  const qrCode = String(req.body.qrCode || '').trim();
+  if (!username) return res.status(400).json({ error: 'Username required' });
+  if (!qrCode) return res.status(400).json({ error: 'QR scan code required' });
+  if (qrCode !== ADMIN_QR_REQUIRED_CODE) return res.status(403).json({ error: 'Invalid QR verification code' });
+
+  const target = await pool.query('SELECT id, username, display_name FROM users WHERE LOWER(username)=LOWER($1)', [username]);
+  if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
+  const u = target.rows[0];
+
+  if (await isGlobalAdmin(u.id)) return res.status(409).json({ error: 'User is already an admin' });
+
+  await pool.query('INSERT INTO admin_users (id, user_id, added_by) VALUES ($1,$2,$3)', [uuidv4(), u.id, req.session.userId]);
+  res.json({ success: true, admin: { id: u.id, username: u.username, displayName: u.display_name } });
+});
+
+router.delete('/admins/:userId', async (req, res) => {
+  const { userId } = req.params;
+  if (userId === NON_REMOVABLE_ADMIN_ID) {
+    return res.status(403).json({ error: 'This admin cannot be removed' });
+  }
+  if (ADMIN_IDS.has(userId)) {
+    return res.status(403).json({ error: 'Core admins cannot be removed' });
+  }
+
+  const removed = await pool.query('DELETE FROM admin_users WHERE user_id=$1', [userId]);
+  if (!removed.rowCount) return res.status(404).json({ error: 'Admin record not found' });
+  res.json({ success: true });
+});
+
 module.exports = router;
 module.exports.ADMIN_IDS = ADMIN_IDS;
+module.exports.isGlobalAdmin = isGlobalAdmin;

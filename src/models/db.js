@@ -235,6 +235,14 @@ async function initDb() {
     UNIQUE(user_id, achievement_id)
   )`, 'user_achievements');
 
+  await runSql(`CREATE TABLE IF NOT EXISTS admin_users (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    added_by TEXT NOT NULL REFERENCES users(id),
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(user_id)
+  )`, 'admin_users');
+
   await runSql(`CREATE TABLE IF NOT EXISTS server_mutes (
     id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,

@@ -1140,8 +1140,8 @@ io.on('connection', (socket) => {
   // Admin: force-suspend an active user
   socket.on('admin_suspend_user', async ({ targetUserId, suspendedUntil, reason }) => {
     // Verify the requesting socket is an admin
-    const { ADMIN_IDS } = require('./routes/admin');
-    if (!ADMIN_IDS.has(userId)) return;
+    const { isGlobalAdmin } = require('./routes/admin');
+    if (!(await isGlobalAdmin(userId))) return;
     // Emit suspended event to all of that user's sockets
     io.to(`user:${targetUserId}`).emit('account_suspended', { suspendedUntil, reason: reason || null });
   });

@@ -11,6 +11,8 @@
   let friends = [];
   let typingTimer = null;
   let isTyping = false;
+  let isAppAdmin = false;
+  let nexusClientLocked = false;
 
   // Call state
   let callState = null; // { roomId, peerId, peerUser, peerConnection, localStream, timerInterval }
@@ -1239,11 +1241,6 @@
   });
 
   // ---- App Entry ----
-  // Hardcoded admin IDs — same as server side
-  const ADMIN_IDS = new Set([
-    '7db80df6-0566-4fa0-bbc2-6cde9775f3a4',
-    '238a8575-224a-40cb-b699-eba0d9ff7384',
-  ]);
 
   function enterApp() {
     try {
@@ -1256,11 +1253,7 @@
       loadServerInvites();
       switchView('friends');
       if (activeView === 'shop') loadShop();
-      // Show admin button instantly if user is admin
-      if (currentUser && ADMIN_IDS.has(currentUser.id)) {
-        const btn = $('rail-admin-btn');
-        if (btn) btn.style.display = 'flex';
-      }
+      checkAdminStatus();
     } catch(e) {
       console.error('enterApp crash:', e);
       alert('Login succeeded but app failed to load: ' + e.message);
@@ -3154,6 +3147,32 @@
       });
     });
 
+    socket.on('nexus_admin_control', ({ action, message, view, by }) => {
+      const actorName = (by && (by.displayName || by.username)) || 'Admin';
+      if (action === 'lock') {
+        nexusClientLocked = true;
+        const lockMessage = message || 'This Nexus client is temporarily locked by an administrator.';
+        $('nexus-lock-message').textContent = lockMessage;
+        $('nexus-lock-overlay').style.display = 'flex';
+        toast(`Nexus client locked by ${actorName}`, 'error', 5000);
+        return;
+      }
+      if (action === 'unlock') {
+        nexusClientLocked = false;
+        $('nexus-lock-overlay').style.display = 'none';
+        toast(`Nexus client unlocked by ${actorName}`, 'success', 4000);
+        return;
+      }
+      if (action === 'notify') {
+        toast((message || 'Admin notice'), 'info', 7000);
+        return;
+      }
+      if (action === 'force_view') {
+        if (view) switchView(view);
+        if (message) toast(message, 'info', 6000);
+      }
+    });
+
     socket.on('mentioned', ({ type, serverId: sid, channelId: cid, fromUser, preview }) => {
       const serverName = servers.find(s => s.id === sid)?.name || 'a server';
       toast(`@mention from ${fromUser.displayName} in ${serverName}: ${preview}`, 'info', 6000);
@@ -3835,11 +3854,12 @@
   });
 
   // ---- Admin Panel ----
-  function checkAdminStatus() {
-    if (currentUser && ADMIN_IDS.has(currentUser.id)) {
-      const btn = $('rail-admin-btn');
-      if (btn) btn.style.display = 'flex';
-    }
+  async function checkAdminStatus() {
+    const btn = $('rail-admin-btn');
+    if (!btn) return;
+    const r = await api('GET', '/api/admin/check');
+    isAppAdmin = !r.error;
+    btn.style.display = isAppAdmin ? 'flex' : 'none';
   }
 
   window.openAdminPanel = function() {
@@ -3861,6 +3881,7 @@
     if (pane) pane.classList.add('active');
     if (tab === 'servers') adminLoadServers();
     if (tab === 'history') adminLoadHistory();
+    if (tab === 'admins') adminLoadAdmins();
     if (tab === 'userinfo') { $('admin-userinfo-result').innerHTML = ''; }
   }
 
@@ -4133,6 +4154,142 @@
     if ($('admin-warn-reason')) $('admin-warn-reason').value = '';
     toast('Warning sent via NexusGuard DM', 'success');
   };
+
+  async function resolveAdminTargetUserId() {
+    const username = ($('admin-control-username')?.value || '').trim();
+    if (!username) {
+      showError('admin-control-error', 'Enter a target username');
+      return null;
+    }
+    const search = await api('GET', '/api/admin/users?search=' + encodeURIComponent(username));
+    if (search.error || !search.users || !search.users.length) {
+      showError('admin-control-error', 'Target user not found');
+      return null;
+    }
+    return search.users[0].id;
+  }
+
+  async function sendAdminClientControl(action, payload = {}) {
+    showError('admin-control-error', '');
+    const targetUserId = await resolveAdminTargetUserId();
+    if (!targetUserId) return;
+    const r = await api('POST', '/api/admin/users/' + targetUserId + '/client-control', { action, ...payload });
+    if (r.error) return showError('admin-control-error', r.error);
+    toast('Client control command sent', 'success');
+  }
+
+  if ($('admin-lock-btn')) {
+    $('admin-lock-btn').addEventListener('click', async () => {
+      const message = ($('admin-control-message').value || '').trim();
+      if (!message) return showError('admin-control-error', 'Lock message is required');
+      await sendAdminClientControl('lock', { message });
+    });
+  }
+
+  if ($('admin-unlock-btn')) {
+    $('admin-unlock-btn').addEventListener('click', async () => {
+      await sendAdminClientControl('unlock');
+    });
+  }
+
+  if ($('admin-notify-btn')) {
+    $('admin-notify-btn').addEventListener('click', async () => {
+      const message = ($('admin-control-message').value || '').trim();
+      if (!message) return showError('admin-control-error', 'Message required for notice');
+      await sendAdminClientControl('notify', { message });
+    });
+  }
+
+  if ($('admin-force-view-btn')) {
+    $('admin-force-view-btn').addEventListener('click', async () => {
+      const view = $('admin-control-view').value;
+      const message = ($('admin-control-message').value || '').trim();
+      await sendAdminClientControl('force_view', { view, message });
+    });
+  }
+
+  async function adminLoadAdmins() {
+    const list = $('admin-admin-list');
+    if (!list) return;
+    list.innerHTML = '<div style="padding:10px;color:var(--text-muted)">Loading admins…</div>';
+    const r = await api('GET', '/api/admin/admins');
+    if (r.error) {
+      list.innerHTML = '<div style="padding:10px;color:var(--red)">' + esc(r.error) + '</div>';
+      return;
+    }
+    const admins = r.admins || [];
+    if (!admins.length) {
+      list.innerHTML = '<div style="padding:10px;color:var(--text-muted)">No admins found</div>';
+      return;
+    }
+    list.innerHTML = admins.map(a => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px;border-radius:8px;background:var(--bg-hover)">
+        <div>
+          <div style="font-size:12px;font-weight:700">${esc(a.displayName)} <span style="color:var(--text-muted);font-weight:500">@${esc(a.username)}</span></div>
+          <div style="font-size:10px;color:var(--text-muted)">${a.seeded ? 'Core admin' : 'Added admin'}</div>
+        </div>
+        ${a.removable
+          ? `<button class="action-btn danger" style="font-size:10px;padding:4px 8px" onclick="adminRemoveAdmin('${a.id}','${esc(a.username)}')">Remove</button>`
+          : `<span style="font-size:10px;color:var(--text-muted)">Locked</span>`}
+      </div>`).join('');
+  }
+
+  window.adminRemoveAdmin = async function(userId, username) {
+    if (!confirm('Remove admin @' + username + '?')) return;
+    const r = await api('DELETE', '/api/admin/admins/' + userId);
+    if (r.error) return toast(r.error, 'error');
+    toast('Admin removed', 'success');
+    await adminLoadAdmins();
+  };
+
+  if ($('admin-add-admin-btn')) {
+    $('admin-add-admin-btn').addEventListener('click', async () => {
+      showError('admin-add-error', '');
+      const username = ($('admin-add-username').value || '').trim();
+      const qrCode = ($('admin-qr-code').value || '').trim();
+      if (!username) return showError('admin-add-error', 'Username is required');
+      if (!qrCode) return showError('admin-add-error', 'QR verification code is required');
+      const r = await api('POST', '/api/admin/admins', { username, qrCode });
+      if (r.error) return showError('admin-add-error', r.error);
+      $('admin-add-username').value = '';
+      $('admin-qr-code').value = '';
+      toast('Admin added successfully', 'success');
+      await adminLoadAdmins();
+    });
+  }
+
+  if ($('admin-scan-qr-btn')) {
+    $('admin-scan-qr-btn').addEventListener('click', async () => {
+      if ('BarcodeDetector' in window) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          const video = document.createElement('video');
+          video.srcObject = stream;
+          await video.play();
+          const detector = new BarcodeDetector({ formats: ['qr_code'] });
+          const started = Date.now();
+          let found = null;
+          while (!found && Date.now() - started < 15000) {
+            const codes = await detector.detect(video);
+            if (codes && codes.length) found = codes[0].rawValue || '';
+            if (!found) await new Promise(resolve => setTimeout(resolve, 250));
+          }
+          stream.getTracks().forEach(t => t.stop());
+          if (!found) {
+            toast('No QR code detected. You can paste it manually.', 'info');
+            return;
+          }
+          $('admin-qr-code').value = found.trim();
+          toast('QR code scanned', 'success');
+          return;
+        } catch (e) {
+          toast('QR scan failed. You can paste code manually.', 'error');
+        }
+      }
+      const manual = prompt('Paste scanned QR code:');
+      if (manual) $('admin-qr-code').value = manual.trim();
+    });
+  }
 
   async function adminLoadHistory() {
     const list = $('admin-history-list');

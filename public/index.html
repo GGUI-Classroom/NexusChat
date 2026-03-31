@@ -647,6 +647,8 @@
         <button class="admin-tab active" data-tab="suspend">⛔ Suspend</button>
         <button class="admin-tab" data-tab="servers">🌐 Servers</button>
         <button class="admin-tab" data-tab="userinfo">👤 User Info</button>
+        <button class="admin-tab" data-tab="control">🎛 Control</button>
+        <button class="admin-tab" data-tab="admins">🛡 Admins</button>
         <button class="admin-tab" data-tab="history">📋 Log</button>
       </div>
       <div style="flex:1;overflow-y:auto">
@@ -697,7 +699,52 @@
           </div>
           <div id="admin-userinfo-result" style="padding:0 16px 16px"></div>
         </div>
+        <div class="admin-pane" id="admin-pane-control">
+          <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+            <div class="field-group" style="margin:0"><label>Target Username</label><input type="text" id="admin-control-username" placeholder="e.g. extreem" autocomplete="off" /></div>
+            <div class="field-group" style="margin:0"><label>Custom Message</label><input type="text" id="admin-control-message" placeholder="Maintenance in progress. Please wait…" maxlength="300" /></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn-primary" id="admin-lock-btn">Lock Nexus Client</button>
+              <button class="btn-secondary" id="admin-unlock-btn">Unlock Nexus Client</button>
+              <button class="btn-secondary" id="admin-notify-btn">Push Notice</button>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+              <div class="field-group" style="margin:0;min-width:180px;flex:1">
+                <label>Force View</label>
+                <select id="admin-control-view" style="width:100%;padding:9px 10px;background:var(--bg-void);border:1px solid var(--border-bright);border-radius:6px;color:var(--text-primary);font-family:Syne,sans-serif;font-size:13px">
+                  <option value="friends">Friends</option>
+                  <option value="dms">Direct Messages</option>
+                  <option value="shop">Shop</option>
+                  <option value="achievements">Achievements</option>
+                  <option value="colors">Colors</option>
+                </select>
+              </div>
+              <button class="btn-secondary" id="admin-force-view-btn">Apply View</button>
+            </div>
+            <div class="form-error" id="admin-control-error"></div>
+          </div>
+        </div>
+        <div class="admin-pane" id="admin-pane-admins">
+          <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+            <div class="field-group" style="margin:0"><label>Username To Promote</label><input type="text" id="admin-add-username" placeholder="Username" autocomplete="off" /></div>
+            <div class="field-group" style="margin:0"><label>QR Verification Code</label><input type="text" id="admin-qr-code" placeholder="Scan QR or paste code" autocomplete="off" /></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn-secondary" id="admin-scan-qr-btn">Scan QR</button>
+              <button class="btn-primary" id="admin-add-admin-btn">Add Admin</button>
+            </div>
+            <div class="form-error" id="admin-add-error"></div>
+            <div id="admin-admin-list" style="background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+        </div>
       </div>
+    </div>
+  </div>
+
+  <div class="nexus-lock-overlay" id="nexus-lock-overlay" style="display:none">
+    <div class="nexus-lock-card">
+      <h2>Nexus Client Locked</h2>
+      <p id="nexus-lock-message">An administrator has temporarily locked this Nexus client.</p>
+      <p class="nexus-lock-sub">This affects only Nexus and not your device.</p>
     </div>
   </div>
 
