@@ -4325,8 +4325,10 @@
       showError('admin-add-error', '');
       adminQrVerified = false;
       $('admin-qr-code').value = '';
-      if (!('BarcodeDetector' in window)) {
-        showError('admin-add-error', 'This browser does not support camera QR scanning.');
+      const hasNativeScanner = 'BarcodeDetector' in window;
+      const hasFallbackScanner = typeof window.jsQR === 'function';
+      if (!hasNativeScanner && !hasFallbackScanner) {
+        showError('admin-add-error', 'QR scanning is unavailable in this browser right now. Try latest Chrome/Edge, or enable JavaScript CDN access.');
         return;
       }
 
@@ -4340,13 +4342,31 @@
         video.playsInline = true;
         await video.play();
 
-        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        const detector = hasNativeScanner ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+        const scanCanvas = document.createElement('canvas');
+        const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
         const started = Date.now();
         let matched = false;
-        $('admin-qr-scan-status').textContent = 'Align the QR inside the frame.';
+        $('admin-qr-scan-status').textContent = hasNativeScanner
+          ? 'Align the QR inside the frame.'
+          : 'Align the QR inside the frame. Compatibility scanner active.';
 
         while (!matched && !adminQrScanCancelled && Date.now() - started < 30000) {
-          const codes = await detector.detect(video);
+          let codes = [];
+          if (detector) {
+            codes = await detector.detect(video);
+          } else if (scanCtx && video.videoWidth > 0 && video.videoHeight > 0) {
+            if (scanCanvas.width !== video.videoWidth || scanCanvas.height !== video.videoHeight) {
+              scanCanvas.width = video.videoWidth;
+              scanCanvas.height = video.videoHeight;
+            }
+            scanCtx.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
+            const frame = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+            const decoded = window.jsQR(frame.data, frame.width, frame.height, { inversionAttempts: 'dontInvert' });
+            if (decoded && decoded.data) {
+              codes = [{ rawValue: decoded.data }];
+            }
+          }
           if (codes && codes.length) {
             const raw = String(codes[0].rawValue || '').trim();
             if (raw === REQUIRED_ADMIN_QR_CODE) {
