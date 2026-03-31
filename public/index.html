@@ -307,6 +307,9 @@
             <button class="btn-primary" id="shop-redeem-btn" style="white-space:nowrap;padding:10px 18px">Redeem</button>
             <div class="form-error" id="shop-error" style="align-self:center"></div>
           </div>
+          <div class="secret-tab-strip">
+            <button class="secret-tab mystery" disabled>???SECRET??? · LOCKED</button>
+          </div>
           <div id="shop-grid" class="shop-grid"></div>
           <div class="shop-subsection">
             <h2>Phone Ringtones</h2>
@@ -630,6 +633,25 @@
       <div id="claim-desc"></div>
       <div id="claim-stamp">&#10022; CLAIMED &#10022;</div>
       <div id="claim-dismiss">tap anywhere to continue</div>
+    </div>
+  </div>
+
+  <div id="secret-claim-overlay" style="display:none">
+    <canvas id="secret-claim-canvas"></canvas>
+    <div id="secret-film-grain"></div>
+    <div id="secret-stage-light"></div>
+    <div id="secret-lantern-silhouette"></div>
+    <div id="secret-constellation"></div>
+    <div id="secret-glyphs"></div>
+    <div id="secret-card">
+      <div id="secret-rarity-badge">??SECRET??</div>
+      <div id="secret-deco-preview">
+        <div class="avatar-wrap" id="secret-avatar-wrap" style="width:96px;height:96px;position:relative;overflow:visible;display:inline-flex;align-items:center;justify-content:center">
+          <div class="avatar" id="secret-avatar" style="width:96px;height:96px;font-size:34px;font-weight:800">N</div>
+        </div>
+      </div>
+      <div id="secret-name">The Eclipsed Lantern</div>
+      <div id="secret-desc">Forged at the boundary between what is seen and what is forgotten.</div>
     </div>
   </div>
 

@@ -14,6 +14,13 @@
   let isAppAdmin = false;
   let nexusClientLocked = false;
   let quickPopupTimer = null;
+  let secretHumCtx = null;
+  let secretHumNodes = [];
+  let secretClaimRunning = false;
+
+  const SECRET_CATEGORY = '???SECRET???';
+  const SECRET_DECORATION_ID = 'eclipsed_lantern';
+  const SECRET_UNLOCK_PASSPHRASE = 'void';
 
   // Call state
   let callState = null; // { roomId, peerId, peerUser, peerConnection, localStream, timerInterval }
@@ -1205,6 +1212,7 @@
   }
 
   function showSuspensionScreen(errorMsg, until, reason) {
+    stopSecretHum();
     // Parse "suspended until <date>" from error message if no until provided
     let untilText = 'an unknown time';
     if (until) {
@@ -1225,6 +1233,7 @@
 
   window.logoutFromSuspension = async function() {
     await api('POST', '/api/auth/logout');
+    stopSecretHum();
     leaveGroupCall(false);
     showScreen('auth-screen');
   };
@@ -1272,6 +1281,7 @@
   function enterApp() {
     try {
       updateSelfCard();
+      syncSecretAmbient();
       showScreen('main-screen');
       loadPersistedClientState();
       connectSocket();
@@ -3177,6 +3187,7 @@
     socket.on('account_suspended', ({ suspendedUntil, reason }) => {
       // Immediately show suspension screen and log out
       api('POST', '/api/auth/logout').then(() => {
+        stopSecretHum();
         currentUser = null;
         leaveGroupCall(false);
         if (socket) { socket.disconnect(); socket = null; }
@@ -3883,6 +3894,7 @@
   $('logout-btn').addEventListener('click', async () => {
     if (!confirm('Sign out?')) return;
     await api('POST', '/api/auth/logout');
+    stopSecretHum();
     leaveGroupCall(false);
     if (socket) socket.disconnect();
     currentUser = null; socket = null; friends = [];
@@ -4454,10 +4466,11 @@
   function renderShop(decorations, active) {
     const grid = $('shop-grid');
     if (!grid) return;
+    const visibleDecorations = (decorations || []).filter(d => d.category !== SECRET_CATEGORY);
     // Stop any existing storm canvases in the shop before re-rendering
     grid.querySelectorAll('.avatar-wrap').forEach(w => stopStormCanvas(w));
 
-    grid.innerHTML = decorations.map(d => {
+    grid.innerHTML = visibleDecorations.map(d => {
       const isEquipped = active === d.id;
       const isOwned = d.owned;
       const isMythical = d.rarity === 'mythical';
@@ -4495,14 +4508,14 @@
     // Start canvas engines for all canvas-based decos (always show preview)
     const canvasDecos = { storm: startStormCanvas, inferno: startInfernoCanvas, yinyang: startYinYangCanvas, hydro: startHydroCanvas, shatter: startShatterCanvas };
     Object.entries(canvasDecos).forEach(([id, fn]) => {
-      if (decorations.find(d => d.id === id)) {
+      if (visibleDecorations.find(d => d.id === id)) {
         const wrap = document.querySelector(`#shopcard-${id} .avatar-wrap`);
         if (wrap) setTimeout(() => fn(wrap), 50);
       }
     });
     // Shine overlays for all legendaries
     ['diamond','goldshine'].forEach(id => {
-      if (decorations.find(d => d.id === id)) {
+      if (visibleDecorations.find(d => d.id === id)) {
         const wrap = document.querySelector(`#shopcard-${id} .avatar-wrap`);
         if (wrap) {
           const shine = document.createElement('div');
@@ -4540,6 +4553,7 @@
     if (r.error) return toast(r.error, 'error');
     currentUser.activeDecoration = equipId;
     updateSelfCard();
+    syncSecretAmbient();
     if (shopData) {
       shopData.active = equipId;
       renderShop(shopData.decorations, equipId);
@@ -4875,6 +4889,62 @@
     if (e.key === 'Enter') $('shop-redeem-btn').click();
   });
 
+  async function claimSecretDecoration(payload = {}) {
+    if (secretClaimRunning) {
+      return { error: 'A secret claim sequence is already running' };
+    }
+    const body = {};
+    if (payload.secretId) body.secretId = payload.secretId;
+    if (payload.passphrase) body.passphrase = payload.passphrase;
+
+    const r = await api('POST', '/api/shop/claim-secret', body);
+    if (r.error) {
+      toast(r.error, 'error');
+      return r;
+    }
+
+    secretClaimRunning = true;
+    try {
+      await showSecretClaimAnimation(r.decoration || {
+        id: SECRET_DECORATION_ID,
+        name: 'The Eclipsed Lantern',
+        rarity: '??SECRET??',
+        flavorText: 'Forged at the boundary between what is seen and what is forgotten.'
+      });
+    } finally {
+      secretClaimRunning = false;
+    }
+
+    currentUser.activeDecoration = r.active || SECRET_DECORATION_ID;
+    updateSelfCard();
+    syncSecretAmbient();
+    await loadShop();
+    toast(r.alreadyOwned ? 'Secret rekindled.' : 'Secret decoration claimed.', 'success', 4500);
+    return r;
+  }
+
+  window.claimSecret = async function(secretId) {
+    const target = String(secretId || '').trim() || SECRET_DECORATION_ID;
+    if (target !== SECRET_DECORATION_ID) {
+      const err = 'Unknown secret id. Try claimSecret("eclipsed_lantern")';
+      console.warn(err);
+      return { error: err };
+    }
+    console.info('Claim sequence started...');
+    return claimSecretDecoration({ secretId: target });
+  };
+
+  window.unlock = async function(passphrase) {
+    const code = String(passphrase || '').trim().toLowerCase();
+    if (code !== SECRET_UNLOCK_PASSPHRASE) {
+      const err = 'Invalid passphrase';
+      console.warn(err);
+      return { error: err };
+    }
+    console.info('Passphrase accepted. Secret sequence started...');
+    return claimSecretDecoration({ passphrase: code });
+  };
+
   // ---- Mythical Claim Animation ----
   function showClaimAnimation(decoration) {
     return new Promise(resolve => {
@@ -5017,6 +5087,231 @@
 
       // Allow dismiss after 2.5s
       setTimeout(() => overlay.addEventListener('click', dismiss), 2500);
+    });
+  }
+
+  function syncSecretAmbient() {
+    const shouldPlay = !!(currentUser && currentUser.activeDecoration === SECRET_DECORATION_ID);
+    if (shouldPlay) startSecretHum();
+    else stopSecretHum();
+  }
+
+  function startSecretHum() {
+    if (secretHumCtx) return;
+    try {
+      secretHumCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const master = secretHumCtx.createGain();
+      master.gain.value = 0.018;
+      master.connect(secretHumCtx.destination);
+
+      const base = secretHumCtx.createOscillator();
+      base.type = 'sine';
+      base.frequency.value = 82.4;
+
+      const shimmer = secretHumCtx.createOscillator();
+      shimmer.type = 'triangle';
+      shimmer.frequency.value = 164.8;
+
+      const shimmerGain = secretHumCtx.createGain();
+      shimmerGain.gain.value = 0.18;
+
+      const lfo = secretHumCtx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = 0.085;
+      const lfoGain = secretHumCtx.createGain();
+      lfoGain.gain.value = 17;
+      lfo.connect(lfoGain);
+      lfoGain.connect(base.frequency);
+
+      base.connect(master);
+      shimmer.connect(shimmerGain);
+      shimmerGain.connect(master);
+
+      base.start();
+      shimmer.start();
+      lfo.start();
+      secretHumNodes = [base, shimmer, lfo, shimmerGain, lfoGain, master];
+    } catch (_) {
+      stopSecretHum();
+    }
+  }
+
+  function stopSecretHum() {
+    secretHumNodes.forEach(n => {
+      try {
+        if (n && typeof n.stop === 'function') n.stop();
+      } catch (_) {}
+      try {
+        if (n && typeof n.disconnect === 'function') n.disconnect();
+      } catch (_) {}
+    });
+    secretHumNodes = [];
+    if (secretHumCtx) {
+      try { secretHumCtx.close(); } catch (_) {}
+      secretHumCtx = null;
+    }
+  }
+
+  function showSecretClaimAnimation(decoration) {
+    return new Promise(resolve => {
+      const overlay = $('secret-claim-overlay');
+      const canvas = $('secret-claim-canvas');
+      const card = $('secret-card');
+      const stageLight = $('secret-stage-light');
+      const silhouette = $('secret-lantern-silhouette');
+      const constellation = $('secret-constellation');
+      const glyphs = $('secret-glyphs');
+      const wrap = $('secret-avatar-wrap');
+      const nameEl = $('secret-name');
+      const descEl = $('secret-desc');
+      const rarityEl = $('secret-rarity-badge');
+      const ctx = canvas.getContext('2d');
+
+      const totalMs = 20000;
+      const steps = [
+        { cls: 'stage-dark', ms: 2000 },
+        { cls: 'stage-walk', ms: 3000 },
+        { cls: 'stage-arrive', ms: 3000 },
+        { cls: 'stage-shatter', ms: 2000 },
+        { cls: 'stage-erupt', ms: 3000 },
+        { cls: 'stage-ascend', ms: 3000 },
+        { cls: 'stage-cosmos', ms: 3000 },
+        { cls: 'stage-collapse', ms: 1000 }
+      ];
+
+      let disposed = false;
+      let raf = null;
+      let phaseStart = performance.now();
+      let currentPhase = 'stage-dark';
+
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      overlay.style.display = 'flex';
+      overlay.classList.remove('stage-dark', 'stage-walk', 'stage-arrive', 'stage-shatter', 'stage-erupt', 'stage-ascend', 'stage-cosmos', 'stage-collapse', 'stage-card');
+      overlay.classList.add('stage-dark');
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(22px) scale(0.93)';
+
+      if (nameEl) nameEl.textContent = decoration && decoration.name ? decoration.name : 'The Eclipsed Lantern';
+      if (descEl) descEl.textContent = decoration && (decoration.flavorText || decoration.description)
+        ? (decoration.flavorText || decoration.description)
+        : 'Forged at the boundary between what is seen and what is forgotten.';
+      if (rarityEl) rarityEl.textContent = decoration && decoration.rarity ? decoration.rarity : '??SECRET??';
+
+      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
+      const decoEl = document.createElement('div');
+      decoEl.className = 'avatar-deco deco-' + SECRET_DECORATION_ID;
+      wrap.appendChild(decoEl);
+
+      const particles = [];
+      function spawnBurst(amount, hueStart = 42, hueRange = 40) {
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        for (let i = 0; i < amount; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const speed = 0.8 + Math.random() * 3.6;
+          particles.push({
+            x: cx,
+            y: cy,
+            vx: Math.cos(a) * speed,
+            vy: Math.sin(a) * speed,
+            life: 1,
+            decay: 0.006 + Math.random() * 0.016,
+            size: 1 + Math.random() * 3,
+            hue: hueStart + Math.random() * hueRange
+          });
+        }
+      }
+
+      function draw(now) {
+        if (disposed) return;
+        const t = now - phaseStart;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (currentPhase === 'stage-walk') {
+          for (let i = 0; i < 8; i++) {
+            const y = (now * 0.02 + i * 90) % canvas.height;
+            ctx.fillStyle = 'rgba(230,236,255,0.04)';
+            ctx.fillRect((i * 121 + now * 0.01) % canvas.width, y, 1, 18);
+          }
+        }
+
+        if (currentPhase === 'stage-shatter' && t < 280) {
+          spawnBurst(22, 36, 28);
+        }
+        if (currentPhase === 'stage-erupt' && t < 260) {
+          spawnBurst(42, 36, 290);
+        }
+        if (currentPhase === 'stage-ascend' && Math.random() < 0.32) {
+          spawnBurst(3, 180, 110);
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.008;
+          p.life -= p.decay;
+          if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+          }
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+          ctx.fillStyle = 'hsla(' + p.hue + ',95%,70%,' + (p.life * 0.9) + ')';
+          ctx.shadowColor = 'hsla(' + p.hue + ',100%,70%,0.9)';
+          ctx.shadowBlur = 9;
+          ctx.fill();
+        }
+
+        raf = requestAnimationFrame(draw);
+      }
+
+      raf = requestAnimationFrame(draw);
+
+      function setPhase(cls) {
+        currentPhase = cls;
+        phaseStart = performance.now();
+        overlay.classList.remove('stage-dark', 'stage-walk', 'stage-arrive', 'stage-shatter', 'stage-erupt', 'stage-ascend', 'stage-cosmos', 'stage-collapse', 'stage-card');
+        overlay.classList.add(cls);
+        if (cls === 'stage-dark') {
+          stageLight.style.opacity = '0';
+          silhouette.style.opacity = '0';
+          constellation.style.opacity = '0';
+          glyphs.style.opacity = '0';
+        }
+      }
+
+      function wait(ms) {
+        return new Promise(r => setTimeout(r, ms));
+      }
+
+      async function runTimeline() {
+        let elapsed = 0;
+        for (const s of steps) {
+          setPhase(s.cls);
+          await wait(s.ms);
+          elapsed += s.ms;
+        }
+        if (elapsed < totalMs) await wait(totalMs - elapsed);
+        overlay.classList.add('stage-card');
+        await wait(2200);
+        overlay.addEventListener('click', dismiss, { once: true });
+        setTimeout(dismiss, 5200);
+      }
+
+      function dismiss() {
+        if (disposed) return;
+        disposed = true;
+        if (raf) cancelAnimationFrame(raf);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        overlay.style.display = 'none';
+        overlay.classList.remove('stage-dark', 'stage-walk', 'stage-arrive', 'stage-shatter', 'stage-erupt', 'stage-ascend', 'stage-cosmos', 'stage-collapse', 'stage-card');
+        wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
+        resolve();
+      }
+
+      runTimeline().catch(() => dismiss());
     });
   }
 
