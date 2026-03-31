@@ -4466,50 +4466,9 @@
   function renderShop(decorations, active) {
     const grid = $('shop-grid');
     if (!grid) return;
-    const all = decorations || [];
-    const normalDecorations = all.filter(d => d.category !== SECRET_CATEGORY);
-    const secretDecorations = all.filter(d => d.category === SECRET_CATEGORY && d.owned);
-    const hasSecretUnlocked = secretDecorations.length > 0;
-
-    if (!shopData) shopData = {};
-    if (hasSecretUnlocked && !shopData.activeDecoTab) {
-      shopData.activeDecoTab = (active === SECRET_DECORATION_ID) ? 'secret' : 'all';
-    }
-    if (!hasSecretUnlocked) {
-      shopData.activeDecoTab = 'all';
-    }
-
+    const visibleDecorations = decorations || [];
     const tabsHost = $('shop-dynamic-tabs');
-    if (tabsHost) {
-      if (hasSecretUnlocked) {
-        const activeTab = shopData.activeDecoTab === 'secret' ? 'secret' : 'all';
-        tabsHost.innerHTML = `
-          <div class="shop-secret-tabs">
-            <button class="shop-tab ${activeTab === 'all' ? 'active' : ''}" id="shop-tab-all">Decorations</button>
-            <button class="shop-tab ${activeTab === 'secret' ? 'active' : ''}" id="shop-tab-secret">???SECRET???</button>
-          </div>`;
-        const allBtn = $('shop-tab-all');
-        const secretBtn = $('shop-tab-secret');
-        if (allBtn) {
-          allBtn.onclick = () => {
-            shopData.activeDecoTab = 'all';
-            renderShop(all, active);
-          };
-        }
-        if (secretBtn) {
-          secretBtn.onclick = () => {
-            shopData.activeDecoTab = 'secret';
-            renderShop(all, active);
-          };
-        }
-      } else {
-        tabsHost.innerHTML = '';
-      }
-    }
-
-    const visibleDecorations = (hasSecretUnlocked && shopData.activeDecoTab === 'secret')
-      ? secretDecorations
-      : normalDecorations;
+    if (tabsHost) tabsHost.innerHTML = '';
     // Stop any existing storm canvases in the shop before re-rendering
     grid.querySelectorAll('.avatar-wrap').forEach(w => stopStormCanvas(w));
 

@@ -1970,6 +1970,8 @@ html, body {
   inset: -7px;
   border-radius: 50%;
   overflow: hidden;
+  -webkit-mask: radial-gradient(circle, transparent 60%, black 67%);
+          mask: radial-gradient(circle, transparent 60%, black 67%);
   border: 1px solid rgba(172, 209, 247, 0.5);
   background:
     radial-gradient(circle at 40% 75%, rgba(106, 146, 96, 0.2), transparent 44%),
@@ -1986,6 +1988,8 @@ html, body {
   position: absolute;
   inset: -22% -45% -22% -45%;
   border-radius: 50%;
+  -webkit-mask: radial-gradient(circle, transparent 62%, black 70%);
+          mask: radial-gradient(circle, transparent 62%, black 70%);
   background:
     radial-gradient(circle at 15% 35%, rgba(255, 255, 255, 0.28), transparent 28%),
     radial-gradient(circle at 32% 58%, rgba(42, 64, 96, 0.74), transparent 46%),
@@ -2001,6 +2005,8 @@ html, body {
   position: absolute;
   inset: -10%;
   border-radius: 50%;
+  -webkit-mask: radial-gradient(circle, transparent 57%, black 68%);
+          mask: radial-gradient(circle, transparent 57%, black 68%);
   background-image:
     repeating-linear-gradient(118deg, rgba(196, 218, 245, 0.0), rgba(196, 218, 245, 0.0) 6px, rgba(196, 218, 245, 0.28) 7px, rgba(196, 218, 245, 0.0) 11px),
     linear-gradient(130deg, rgba(201, 232, 255, 0.0) 30%, rgba(245, 252, 255, 0.42) 48%, rgba(188, 228, 255, 0.0) 64%);
