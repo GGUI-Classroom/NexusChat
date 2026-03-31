@@ -243,6 +243,16 @@ async function initDb() {
     UNIQUE(user_id)
   )`, 'admin_users');
 
+  await runSql(`CREATE TABLE IF NOT EXISTS user_client_state (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_paused BOOLEAN DEFAULT FALSE,
+    pause_message TEXT DEFAULT NULL,
+    updated_by TEXT DEFAULT NULL REFERENCES users(id),
+    updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(user_id)
+  )`, 'user_client_state');
+
   await runSql(`CREATE TABLE IF NOT EXISTS server_mutes (
     id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,

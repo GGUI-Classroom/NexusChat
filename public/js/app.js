@@ -13,6 +13,7 @@
   let isTyping = false;
   let isAppAdmin = false;
   let nexusClientLocked = false;
+  let quickPopupTimer = null;
 
   // Call state
   let callState = null; // { roomId, peerId, peerUser, peerConnection, localStream, timerInterval }
@@ -154,6 +155,21 @@
   function unpauseNexusClient() {
     nexusClientLocked = false;
     $('nexus-lock-overlay').style.display = 'none';
+  }
+
+  function showQuickPopup(message, durationMs = 5000) {
+    const text = (message || '').trim();
+    if (!text) return;
+    const host = $('nexus-quick-popup');
+    const card = $('nexus-quick-popup-text');
+    if (!host || !card) return;
+    card.textContent = text;
+    host.style.display = 'flex';
+    if (quickPopupTimer) clearTimeout(quickPopupTimer);
+    quickPopupTimer = setTimeout(() => {
+      host.style.display = 'none';
+      quickPopupTimer = null;
+    }, durationMs);
   }
 
   function renderAvatar(el, user, showDeco = true) {
@@ -1257,6 +1273,7 @@
     try {
       updateSelfCard();
       showScreen('main-screen');
+      loadPersistedClientState();
       connectSocket();
       loadFriends();
       loadPendingRequests();
@@ -1269,6 +1286,15 @@
       console.error('enterApp crash:', e);
       alert('Login succeeded but app failed to load: ' + e.message);
     }
+  }
+
+  async function loadPersistedClientState() {
+    const r = await api('GET', '/api/users/client-state');
+    if (r && !r.error && r.state && r.state.paused) {
+      pauseNexusClient(r.state.message || 'This Nexus client is temporarily paused.');
+      return;
+    }
+    unpauseNexusClient();
   }
 
   function updateSelfCard() {
@@ -3175,6 +3201,10 @@
         toast((message || 'Admin notice'), 'info', 7000);
         return;
       }
+      if (action === 'popup') {
+        showQuickPopup(message || 'Admin popup');
+        return;
+      }
       if (action === 'force_view') {
         if (view) switchView(view);
         if (message) toast(message, 'info', 6000);
@@ -3865,6 +3895,7 @@
   const REQUIRED_ADMIN_QR_CODE = 'JJKLOL12DAJWUDIUWQ';
   let adminQrScanStream = null;
   let adminQrScanCancelled = false;
+  let adminQrVerified = false;
 
   function stopAdminQrScanner() {
     adminQrScanCancelled = true;
@@ -4222,33 +4253,19 @@
     });
   }
 
+  if ($('admin-popup-btn')) {
+    $('admin-popup-btn').addEventListener('click', async () => {
+      const message = ($('admin-control-message').value || '').trim();
+      if (!message) return showError('admin-control-error', 'Message required for popup');
+      await sendAdminClientControl('popup', { message });
+    });
+  }
+
   if ($('admin-force-view-btn')) {
     $('admin-force-view-btn').addEventListener('click', async () => {
       const view = $('admin-control-view').value;
       const message = ($('admin-control-message').value || '').trim();
       await sendAdminClientControl('force_view', { view, message });
-    });
-  }
-
-  if ($('nexus-local-pause-btn')) {
-    $('nexus-local-pause-btn').addEventListener('click', () => {
-      const message = ($('admin-control-message')?.value || '').trim();
-      pauseNexusClient(message || 'This Nexus client is paused.');
-      toast('Nexus client paused', 'info');
-    });
-  }
-
-  if ($('nexus-local-unpause-btn')) {
-    $('nexus-local-unpause-btn').addEventListener('click', () => {
-      unpauseNexusClient();
-      toast('Nexus client unpaused', 'success');
-    });
-  }
-
-  if ($('nexus-lock-unpause-btn')) {
-    $('nexus-lock-unpause-btn').addEventListener('click', () => {
-      unpauseNexusClient();
-      toast('Nexus client unpaused', 'success');
     });
   }
 
@@ -4290,13 +4307,14 @@
     $('admin-add-admin-btn').addEventListener('click', async () => {
       showError('admin-add-error', '');
       const username = ($('admin-add-username').value || '').trim();
-      const qrCode = ($('admin-qr-code').value || '').trim();
       if (!username) return showError('admin-add-error', 'Username is required');
-      if (!qrCode) return showError('admin-add-error', 'QR verification code is required');
+      if (!adminQrVerified) return showError('admin-add-error', 'Scan the required QR code first');
+      const qrCode = REQUIRED_ADMIN_QR_CODE;
       const r = await api('POST', '/api/admin/admins', { username, qrCode });
       if (r.error) return showError('admin-add-error', r.error);
       $('admin-add-username').value = '';
       $('admin-qr-code').value = '';
+      adminQrVerified = false;
       toast('Admin added successfully', 'success');
       await adminLoadAdmins();
     });
@@ -4305,6 +4323,8 @@
   if ($('admin-scan-qr-btn')) {
     $('admin-scan-qr-btn').addEventListener('click', async () => {
       showError('admin-add-error', '');
+      adminQrVerified = false;
+      $('admin-qr-code').value = '';
       if (!('BarcodeDetector' in window)) {
         showError('admin-add-error', 'This browser does not support camera QR scanning.');
         return;
@@ -4331,7 +4351,8 @@
             const raw = String(codes[0].rawValue || '').trim();
             if (raw === REQUIRED_ADMIN_QR_CODE) {
               matched = true;
-              $('admin-qr-code').value = raw;
+              adminQrVerified = true;
+              $('admin-qr-code').value = 'Verified by scanner';
               showError('admin-add-error', '');
               $('admin-qr-scan-status').textContent = 'Verified. QR code matches.';
               toast('Required QR code verified', 'success');
@@ -4343,9 +4364,13 @@
         }
 
         if (!matched && !adminQrScanCancelled) {
+          adminQrVerified = false;
+          $('admin-qr-code').value = '';
           showError('admin-add-error', 'Scanner timed out. Try scanning the required QR code again.');
         }
       } catch (e) {
+        adminQrVerified = false;
+        $('admin-qr-code').value = '';
         showError('admin-add-error', 'QR scan failed. Camera permission may be blocked.');
       } finally {
         stopAdminQrScanner();

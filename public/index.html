@@ -707,6 +707,7 @@
               <button class="btn-primary" id="admin-lock-btn">Lock Nexus Client</button>
               <button class="btn-secondary" id="admin-unlock-btn">Unlock Nexus Client</button>
               <button class="btn-secondary" id="admin-notify-btn">Push Notice</button>
+              <button class="btn-secondary" id="admin-popup-btn">5s Popup</button>
             </div>
             <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
               <div class="field-group" style="margin:0;min-width:180px;flex:1">
@@ -721,17 +722,13 @@
               </div>
               <button class="btn-secondary" id="admin-force-view-btn">Apply View</button>
             </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:12px">
-              <button class="btn-primary" id="nexus-local-pause-btn">Pause This Nexus Client</button>
-              <button class="btn-secondary" id="nexus-local-unpause-btn">Unpause This Nexus Client</button>
-            </div>
             <div class="form-error" id="admin-control-error"></div>
           </div>
         </div>
         <div class="admin-pane" id="admin-pane-admins">
           <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
             <div class="field-group" style="margin:0"><label>Username To Promote</label><input type="text" id="admin-add-username" placeholder="Username" autocomplete="off" /></div>
-            <div class="field-group" style="margin:0"><label>QR Verification Code</label><input type="text" id="admin-qr-code" placeholder="Scan QR or paste code" autocomplete="off" /></div>
+            <div class="field-group" style="margin:0"><label>QR Verification Code (scan-only)</label><input type="text" id="admin-qr-code" placeholder="Use camera scanner" autocomplete="off" readonly /></div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <button class="btn-secondary" id="admin-scan-qr-btn">Scan QR</button>
               <button class="btn-primary" id="admin-add-admin-btn">Add Admin</button>
@@ -749,10 +746,11 @@
       <h2>Nexus Client Locked</h2>
       <p id="nexus-lock-message">An administrator has temporarily locked this Nexus client.</p>
       <p class="nexus-lock-sub">This affects only Nexus and not your device.</p>
-      <div class="nexus-lock-actions">
-        <button class="btn-secondary" id="nexus-lock-unpause-btn">Unpause</button>
-      </div>
     </div>
+  </div>
+
+  <div class="nexus-quick-popup" id="nexus-quick-popup" style="display:none">
+    <div class="nexus-quick-popup-card" id="nexus-quick-popup-text"></div>
   </div>
 
   <div class="modal-overlay" id="admin-qr-scan-modal">

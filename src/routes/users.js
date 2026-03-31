@@ -70,4 +70,16 @@ router.post('/change-password', requireAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+router.get('/client-state', requireAuth, async (req, res) => {
+  const r = await pool.query(
+    'SELECT is_paused, pause_message FROM user_client_state WHERE user_id=$1',
+    [req.session.userId]
+  );
+  const row = r.rows[0] || null;
+  res.json({
+    paused: !!(row && row.is_paused),
+    message: row && row.pause_message ? row.pause_message : null
+  });
+});
+
 module.exports = router;

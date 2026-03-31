@@ -2640,6 +2640,28 @@ html, body {
   justify-content: flex-end;
 }
 
+.nexus-quick-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 1180;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nexus-quick-popup-card {
+  max-width: min(86vw, 560px);
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(16, 22, 38, 0.95);
+  border: 1px solid rgba(111, 220, 255, 0.38);
+  color: #d9ecff;
+  font-size: 14px;
+  line-height: 1.4;
+  box-shadow: 0 16px 36px rgba(0,0,0,0.35);
+}
+
 .admin-qr-scan-wrap {
   position: relative;
   width: 100%;

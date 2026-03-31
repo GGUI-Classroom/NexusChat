@@ -348,10 +348,11 @@ router.post('/users/:userId/client-control', async (req, res) => {
   const message = String(req.body.message || '').trim().slice(0, 300);
   const view = String(req.body.view || '').trim().toLowerCase();
 
-  const allowedActions = new Set(['lock', 'unlock', 'notify', 'force_view']);
+  const allowedActions = new Set(['lock', 'unlock', 'notify', 'popup', 'force_view']);
   if (!allowedActions.has(action)) return res.status(400).json({ error: 'Invalid action' });
 
   if (action === 'lock' && !message) return res.status(400).json({ error: 'Lock message is required' });
+  if ((action === 'notify' || action === 'popup') && !message) return res.status(400).json({ error: 'Message is required' });
   if (action === 'force_view') {
     const allowedViews = new Set(['friends', 'dms', 'servers', 'shop', 'achievements', 'colors']);
     if (!allowedViews.has(view)) return res.status(400).json({ error: 'Invalid view target' });
@@ -365,6 +366,28 @@ router.post('/users/:userId/client-control', async (req, res) => {
 
   const actor = await pool.query('SELECT username, display_name FROM users WHERE id=$1', [req.session.userId]);
   const actorRow = actor.rows[0] || {};
+
+  if (action === 'lock') {
+    const existing = await pool.query('SELECT id FROM user_client_state WHERE user_id=$1', [userId]);
+    if (existing.rows.length) {
+      await pool.query(
+        'UPDATE user_client_state SET is_paused=TRUE, pause_message=$1, updated_by=$2, updated_at=EXTRACT(EPOCH FROM NOW())::BIGINT WHERE user_id=$3',
+        [message, req.session.userId, userId]
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO user_client_state (id, user_id, is_paused, pause_message, updated_by) VALUES ($1,$2,TRUE,$3,$4)',
+        [uuidv4(), userId, message, req.session.userId]
+      );
+    }
+  }
+
+  if (action === 'unlock') {
+    await pool.query(
+      'UPDATE user_client_state SET is_paused=FALSE, pause_message=NULL, updated_by=$1, updated_at=EXTRACT(EPOCH FROM NOW())::BIGINT WHERE user_id=$2',
+      [req.session.userId, userId]
+    );
+  }
 
   req.io.to(`user:${userId}`).emit('nexus_admin_control', {
     action,
