@@ -209,7 +209,7 @@
         stopYinYangCanvas(oldWrap);
         stopHydroCanvas(oldWrap);
         stopShatterCanvas(oldWrap);
-        oldWrap.querySelectorAll('.admin-crown,.deco-shine-overlay').forEach(e=>e.remove());
+        oldWrap.querySelectorAll('.admin-crown,.deco-shine-overlay,.stormveil-layer').forEach(e=>e.remove());
       }
       return;
     }
@@ -232,7 +232,7 @@
     }
 
     // Remove stale deco elements and canvases
-    wrap.querySelectorAll('.avatar-deco, .storm-canvas').forEach(e => e.remove());
+    wrap.querySelectorAll('.avatar-deco, .storm-canvas, .stormveil-layer').forEach(e => e.remove());
     // Stop any running canvas engines first
     stopStormCanvas(wrap); stopInfernoCanvas(wrap); stopYinYangCanvas(wrap);
     stopHydroCanvas(wrap);
@@ -244,6 +244,18 @@
       const decoEl = document.createElement('div');
       decoEl.className = 'avatar-deco deco-' + deco;
       wrap.appendChild(decoEl);
+
+      if (deco === 'stormveil') {
+        const layerA = document.createElement('span');
+        layerA.className = 'stormveil-layer stormveil-layer-a';
+        wrap.appendChild(layerA);
+        const layerB = document.createElement('span');
+        layerB.className = 'stormveil-layer stormveil-layer-b';
+        wrap.appendChild(layerB);
+        const layerC = document.createElement('span');
+        layerC.className = 'stormveil-layer stormveil-layer-c';
+        wrap.appendChild(layerC);
+      }
     }
     wrap.dataset.deco = deco;
 
