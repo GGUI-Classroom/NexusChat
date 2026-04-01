@@ -1977,6 +1977,14 @@ html, body {
     radial-gradient(circle at 22% 18%, rgba(167, 255, 242, 0.52), transparent 30%),
     radial-gradient(circle at 78% 26%, rgba(177, 140, 255, 0.42), transparent 34%),
     radial-gradient(circle at 70% 80%, rgba(90, 255, 224, 0.34), transparent 36%),
+    conic-gradient(from 140deg,
+      rgba(109, 245, 255, 0.0) 0deg,
+      rgba(109, 245, 255, 0.56) 24deg,
+      rgba(178, 126, 255, 0.54) 56deg,
+      rgba(109, 245, 255, 0.0) 86deg,
+      rgba(168, 124, 255, 0.52) 120deg,
+      rgba(109, 245, 255, 0.0) 360deg
+    ),
     conic-gradient(from 35deg,
       rgba(103, 245, 255, 0.86),
       rgba(124, 161, 255, 0.82),
@@ -2126,18 +2134,56 @@ html, body {
 .stormveil-layer-d {
   inset: -3px;
   border-radius: 50%;
-  background:
-    linear-gradient(130deg,
-      rgba(160, 255, 238, 0.0) 28%,
-      rgba(160, 255, 238, 0.26) 42%,
-      rgba(196, 174, 255, 0.36) 50%,
-      rgba(126, 240, 255, 0.24) 58%,
-      rgba(160, 255, 238, 0.0) 72%
-    );
+  background: linear-gradient(132deg,
+    rgba(186, 132, 255, 0.0) 28%,
+    rgba(186, 132, 255, 0.38) 36%,
+    rgba(214, 164, 255, 0.86) 44%,
+    rgba(244, 233, 255, 0.96) 49%,
+    rgba(188, 130, 255, 0.9) 55%,
+    rgba(164, 118, 255, 0.44) 63%,
+    rgba(186, 132, 255, 0.0) 72%
+  );
   mix-blend-mode: screen;
-  opacity: 0.6;
-  filter: blur(0.4px);
-  animation: stormveil-inner-mist 5.8s ease-in-out infinite, stormveil-inner-glint 3.2s ease-in-out infinite;
+  opacity: 0.92;
+  filter: blur(0.15px);
+  animation: stormveil-inner-mist 5.6s ease-in-out infinite, stormveil-inner-glint 2.6s ease-in-out infinite;
+}
+
+.stormveil-layer-e {
+  inset: -2px;
+  border-radius: 50%;
+  background: linear-gradient(40deg,
+    rgba(108, 246, 255, 0.0) 40%,
+    rgba(108, 246, 255, 0.26) 46%,
+    rgba(232, 252, 255, 0.95) 49%,
+    rgba(112, 244, 255, 0.78) 52%,
+    rgba(108, 246, 255, 0.20) 56%,
+    rgba(108, 246, 255, 0.0) 62%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.84;
+  filter: blur(0.1px);
+  animation: stormveil-line-e 6.2s linear infinite;
+}
+
+.stormveil-layer-f {
+  inset: -5px;
+  border-radius: 50%;
+  background: conic-gradient(from 8deg,
+    rgba(126, 245, 255, 0.0) 0deg,
+    rgba(126, 245, 255, 0.85) 18deg,
+    rgba(214, 241, 255, 0.92) 28deg,
+    rgba(186, 126, 255, 0.88) 42deg,
+    rgba(126, 245, 255, 0.0) 60deg,
+    rgba(186, 126, 255, 0.72) 300deg,
+    rgba(126, 245, 255, 0.0) 360deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 57%, black 68%);
+          mask: radial-gradient(circle, transparent 57%, black 68%);
+  mix-blend-mode: screen;
+  opacity: 0.66;
+  filter: blur(0.25px);
+  animation: stormveil-line-f 7.8s linear infinite;
 }
 
 @keyframes stormveil-arc-main-idle {
@@ -2156,16 +2202,28 @@ html, body {
 }
 
 @keyframes stormveil-inner-mist {
-  0% { transform: translateX(-18%) rotate(-18deg) scale(1.03); opacity: 0.44; }
-  30% { transform: translateX(6%) rotate(-7deg) scale(1.02); opacity: 0.64; }
-  55% { transform: translateX(15%) rotate(2deg) scale(1.01); opacity: 0.56; }
-  80% { transform: translateX(-4%) rotate(-10deg) scale(1.03); opacity: 0.62; }
-  100% { transform: translateX(-18%) rotate(-18deg) scale(1.03); opacity: 0.44; }
+  0% { transform: translateX(-24%) rotate(-24deg) scale(1.04); opacity: 0.64; }
+  35% { transform: translateX(12%) rotate(-8deg) scale(1.02); opacity: 0.96; }
+  62% { transform: translateX(21%) rotate(4deg) scale(1.01); opacity: 0.7; }
+  82% { transform: translateX(-7%) rotate(-14deg) scale(1.03); opacity: 0.82; }
+  100% { transform: translateX(-24%) rotate(-24deg) scale(1.04); opacity: 0.64; }
 }
 
 @keyframes stormveil-inner-glint {
-  0%, 100% { filter: blur(0.4px) brightness(0.96); }
-  50% { filter: blur(0.25px) brightness(1.15); }
+  0%, 100% { filter: blur(0.16px) brightness(1.0); }
+  45% { filter: blur(0.05px) brightness(1.32); }
+}
+
+@keyframes stormveil-line-e {
+  0% { transform: rotate(14deg) scale(1.01); opacity: 0.64; }
+  50% { transform: rotate(196deg) scale(1.03); opacity: 0.92; }
+  100% { transform: rotate(374deg) scale(1.01); opacity: 0.64; }
+}
+
+@keyframes stormveil-line-f {
+  from { transform: rotate(0deg); opacity: 0.62; }
+  50% { transform: rotate(-190deg); opacity: 0.86; }
+  to { transform: rotate(-360deg); opacity: 0.62; }
 }
 
 /* ===== SHOP PAGE ===== */
