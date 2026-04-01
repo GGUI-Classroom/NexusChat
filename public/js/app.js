@@ -255,6 +255,9 @@
         const layerC = document.createElement('span');
         layerC.className = 'stormveil-layer stormveil-layer-c';
         wrap.appendChild(layerC);
+        const layerD = document.createElement('span');
+        layerD.className = 'stormveil-layer stormveil-layer-d';
+        wrap.appendChild(layerD);
       }
     }
     wrap.dataset.deco = deco;

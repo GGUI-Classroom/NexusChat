@@ -2123,6 +2123,23 @@ html, body {
   animation: stormveil-ring-rotate 9s linear infinite;
 }
 
+.stormveil-layer-d {
+  inset: -3px;
+  border-radius: 50%;
+  background:
+    linear-gradient(130deg,
+      rgba(160, 255, 238, 0.0) 28%,
+      rgba(160, 255, 238, 0.26) 42%,
+      rgba(196, 174, 255, 0.36) 50%,
+      rgba(126, 240, 255, 0.24) 58%,
+      rgba(160, 255, 238, 0.0) 72%
+    );
+  mix-blend-mode: screen;
+  opacity: 0.6;
+  filter: blur(0.4px);
+  animation: stormveil-inner-mist 5.8s ease-in-out infinite, stormveil-inner-glint 3.2s ease-in-out infinite;
+}
+
 @keyframes stormveil-arc-main-idle {
   0%, 100% { transform: rotate(-10deg) scale(1.03); opacity: 0.82; }
   50% { transform: rotate(9deg) scale(1.07); opacity: 0.96; }
@@ -2136,6 +2153,19 @@ html, body {
 @keyframes stormveil-ring-rotate {
   from { transform: rotate(0deg); }
   to { transform: rotate(-360deg); }
+}
+
+@keyframes stormveil-inner-mist {
+  0% { transform: translateX(-18%) rotate(-18deg) scale(1.03); opacity: 0.44; }
+  30% { transform: translateX(6%) rotate(-7deg) scale(1.02); opacity: 0.64; }
+  55% { transform: translateX(15%) rotate(2deg) scale(1.01); opacity: 0.56; }
+  80% { transform: translateX(-4%) rotate(-10deg) scale(1.03); opacity: 0.62; }
+  100% { transform: translateX(-18%) rotate(-18deg) scale(1.03); opacity: 0.44; }
+}
+
+@keyframes stormveil-inner-glint {
+  0%, 100% { filter: blur(0.4px) brightness(0.96); }
+  50% { filter: blur(0.25px) brightness(1.15); }
 }
 
 /* ===== SHOP PAGE ===== */
