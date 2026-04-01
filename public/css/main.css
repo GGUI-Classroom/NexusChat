@@ -2244,30 +2244,95 @@ html, body {
 
 /* -- SECRET: HEHESHUIS AURA -- */
 .avatar-deco.deco-heheshuis_aura {
-  inset: -8px;
+  inset: -6px;
   border-radius: 50%;
   z-index: 1;
   pointer-events: none;
   mix-blend-mode: screen;
-  opacity: 0.95;
-  -webkit-mask: radial-gradient(circle, transparent 50%, black 60%, black 69%, transparent 77%);
-          mask: radial-gradient(circle, transparent 50%, black 60%, black 69%, transparent 77%);
+  opacity: 0.98;
+  -webkit-mask: radial-gradient(circle, transparent 34%, black 42%, black 56%, transparent 64%);
+          mask: radial-gradient(circle, transparent 34%, black 42%, black 56%, transparent 64%);
   background:
-    conic-gradient(from 12deg,
+    conic-gradient(from 8deg,
       rgba(46, 248, 255, 0.0) 0deg,
-      rgba(46, 248, 255, 0.94) 38deg,
-      rgba(95, 168, 255, 0.9) 82deg,
-      rgba(180, 83, 255, 0.92) 140deg,
-      rgba(255, 74, 212, 0.9) 206deg,
-      rgba(255, 196, 80, 0.9) 274deg,
-      rgba(46, 248, 255, 0.0) 332deg,
+      rgba(46, 248, 255, 0.99) 18deg,
+      rgba(46, 248, 255, 0.99) 28deg,
+      rgba(110, 196, 255, 0.99) 58deg,
+      rgba(110, 196, 255, 0.99) 66deg,
+      rgba(158, 255, 82, 0.98) 88deg,
+      rgba(158, 255, 82, 0.98) 96deg,
+      rgba(255, 215, 74, 0.99) 118deg,
+      rgba(255, 215, 74, 0.99) 128deg,
+      rgba(255, 146, 62, 0.99) 146deg,
+      rgba(255, 146, 62, 0.99) 154deg,
+      rgba(255, 86, 122, 0.99) 170deg,
+      rgba(255, 86, 122, 0.99) 178deg,
+      rgba(255, 66, 216, 0.99) 198deg,
+      rgba(255, 66, 216, 0.99) 208deg,
+      rgba(176, 87, 255, 0.99) 230deg,
+      rgba(176, 87, 255, 0.99) 238deg,
+      rgba(104, 171, 255, 0.99) 262deg,
+      rgba(104, 171, 255, 0.99) 272deg,
+      rgba(46, 248, 255, 0.99) 300deg,
+      rgba(46, 248, 255, 0.99) 310deg,
+      rgba(46, 248, 255, 0.0) 334deg,
       rgba(46, 248, 255, 0.0) 360deg
+    ),
+    conic-gradient(from 216deg,
+      rgba(255, 255, 255, 0.0) 0deg,
+      rgba(255, 255, 255, 0.96) 12deg,
+      rgba(255, 255, 255, 0.0) 22deg,
+      rgba(255, 255, 255, 0.92) 182deg,
+      rgba(255, 255, 255, 0.0) 196deg,
+      rgba(255, 255, 255, 0.95) 318deg,
+      rgba(255, 255, 255, 0.0) 332deg,
+      rgba(255, 255, 255, 0.0) 360deg
     );
   box-shadow:
-    0 0 14px rgba(79, 191, 255, 0.68),
-    0 0 22px rgba(203, 89, 255, 0.42),
-    0 0 30px rgba(255, 176, 76, 0.34);
-  animation: hh-core-spin 8.4s linear infinite, hh-core-pulse 2.8s ease-in-out infinite;
+    0 0 6px rgba(79, 191, 255, 0.8),
+    0 0 10px rgba(203, 89, 255, 0.56),
+    0 0 14px rgba(255, 176, 76, 0.36);
+  animation: hh-core-spin 8.8s linear infinite, hh-core-pulse 2.5s ease-in-out infinite;
+}
+
+.avatar-deco.deco-heheshuis_aura::before,
+.avatar-deco.deco-heheshuis_aura::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.avatar-deco.deco-heheshuis_aura::before {
+  inset: -5px;
+  -webkit-mask: radial-gradient(circle, transparent 36%, black 44%, black 53%, transparent 60%);
+          mask: radial-gradient(circle, transparent 36%, black 44%, black 53%, transparent 60%);
+  background: conic-gradient(from 292deg,
+    rgba(255,255,255,0.0) 0deg,
+    rgba(255,255,255,0.98) 9deg,
+    rgba(255,238,146,0.95) 16deg,
+    rgba(255,114,80,0.94) 24deg,
+    rgba(255,255,255,0.0) 34deg,
+    rgba(255,255,255,0.0) 360deg);
+  filter: blur(0.02px);
+  opacity: 0.94;
+  animation: hh-flare-cross 3.6s linear infinite;
+}
+
+.avatar-deco.deco-heheshuis_aura::after {
+  inset: -7px;
+  -webkit-mask: radial-gradient(circle, transparent 35%, black 43%, black 54%, transparent 62%);
+          mask: radial-gradient(circle, transparent 35%, black 43%, black 54%, transparent 62%);
+  background: linear-gradient(126deg,
+    rgba(46,248,255,0.0) 28%,
+    rgba(46,248,255,0.96) 43%,
+    rgba(255,255,255,0.98) 48%,
+    rgba(255,102,224,0.95) 54%,
+    rgba(46,248,255,0.0) 68%);
+  filter: blur(0.04px);
+  opacity: 0.88;
+  animation: hh-line-cross 4.8s ease-in-out infinite;
 }
 
 .heheshuis-layer {
@@ -2279,45 +2344,55 @@ html, body {
 }
 
 .heheshuis-layer-a {
-  inset: -10px;
+  inset: -7px;
   z-index: 8;
-  -webkit-mask: radial-gradient(circle, transparent 52%, black 60%, black 68%, transparent 76%);
-          mask: radial-gradient(circle, transparent 52%, black 60%, black 68%, transparent 76%);
+  -webkit-mask: radial-gradient(circle, transparent 30%, black 37%, black 51%, transparent 59%);
+          mask: radial-gradient(circle, transparent 30%, black 37%, black 51%, transparent 59%);
   background:
-    conic-gradient(from 210deg,
+    conic-gradient(from 214deg,
       rgba(255, 255, 255, 0.0) 0deg,
-      rgba(255, 255, 255, 0.94) 16deg,
-      rgba(255, 210, 72, 0.88) 26deg,
-      rgba(255, 92, 210, 0.88) 44deg,
-      rgba(106, 177, 255, 0.86) 64deg,
-      rgba(46, 248, 255, 0.88) 82deg,
-      rgba(255, 255, 255, 0.0) 104deg,
+      rgba(255, 255, 255, 1) 10deg,
+      rgba(255, 255, 255, 1) 14deg,
+      rgba(255, 220, 86, 0.98) 20deg,
+      rgba(255, 220, 86, 0.98) 26deg,
+      rgba(255, 112, 206, 0.98) 34deg,
+      rgba(255, 112, 206, 0.98) 42deg,
+      rgba(128, 194, 255, 0.98) 52deg,
+      rgba(128, 194, 255, 0.98) 60deg,
+      rgba(46, 248, 255, 0.98) 70deg,
+      rgba(46, 248, 255, 0.98) 78deg,
+      rgba(255, 255, 255, 0.0) 92deg,
       rgba(255, 255, 255, 0.0) 360deg
     );
-  filter: blur(0.45px);
-  opacity: 0.92;
-  animation: hh-sweep-1 5.2s linear infinite;
+  filter: blur(0px);
+  opacity: 0.98;
+  animation: hh-sweep-1 4.9s linear infinite;
 }
 
 .heheshuis-layer-b {
-  inset: -7px;
+  inset: -5px;
   z-index: 9;
-  -webkit-mask: radial-gradient(circle, transparent 46%, black 55%, black 63%, transparent 72%);
-          mask: radial-gradient(circle, transparent 46%, black 55%, black 63%, transparent 72%);
+  -webkit-mask: radial-gradient(circle, transparent 26%, black 33%, black 47%, transparent 56%);
+          mask: radial-gradient(circle, transparent 26%, black 33%, black 47%, transparent 56%);
   background:
-    conic-gradient(from 36deg,
+    conic-gradient(from 30deg,
       rgba(46, 248, 255, 0.0) 0deg,
-      rgba(46, 248, 255, 0.8) 38deg,
-      rgba(106, 177, 255, 0.84) 88deg,
-      rgba(180, 83, 255, 0.84) 132deg,
-      rgba(255, 74, 212, 0.8) 176deg,
-      rgba(255, 196, 80, 0.82) 234deg,
-      rgba(46, 248, 255, 0.0) 306deg,
+      rgba(46, 248, 255, 0.98) 18deg,
+      rgba(46, 248, 255, 0.98) 26deg,
+      rgba(118, 188, 255, 0.98) 70deg,
+      rgba(118, 188, 255, 0.98) 78deg,
+      rgba(187, 95, 255, 0.98) 116deg,
+      rgba(187, 95, 255, 0.98) 124deg,
+      rgba(255, 90, 214, 0.98) 164deg,
+      rgba(255, 90, 214, 0.98) 172deg,
+      rgba(255, 206, 84, 0.98) 218deg,
+      rgba(255, 206, 84, 0.98) 226deg,
+      rgba(46, 248, 255, 0.0) 294deg,
       rgba(46, 248, 255, 0.0) 360deg
     );
-  filter: blur(0.35px);
-  opacity: 0.82;
-  animation: hh-sweep-2 7.8s linear infinite;
+  filter: blur(0px);
+  opacity: 0.94;
+  animation: hh-sweep-2 6.6s linear infinite;
 }
 
 @keyframes hh-core-spin {
@@ -2326,27 +2401,39 @@ html, body {
 }
 
 @keyframes hh-core-pulse {
-  0%, 100% { opacity: 0.86; filter: saturate(1.05) brightness(0.98); }
-  50% { opacity: 1; filter: saturate(1.22) brightness(1.12); }
+  0%, 100% { opacity: 0.92; filter: saturate(1.06) brightness(0.98); }
+  50% { opacity: 1; filter: saturate(1.25) brightness(1.14); }
 }
 
 @keyframes hh-sweep-1 {
+  from { transform: rotate(0deg); opacity: 0.72; }
+  50% { transform: rotate(180deg); opacity: 1; }
+  to { transform: rotate(360deg); opacity: 0.72; }
+}
+
+@keyframes hh-sweep-2 {
+  from { transform: rotate(0deg); opacity: 0.66; }
+  50% { transform: rotate(-180deg); opacity: 1; }
+  to { transform: rotate(-360deg); opacity: 0.66; }
+}
+
+@keyframes hh-flare-cross {
   from { transform: rotate(0deg); opacity: 0.62; }
+  30% { opacity: 0.96; }
   50% { transform: rotate(180deg); opacity: 1; }
   to { transform: rotate(360deg); opacity: 0.62; }
 }
 
-@keyframes hh-sweep-2 {
-  from { transform: rotate(0deg); opacity: 0.5; }
-  50% { transform: rotate(-180deg); opacity: 0.92; }
-  to { transform: rotate(-360deg); opacity: 0.5; }
+@keyframes hh-line-cross {
+  0%, 100% { transform: rotate(-22deg) scale(1); opacity: 0.66; }
+  50% { transform: rotate(158deg) scale(1.03); opacity: 0.94; }
 }
 
 @media (max-width: 680px) {
   .avatar-deco.deco-heheshuis_aura,
   .heheshuis-layer-a,
   .heheshuis-layer-b {
-    inset: -6px;
+    inset: -4px;
   }
 }
 
