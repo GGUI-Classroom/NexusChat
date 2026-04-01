@@ -2243,33 +2243,12 @@ html, body {
 }
 
 /* -- SECRET: HEHESHUIS AURA -- */
-.pfp-wrapper {
-  position: relative;
-  width: 160px;
-  height: 160px;
-}
-
-.pfp {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  position: relative;
-  z-index: 5;
-}
-
-/* Base aura layer */
-.aura, .aura2, .aura3 {
-  position: absolute;
+.avatar-deco.deco-heheshuis_aura {
   inset: -15px;
   border-radius: 50%;
-  filter: blur(25px);
   z-index: 1;
-  animation: spin 8s linear infinite;
   opacity: 0.9;
-}
-
-/* Layer 1 - blue/purple energy */
-.aura {
+  filter: blur(25px);
   background: conic-gradient(
     from 0deg,
     #4b9dff,
@@ -2277,19 +2256,21 @@ html, body {
     #ff4bbd,
     #4b9dff
   );
-  animation-duration: 10s;
+  animation: heheshuis-spin 10s linear infinite;
 }
 
-/* Layer 2 - neon pulse */
-.aura2 {
-  inset: -25px;
-  background: radial-gradient(circle, #4b9dff55, transparent 70%);
-  animation: pulse 2.5s ease-in-out infinite;
+.avatar-deco.deco-heheshuis_aura::before,
+.avatar-deco.deco-heheshuis_aura::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  z-index: 1;
 }
 
-/* Layer 3 - chaotic swirl */
-.aura3 {
+.avatar-deco.deco-heheshuis_aura::before {
   inset: -10px;
+  filter: blur(25px);
+  opacity: 0.9;
   background: conic-gradient(
     from 180deg,
     #ff4bbd,
@@ -2297,26 +2278,27 @@ html, body {
     #b44bff,
     #ff4bbd
   );
-  animation-duration: 6s;
-  animation-direction: reverse;
+  animation: heheshuis-spin-reverse 6s linear infinite;
 }
 
-@keyframes spin {
+.avatar-deco.deco-heheshuis_aura::after {
+  inset: -25px;
+  filter: blur(25px);
+  background: radial-gradient(circle, #4b9dff55, transparent 70%);
+  animation: heheshuis-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes heheshuis-spin {
   to { transform: rotate(360deg); }
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.15); }
+@keyframes heheshuis-spin-reverse {
+  to { transform: rotate(-360deg); }
 }
 
-/* Compatibility for existing avatar wrappers in NexusChat */
-.avatar-wrap.pfp-wrapper,
-.profile-popup-avatar-wrap.pfp-wrapper,
-#secret-avatar-wrap.pfp-wrapper,
-#claim-avatar-wrap.pfp-wrapper {
-  width: 100%;
-  height: 100%;
+@keyframes heheshuis-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
 }
 
 /* ===== SHOP PAGE ===== */
