@@ -179,6 +179,17 @@
     }, durationMs);
   }
 
+  function addStormveilLayers(wrap) {
+    if (!wrap) return;
+    wrap.querySelectorAll('.stormveil-layer').forEach(e => e.remove());
+    const layerNames = ['a', 'b', 'c', 'd', 'e', 'f'];
+    layerNames.forEach(name => {
+      const layer = document.createElement('span');
+      layer.className = 'stormveil-layer stormveil-layer-' + name;
+      wrap.appendChild(layer);
+    });
+  }
+
   function renderAvatar(el, user, showDeco = true) {
     const url = user && user.avatarDataUrl;
     // Don't show deco on grouped messages (avatar is hidden anyway)
@@ -246,24 +257,7 @@
       wrap.appendChild(decoEl);
 
       if (deco === 'stormveil') {
-        const layerA = document.createElement('span');
-        layerA.className = 'stormveil-layer stormveil-layer-a';
-        wrap.appendChild(layerA);
-        const layerB = document.createElement('span');
-        layerB.className = 'stormveil-layer stormveil-layer-b';
-        wrap.appendChild(layerB);
-        const layerC = document.createElement('span');
-        layerC.className = 'stormveil-layer stormveil-layer-c';
-        wrap.appendChild(layerC);
-        const layerD = document.createElement('span');
-        layerD.className = 'stormveil-layer stormveil-layer-d';
-        wrap.appendChild(layerD);
-        const layerE = document.createElement('span');
-        layerE.className = 'stormveil-layer stormveil-layer-e';
-        wrap.appendChild(layerE);
-        const layerF = document.createElement('span');
-        layerF.className = 'stormveil-layer stormveil-layer-f';
-        wrap.appendChild(layerF);
+        addStormveilLayers(wrap);
       }
     }
     wrap.dataset.deco = deco;
@@ -4548,6 +4542,13 @@
         }
       }
     });
+
+    // Stormveil uses multiple overlay layers for the final look.
+    visibleDecorations.forEach(d => {
+      if (d.id !== 'stormveil') return;
+      const wrap = document.querySelector(`#shopcard-${d.id} .avatar-wrap`);
+      if (wrap) addStormveilLayers(wrap);
+    });
   }
 
   window.shopAction = async function(decoId, action) {
@@ -4992,6 +4993,7 @@
       const decoEl = document.createElement('div');
       decoEl.className = 'avatar-deco deco-' + decoration.id;
       wrap.appendChild(decoEl);
+      if (decoration.id === 'stormveil') addStormveilLayers(wrap);
       if (decoration.id === 'nexus_admin') {
         const crown = document.createElement('span');
         crown.className = 'admin-crown';
@@ -5258,6 +5260,7 @@
       const decoEl = document.createElement('div');
       decoEl.className = 'avatar-deco deco-' + SECRET_DECORATION_ID;
       wrap.appendChild(decoEl);
+      if (SECRET_DECORATION_ID === 'stormveil') addStormveilLayers(wrap);
 
       const particles = [];
       function spawnBurst(amount, hueStart = 210, hueRange = 60, spread = 3.8) {
