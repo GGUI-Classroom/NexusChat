@@ -192,16 +192,6 @@
     });
   }
 
-  function addHeheshuisAuraLayers(wrap) {
-    if (!wrap) return;
-    wrap.querySelectorAll('.aura,.aura2,.aura3').forEach(e => e.remove());
-    ['aura', 'aura2', 'aura3'].forEach(name => {
-      const layer = document.createElement('span');
-      layer.className = name;
-      wrap.appendChild(layer);
-    });
-  }
-
   function renderAvatar(el, user, showDeco = true) {
     const url = user && user.avatarDataUrl;
     // Don't show deco on grouped messages (avatar is hidden anyway)
@@ -232,10 +222,8 @@
         stopYinYangCanvas(oldWrap);
         stopHydroCanvas(oldWrap);
         stopShatterCanvas(oldWrap);
-        oldWrap.querySelectorAll('.admin-crown,.deco-shine-overlay,.stormveil-layer,.aura,.aura2,.aura3').forEach(e=>e.remove());
-        oldWrap.classList.remove('pfp-wrapper');
+        oldWrap.querySelectorAll('.admin-crown,.deco-shine-overlay,.stormveil-layer').forEach(e=>e.remove());
       }
-      el.classList.remove('pfp');
       return;
     }
 
@@ -257,7 +245,7 @@
     }
 
     // Remove stale deco elements and canvases
-    wrap.querySelectorAll('.avatar-deco, .storm-canvas, .stormveil-layer, .aura, .aura2, .aura3').forEach(e => e.remove());
+    wrap.querySelectorAll('.avatar-deco, .storm-canvas, .stormveil-layer').forEach(e => e.remove());
     // Stop any running canvas engines first
     stopStormCanvas(wrap); stopInfernoCanvas(wrap); stopYinYangCanvas(wrap);
     stopHydroCanvas(wrap);
@@ -272,14 +260,6 @@
 
       if (deco === 'stormveil') {
         addStormveilLayers(wrap);
-      }
-      if (deco === HEHESHUIS_SECRET_ID) {
-        wrap.classList.add('pfp-wrapper');
-        el.classList.add('pfp');
-        addHeheshuisAuraLayers(wrap);
-      } else {
-        wrap.classList.remove('pfp-wrapper');
-        el.classList.remove('pfp');
       }
     }
     wrap.dataset.deco = deco;
@@ -4571,16 +4551,6 @@
       const wrap = document.querySelector(`#shopcard-${d.id} .avatar-wrap`);
       if (wrap) addStormveilLayers(wrap);
     });
-
-    visibleDecorations.forEach(d => {
-      if (d.id !== HEHESHUIS_SECRET_ID) return;
-      const wrap = document.querySelector(`#shopcard-${d.id} .avatar-wrap`);
-      const avatar = wrap ? wrap.querySelector('.avatar') : null;
-      if (!wrap || !avatar) return;
-      wrap.classList.add('pfp-wrapper');
-      avatar.classList.add('pfp');
-      addHeheshuisAuraLayers(wrap);
-    });
   }
 
   window.shopAction = async function(decoId, action) {
@@ -5032,12 +5002,11 @@
       $('claim-dismiss').style.opacity = '0';
 
       // Apply decoration to preview avatar
-      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas,.aura,.aura2,.aura3').forEach(e => e.remove());
+      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
       const decoEl = document.createElement('div');
       decoEl.className = 'avatar-deco deco-' + decoration.id;
       wrap.appendChild(decoEl);
       if (decoration.id === 'stormveil') addStormveilLayers(wrap);
-      if (decoration.id === HEHESHUIS_SECRET_ID) addHeheshuisAuraLayers(wrap);
       if (decoration.id === 'nexus_admin') {
         const crown = document.createElement('span');
         crown.className = 'admin-crown';
@@ -5302,12 +5271,11 @@
 
       const secretPreviewId = decoration && decoration.id ? decoration.id : SECRET_DECORATION_ID;
 
-      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas,.stormveil-layer,.aura,.aura2,.aura3').forEach(e => e.remove());
+      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas,.stormveil-layer').forEach(e => e.remove());
       const decoEl = document.createElement('div');
       decoEl.className = 'avatar-deco deco-' + secretPreviewId;
       wrap.appendChild(decoEl);
       if (secretPreviewId === 'stormveil') addStormveilLayers(wrap);
-      if (secretPreviewId === HEHESHUIS_SECRET_ID) addHeheshuisAuraLayers(wrap);
 
       const particles = [];
       function spawnBurst(amount, hueStart = 210, hueRange = 60, spread = 3.8) {
