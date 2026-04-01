@@ -8,6 +8,8 @@ router.use(requireAuth);
 
 const SECRET_CATEGORY = '???SECRET???';
 const SECRET_PASSPHRASE = (process.env.SECRET_DECO_PASSPHRASE || 'void').trim().toLowerCase();
+const HEHESHUIS_SECRET_ID = 'heheshuis_aura';
+const HEHESHUIS_PASSPHRASE = 'lol';
 
 async function syncAchievementFields(userId, fields) {
   try {
@@ -168,6 +170,17 @@ const DECORATIONS = [
     category: SECRET_CATEGORY,
     hidden: true
   },
+  {
+    id: HEHESHUIS_SECRET_ID,
+    nexalPrice: null,
+    name: 'Heheshuis Aura',
+    description: 'A tri-layer neon aura: energy ring, pulse bloom, and chaotic swirl.',
+    flavorText: 'The orbit hums in three voices.',
+    rarity: '??SECRET??',
+    preview: HEHESHUIS_SECRET_ID,
+    category: SECRET_CATEGORY,
+    hidden: true
+  },
 ];
 
 const SECRET_DECORATION_IDS = new Set(
@@ -242,8 +255,12 @@ router.post('/claim-secret', async (req, res) => {
   const passphrase = String(req.body.passphrase || '').trim().toLowerCase();
 
   let secretDeco = null;
+  const wantsHeheshuis = secretId === HEHESHUIS_SECRET_ID;
   if (secretId) {
     secretDeco = DECORATIONS.find(d => d.id === secretId && SECRET_DECORATION_IDS.has(d.id));
+    if (wantsHeheshuis && passphrase !== HEHESHUIS_PASSPHRASE) {
+      return res.status(403).json({ error: 'Secret claim denied' });
+    }
   } else if (passphrase && passphrase === SECRET_PASSPHRASE) {
     secretDeco = DECORATIONS.find(d => SECRET_DECORATION_IDS.has(d.id));
   }
@@ -251,7 +268,7 @@ router.post('/claim-secret', async (req, res) => {
   if (!secretDeco) {
     return res.status(403).json({ error: 'Secret claim denied' });
   }
-  if (passphrase && passphrase !== SECRET_PASSPHRASE) {
+  if (passphrase && passphrase !== SECRET_PASSPHRASE && passphrase !== HEHESHUIS_PASSPHRASE) {
     return res.status(403).json({ error: 'Secret claim denied' });
   }
 

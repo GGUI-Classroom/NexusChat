@@ -2242,6 +2242,65 @@ html, body {
   to { transform: rotate(-360deg); opacity: 0.62; }
 }
 
+/* -- SECRET: HEHESHUIS AURA -- */
+.avatar-deco.deco-heheshuis_aura {
+  inset: -15px;
+  border-radius: 50%;
+  z-index: 1;
+  opacity: 0.9;
+  filter: blur(25px);
+  background: conic-gradient(
+    from 0deg,
+    #4b9dff,
+    #b44bff,
+    #ff4bbd,
+    #4b9dff
+  );
+  animation: heheshuis-spin 10s linear infinite;
+}
+
+.avatar-deco.deco-heheshuis_aura::before,
+.avatar-deco.deco-heheshuis_aura::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+.avatar-deco.deco-heheshuis_aura::before {
+  inset: -10px;
+  filter: blur(25px);
+  opacity: 0.9;
+  background: conic-gradient(
+    from 180deg,
+    #ff4bbd,
+    #4b9dff,
+    #b44bff,
+    #ff4bbd
+  );
+  animation: heheshuis-spin-reverse 6s linear infinite;
+}
+
+.avatar-deco.deco-heheshuis_aura::after {
+  inset: -25px;
+  filter: blur(25px);
+  background: radial-gradient(circle, #4b9dff55, transparent 70%);
+  animation: heheshuis-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes heheshuis-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes heheshuis-spin-reverse {
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes heheshuis-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
 /* ===== SHOP PAGE ===== */
 .shop-grid {
   display: grid;

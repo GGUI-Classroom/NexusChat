@@ -21,6 +21,8 @@
   const SECRET_CATEGORY = '???SECRET???';
   const SECRET_DECORATION_ID = 'stormveil';
   const SECRET_UNLOCK_PASSPHRASE = 'void';
+  const HEHESHUIS_SECRET_ID = 'heheshuis_aura';
+  const HEHESHUIS_PASSPHRASE = 'lol';
 
   // Call state
   let callState = null; // { roomId, peerId, peerUser, peerConnection, localStream, timerInterval }
@@ -4970,6 +4972,17 @@
     return claimSecretDecoration({ passphrase: code });
   };
 
+  window.heheshuis = async function(passphrase) {
+    const code = String(passphrase || '').trim().toLowerCase();
+    if (code !== HEHESHUIS_PASSPHRASE) {
+      const err = 'Invalid passphrase';
+      console.warn(err);
+      return { error: err };
+    }
+    console.info('Heheshuis sequence started...');
+    return claimSecretDecoration({ secretId: HEHESHUIS_SECRET_ID, passphrase: code });
+  };
+
   // ---- Mythical Claim Animation ----
   function showClaimAnimation(decoration) {
     return new Promise(resolve => {
@@ -5256,11 +5269,13 @@
         : "It doesn't rain here. It hunts.";
       if (rarityEl) rarityEl.textContent = decoration && decoration.rarity ? decoration.rarity : '??SECRET??';
 
-      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
+      const secretPreviewId = decoration && decoration.id ? decoration.id : SECRET_DECORATION_ID;
+
+      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas,.stormveil-layer').forEach(e => e.remove());
       const decoEl = document.createElement('div');
-      decoEl.className = 'avatar-deco deco-' + SECRET_DECORATION_ID;
+      decoEl.className = 'avatar-deco deco-' + secretPreviewId;
       wrap.appendChild(decoEl);
-      if (SECRET_DECORATION_ID === 'stormveil') addStormveilLayers(wrap);
+      if (secretPreviewId === 'stormveil') addStormveilLayers(wrap);
 
       const particles = [];
       function spawnBurst(amount, hueStart = 210, hueRange = 60, spread = 3.8) {
