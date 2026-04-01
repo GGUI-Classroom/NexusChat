@@ -2213,9 +2213,12 @@ html, body {
 
 @keyframes stormveil-inner-mist {
   0% { transform: translateX(-20%) translateY(2%) rotate(-26deg) scale(1.03, 1.06); opacity: 0.66; }
-  26% { transform: translateX(1%) translateY(-1%) rotate(-15deg) scale(1.02, 1.05); opacity: 0.92; }
-  52% { transform: translateX(17%) translateY(-2%) rotate(-6deg) scale(1.01, 1.04); opacity: 0.74; }
-  76% { transform: translateX(4%) translateY(1%) rotate(-18deg) scale(1.02, 1.05); opacity: 0.88; }
+  20% { transform: translateX(-2%) translateY(0%) rotate(-18deg) scale(1.02, 1.05); opacity: 0.9; }
+  30% { transform: translateX(6%) translateY(-1%) rotate(-13deg) scale(1.02, 1.05); opacity: 0.84; }
+  35% { transform: translateX(8%) translateY(-1%) rotate(-12deg) scale(1.02, 1.05); opacity: 0.06; }
+  65% { transform: translateX(8%) translateY(-1%) rotate(-12deg) scale(1.02, 1.05); opacity: 0.06; }
+  72% { transform: translateX(12%) translateY(-2%) rotate(-9deg) scale(1.01, 1.04); opacity: 0.7; }
+  86% { transform: translateX(2%) translateY(1%) rotate(-18deg) scale(1.02, 1.05); opacity: 0.88; }
   100% { transform: translateX(-20%) translateY(2%) rotate(-26deg) scale(1.03, 1.06); opacity: 0.66; }
 }
 
