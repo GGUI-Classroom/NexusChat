@@ -2152,18 +2152,22 @@ html, body {
 .stormveil-layer-e {
   inset: -2px;
   border-radius: 50%;
-  background: linear-gradient(40deg,
-    rgba(108, 246, 255, 0.0) 40%,
-    rgba(108, 246, 255, 0.26) 46%,
-    rgba(232, 252, 255, 0.95) 49%,
-    rgba(112, 244, 255, 0.78) 52%,
-    rgba(108, 246, 255, 0.20) 56%,
-    rgba(108, 246, 255, 0.0) 62%
+  background: conic-gradient(from 210deg,
+    rgba(108, 246, 255, 0.0) 0deg,
+    rgba(108, 246, 255, 0.18) 12deg,
+    rgba(108, 246, 255, 0.84) 24deg,
+    rgba(235, 252, 255, 0.95) 30deg,
+    rgba(108, 246, 255, 0.76) 38deg,
+    rgba(108, 246, 255, 0.12) 52deg,
+    rgba(108, 246, 255, 0.0) 76deg,
+    rgba(108, 246, 255, 0.0) 360deg
   );
+  -webkit-mask: radial-gradient(circle, transparent 58%, black 69%);
+          mask: radial-gradient(circle, transparent 58%, black 69%);
   mix-blend-mode: screen;
-  opacity: 0.84;
-  filter: blur(0.1px);
-  animation: stormveil-line-e 6.2s linear infinite;
+  opacity: 0.9;
+  filter: blur(0.08px);
+  animation: stormveil-line-e 6.8s cubic-bezier(0.42, 0.0, 0.35, 1) infinite;
 }
 
 .stormveil-layer-f {
@@ -2215,9 +2219,12 @@ html, body {
 }
 
 @keyframes stormveil-line-e {
-  0% { transform: rotate(14deg) scale(1.01); opacity: 0.64; }
-  50% { transform: rotate(196deg) scale(1.03); opacity: 0.92; }
-  100% { transform: rotate(374deg) scale(1.01); opacity: 0.64; }
+  0% { transform: translate(-3%, 2%) rotate(14deg) scale(1.01); opacity: 0.66; }
+  18% { transform: translate(2%, -1%) rotate(72deg) scale(1.03); opacity: 0.86; }
+  39% { transform: translate(4%, -2%) rotate(156deg) scale(1.02); opacity: 0.72; }
+  57% { transform: translate(-1%, 2%) rotate(210deg) scale(1.04); opacity: 0.9; }
+  78% { transform: translate(-4%, 0%) rotate(300deg) scale(1.02); opacity: 0.74; }
+  100% { transform: translate(-3%, 2%) rotate(374deg) scale(1.01); opacity: 0.66; }
 }
 
 @keyframes stormveil-line-f {
