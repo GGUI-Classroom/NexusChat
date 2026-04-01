@@ -2244,717 +2244,116 @@ html, body {
 
 /* -- SECRET: HEHESHUIS AURA -- */
 .avatar-deco.deco-heheshuis_aura {
-  --hh-core-blue: #3ca2ff;
-  --hh-core-cyan: #2ef8ff;
-  --hh-core-magenta: #ff3ed9;
-  --hh-core-violet: #9d53ff;
-  --hh-core-gold: #ffd84a;
-  --hh-core-lime: #9fff50;
-  --hh-core-orange: #ff8a39;
-  --hh-core-red: #ff4e6e;
-  --hh-soft-white: rgba(255,255,255,0.88);
-  --hh-canvas-alpha: 0.96;
-  --hh-ring-mask-a: radial-gradient(circle, transparent 56%, black 67%, black 72%, transparent 77%);
-  --hh-ring-mask-b: radial-gradient(circle, transparent 54%, black 63%, black 71%, transparent 78%);
-  --hh-ring-mask-c: radial-gradient(circle, transparent 50%, black 60%, black 73%, transparent 82%);
-
-  inset: -26px;
+  inset: -8px;
   border-radius: 50%;
   z-index: 1;
   pointer-events: none;
-  opacity: var(--hh-canvas-alpha);
   mix-blend-mode: screen;
-  filter: saturate(1.22) brightness(1.08);
-
+  opacity: 0.95;
+  -webkit-mask: radial-gradient(circle, transparent 50%, black 60%, black 69%, transparent 77%);
+          mask: radial-gradient(circle, transparent 50%, black 60%, black 69%, transparent 77%);
   background:
-    radial-gradient(circle at 50% 50%, rgba(8,12,30,0) 0%, rgba(8,12,30,0) 44%, rgba(8,12,30,0.08) 53%, rgba(8,12,30,0) 64%),
-    conic-gradient(from 0deg,
-      var(--hh-core-blue) 0deg,
-      var(--hh-core-cyan) 34deg,
-      var(--hh-core-lime) 70deg,
-      var(--hh-core-gold) 108deg,
-      var(--hh-core-orange) 146deg,
-      var(--hh-core-red) 184deg,
-      var(--hh-core-magenta) 222deg,
-      var(--hh-core-violet) 262deg,
-      var(--hh-core-blue) 308deg,
-      var(--hh-core-cyan) 360deg
+    conic-gradient(from 12deg,
+      rgba(46, 248, 255, 0.0) 0deg,
+      rgba(46, 248, 255, 0.94) 38deg,
+      rgba(95, 168, 255, 0.9) 82deg,
+      rgba(180, 83, 255, 0.92) 140deg,
+      rgba(255, 74, 212, 0.9) 206deg,
+      rgba(255, 196, 80, 0.9) 274deg,
+      rgba(46, 248, 255, 0.0) 332deg,
+      rgba(46, 248, 255, 0.0) 360deg
     );
-
-  -webkit-mask: var(--hh-ring-mask-a);
-          mask: var(--hh-ring-mask-a);
-
   box-shadow:
-    0 0 24px rgba(60, 162, 255, 0.62),
-    0 0 36px rgba(255, 62, 217, 0.44),
-    0 0 52px rgba(255, 216, 74, 0.34),
-    0 0 66px rgba(46, 248, 255, 0.26);
-
-  animation:
-    hh-core-rotate 9.5s linear infinite,
-    hh-core-breathe 3.1s ease-in-out infinite,
-    hh-core-warp 7.8s ease-in-out infinite;
-}
-
-.avatar-deco.deco-heheshuis_aura::before,
-.avatar-deco.deco-heheshuis_aura::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.avatar-deco.deco-heheshuis_aura::before {
-  inset: -14px;
-  background:
-    conic-gradient(from 220deg,
-      rgba(255,255,255,0.0) 0deg,
-      rgba(255,255,255,0.86) 24deg,
-      rgba(255,216,74,0.72) 36deg,
-      rgba(255,78,110,0.74) 54deg,
-      rgba(157,83,255,0.66) 76deg,
-      rgba(46,248,255,0.75) 104deg,
-      rgba(159,255,80,0.63) 130deg,
-      rgba(255,255,255,0.0) 160deg,
-      rgba(255,255,255,0.0) 360deg
-    );
-  -webkit-mask: var(--hh-ring-mask-b);
-          mask: var(--hh-ring-mask-b);
-  filter: blur(1.2px);
-  mix-blend-mode: screen;
-  opacity: 0.9;
-  animation:
-    hh-strike-sweep 5.6s linear infinite,
-    hh-strike-shimmer 2.3s ease-in-out infinite;
-}
-
-.avatar-deco.deco-heheshuis_aura::after {
-  inset: -36px;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(27,36,78,0.0) 18%, rgba(40,66,140,0.26) 52%, rgba(35,20,80,0.0) 78%),
-    radial-gradient(circle at 21% 28%, rgba(60,162,255,0.42), transparent 46%),
-    radial-gradient(circle at 74% 18%, rgba(255,62,217,0.34), transparent 48%),
-    radial-gradient(circle at 84% 82%, rgba(255,216,74,0.32), transparent 46%),
-    radial-gradient(circle at 16% 82%, rgba(46,248,255,0.3), transparent 44%);
-  filter: blur(15px);
-  opacity: 0.82;
-  animation:
-    hh-nebula-spin 14s linear infinite,
-    hh-nebula-bloom 4.8s ease-in-out infinite;
+    0 0 14px rgba(79, 191, 255, 0.68),
+    0 0 22px rgba(203, 89, 255, 0.42),
+    0 0 30px rgba(255, 176, 76, 0.34);
+  animation: hh-core-spin 8.4s linear infinite, hh-core-pulse 2.8s ease-in-out infinite;
 }
 
 .heheshuis-layer {
   position: absolute;
+  inset: -9px;
   border-radius: 50%;
   pointer-events: none;
   mix-blend-mode: screen;
 }
 
-.heheshuis-layer-core-a {
-  inset: -8px;
-  z-index: 7;
-  -webkit-mask: radial-gradient(circle, transparent 57%, black 66%, black 70%, transparent 75%);
-          mask: radial-gradient(circle, transparent 57%, black 66%, black 70%, transparent 75%);
-  background: conic-gradient(from 18deg,
-    rgba(60,162,255,0) 0deg,
-    rgba(60,162,255,0.95) 36deg,
-    rgba(46,248,255,0.82) 60deg,
-    rgba(159,255,80,0.74) 94deg,
-    rgba(255,216,74,0.78) 122deg,
-    rgba(255,138,57,0.76) 154deg,
-    rgba(255,78,110,0.85) 184deg,
-    rgba(255,62,217,0.85) 220deg,
-    rgba(157,83,255,0.84) 258deg,
-    rgba(60,162,255,0.0) 300deg,
-    rgba(60,162,255,0) 360deg);
-  filter: blur(0.55px);
-  opacity: 0.97;
-  animation: hh-ring-core-a 7.4s linear infinite;
-}
-
-.heheshuis-layer-core-b {
-  inset: -14px;
-  z-index: 6;
-  -webkit-mask: radial-gradient(circle, transparent 59%, black 67%, black 72%, transparent 80%);
-          mask: radial-gradient(circle, transparent 59%, black 67%, black 72%, transparent 80%);
-  background: conic-gradient(from 210deg,
-    rgba(157,83,255,0) 0deg,
-    rgba(157,83,255,0.78) 30deg,
-    rgba(255,62,217,0.86) 64deg,
-    rgba(255,216,74,0.82) 112deg,
-    rgba(46,248,255,0.86) 162deg,
-    rgba(60,162,255,0.8) 194deg,
-    rgba(157,83,255,0) 246deg,
-    rgba(157,83,255,0.66) 310deg,
-    rgba(157,83,255,0) 360deg);
-  filter: blur(0.8px);
+.heheshuis-layer-a {
+  inset: -10px;
+  z-index: 8;
+  -webkit-mask: radial-gradient(circle, transparent 52%, black 60%, black 68%, transparent 76%);
+          mask: radial-gradient(circle, transparent 52%, black 60%, black 68%, transparent 76%);
+  background:
+    conic-gradient(from 210deg,
+      rgba(255, 255, 255, 0.0) 0deg,
+      rgba(255, 255, 255, 0.94) 16deg,
+      rgba(255, 210, 72, 0.88) 26deg,
+      rgba(255, 92, 210, 0.88) 44deg,
+      rgba(106, 177, 255, 0.86) 64deg,
+      rgba(46, 248, 255, 0.88) 82deg,
+      rgba(255, 255, 255, 0.0) 104deg,
+      rgba(255, 255, 255, 0.0) 360deg
+    );
+  filter: blur(0.45px);
   opacity: 0.92;
-  animation: hh-ring-core-b 10.3s linear infinite;
+  animation: hh-sweep-1 5.2s linear infinite;
 }
 
-.heheshuis-layer-core-c {
-  inset: -2px;
-  z-index: 8;
-  -webkit-mask: radial-gradient(circle, transparent 63%, black 68%, black 70%, transparent 74%);
-          mask: radial-gradient(circle, transparent 63%, black 68%, black 70%, transparent 74%);
-  background: conic-gradient(from 110deg,
-    rgba(255,255,255,0) 0deg,
-    rgba(255,255,255,0.9) 16deg,
-    rgba(255,255,255,0.0) 34deg,
-    rgba(255,255,255,0.82) 192deg,
-    rgba(255,255,255,0.0) 214deg,
-    rgba(255,255,255,0.92) 322deg,
-    rgba(255,255,255,0.0) 338deg,
-    rgba(255,255,255,0) 360deg);
-  filter: blur(0.25px);
-  animation: hh-ring-core-c 3.4s linear infinite;
-}
-
-.heheshuis-layer-core-d {
-  inset: -24px;
-  z-index: 5;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(19, 10, 45, 0) 48%, rgba(26, 16, 64, 0.42) 62%, rgba(19, 10, 45, 0) 74%),
-    conic-gradient(from 74deg,
-      rgba(60,162,255,0.0) 0deg,
-      rgba(60,162,255,0.34) 20deg,
-      rgba(255,62,217,0.2) 58deg,
-      rgba(255,216,74,0.28) 118deg,
-      rgba(46,248,255,0.3) 180deg,
-      rgba(157,83,255,0.22) 262deg,
-      rgba(60,162,255,0.0) 360deg);
-  filter: blur(10px);
-  opacity: 0.86;
-  animation: hh-core-drift 12.4s ease-in-out infinite;
-}
-
-.heheshuis-layer-ring-1 {
-  inset: -34px;
-  z-index: 4;
-  -webkit-mask: radial-gradient(circle, transparent 64%, black 70%, black 73%, transparent 79%);
-          mask: radial-gradient(circle, transparent 64%, black 70%, black 73%, transparent 79%);
-  background: conic-gradient(from 24deg,
-    rgba(46,248,255,0.0) 0deg,
-    rgba(46,248,255,0.92) 58deg,
-    rgba(60,162,255,0.85) 102deg,
-    rgba(157,83,255,0.86) 168deg,
-    rgba(255,62,217,0.84) 236deg,
-    rgba(255,216,74,0.84) 292deg,
-    rgba(46,248,255,0.0) 360deg);
-  filter: blur(0.5px);
-  opacity: 0.9;
-  animation: hh-ring-1-orbit 11.8s linear infinite;
-}
-
-.heheshuis-layer-ring-2 {
-  inset: -40px;
-  z-index: 3;
-  -webkit-mask: radial-gradient(circle, transparent 66%, black 72%, black 75%, transparent 81%);
-          mask: radial-gradient(circle, transparent 66%, black 72%, black 75%, transparent 81%);
-  background: conic-gradient(from 220deg,
-    rgba(255,216,74,0.0) 0deg,
-    rgba(255,216,74,0.9) 42deg,
-    rgba(255,138,57,0.86) 74deg,
-    rgba(255,78,110,0.84) 110deg,
-    rgba(255,62,217,0.82) 148deg,
-    rgba(157,83,255,0.86) 186deg,
-    rgba(60,162,255,0.84) 228deg,
-    rgba(46,248,255,0.92) 270deg,
-    rgba(159,255,80,0.8) 308deg,
-    rgba(255,216,74,0.0) 360deg);
-  filter: blur(0.68px);
-  opacity: 0.88;
-  animation: hh-ring-2-orbit 15.6s linear infinite;
-}
-
-.heheshuis-layer-ring-3 {
-  inset: -46px;
-  z-index: 2;
-  -webkit-mask: radial-gradient(circle, transparent 67%, black 73%, black 76%, transparent 83%);
-          mask: radial-gradient(circle, transparent 67%, black 73%, black 76%, transparent 83%);
-  background: conic-gradient(from 100deg,
-    rgba(60,162,255,0.0) 0deg,
-    rgba(60,162,255,0.82) 34deg,
-    rgba(46,248,255,0.82) 60deg,
-    rgba(159,255,80,0.76) 94deg,
-    rgba(255,216,74,0.79) 128deg,
-    rgba(255,138,57,0.78) 160deg,
-    rgba(255,78,110,0.77) 198deg,
-    rgba(255,62,217,0.78) 236deg,
-    rgba(157,83,255,0.8) 266deg,
-    rgba(60,162,255,0.0) 320deg,
-    rgba(60,162,255,0.0) 360deg);
-  filter: blur(0.9px);
-  opacity: 0.78;
-  animation: hh-ring-3-orbit 18.2s linear infinite;
-}
-
-.heheshuis-layer-ring-4 {
-  inset: -52px;
-  z-index: 2;
-  -webkit-mask: radial-gradient(circle, transparent 68%, black 74%, black 77%, transparent 84%);
-          mask: radial-gradient(circle, transparent 68%, black 74%, black 77%, transparent 84%);
-  background:
-    conic-gradient(from 46deg,
-      rgba(255,255,255,0.0) 0deg,
-      rgba(255,255,255,0.9) 8deg,
-      rgba(255,255,255,0.0) 18deg,
-      rgba(255,255,255,0.84) 132deg,
-      rgba(255,255,255,0.0) 148deg,
-      rgba(255,255,255,0.88) 288deg,
-      rgba(255,255,255,0.0) 306deg,
-      rgba(255,255,255,0.0) 360deg);
-  filter: blur(0.4px);
-  opacity: 0.9;
-  animation: hh-ring-4-orbit 8.7s linear infinite;
-}
-
-.heheshuis-layer-ring-5 {
-  inset: -58px;
-  z-index: 1;
-  -webkit-mask: radial-gradient(circle, transparent 69%, black 75%, black 78%, transparent 85%);
-          mask: radial-gradient(circle, transparent 69%, black 75%, black 78%, transparent 85%);
-  background: conic-gradient(from 312deg,
-    rgba(255,62,217,0.0) 0deg,
-    rgba(255,62,217,0.74) 32deg,
-    rgba(157,83,255,0.74) 58deg,
-    rgba(60,162,255,0.78) 88deg,
-    rgba(46,248,255,0.78) 122deg,
-    rgba(159,255,80,0.7) 160deg,
-    rgba(255,216,74,0.72) 194deg,
-    rgba(255,138,57,0.72) 226deg,
-    rgba(255,78,110,0.72) 258deg,
-    rgba(255,62,217,0.0) 300deg,
-    rgba(255,62,217,0.0) 360deg);
-  filter: blur(1px);
-  opacity: 0.74;
-  animation: hh-ring-5-orbit 22.4s linear infinite;
-}
-
-.heheshuis-layer-ring-6 {
-  inset: -66px;
-  z-index: 1;
-  -webkit-mask: radial-gradient(circle, transparent 70%, black 76%, black 79%, transparent 86%);
-          mask: radial-gradient(circle, transparent 70%, black 76%, black 79%, transparent 86%);
-  background: conic-gradient(from 180deg,
-    rgba(60,162,255,0.0) 0deg,
-    rgba(60,162,255,0.62) 54deg,
-    rgba(157,83,255,0.62) 104deg,
-    rgba(255,62,217,0.66) 156deg,
-    rgba(255,216,74,0.68) 210deg,
-    rgba(46,248,255,0.64) 268deg,
-    rgba(60,162,255,0.0) 332deg,
-    rgba(60,162,255,0.0) 360deg);
-  filter: blur(1.6px);
-  opacity: 0.66;
-  animation: hh-ring-6-orbit 28s linear infinite;
-}
-
-.heheshuis-layer-trail-1 {
-  inset: -20px;
+.heheshuis-layer-b {
+  inset: -7px;
   z-index: 9;
-  background: linear-gradient(118deg,
-    rgba(46,248,255,0.0) 30%,
-    rgba(46,248,255,0.95) 42%,
-    rgba(255,255,255,0.98) 49%,
-    rgba(60,162,255,0.88) 57%,
-    rgba(157,83,255,0.0) 68%);
-  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 54%, black 65%, black 69%, transparent 81%);
-          mask: radial-gradient(circle at 50% 50%, transparent 54%, black 65%, black 69%, transparent 81%);
-  filter: blur(0.26px);
-  opacity: 0.9;
-  transform: rotate(8deg);
-  animation: hh-trail-1 4.6s ease-in-out infinite;
-}
-
-.heheshuis-layer-trail-2 {
-  inset: -28px;
-  z-index: 8;
-  background: linear-gradient(42deg,
-    rgba(255,216,74,0.0) 34%,
-    rgba(255,216,74,0.92) 46%,
-    rgba(255,138,57,0.9) 54%,
-    rgba(255,78,110,0.86) 61%,
-    rgba(255,62,217,0.0) 72%);
-  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 56%, black 67%, black 71%, transparent 82%);
-          mask: radial-gradient(circle at 50% 50%, transparent 56%, black 67%, black 71%, transparent 82%);
-  filter: blur(0.4px);
-  opacity: 0.85;
-  transform: rotate(-18deg);
-  animation: hh-trail-2 6.1s ease-in-out infinite;
-}
-
-.heheshuis-layer-trail-3 {
-  inset: -36px;
-  z-index: 7;
-  background: linear-gradient(146deg,
-    rgba(157,83,255,0.0) 30%,
-    rgba(157,83,255,0.84) 42%,
-    rgba(255,62,217,0.88) 50%,
-    rgba(255,255,255,0.9) 55%,
-    rgba(46,248,255,0.86) 63%,
-    rgba(157,83,255,0.0) 74%);
-  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 60%, black 70%, black 73%, transparent 84%);
-          mask: radial-gradient(circle at 50% 50%, transparent 60%, black 70%, black 73%, transparent 84%);
-  filter: blur(0.72px);
-  opacity: 0.8;
-  transform: rotate(30deg);
-  animation: hh-trail-3 7.8s ease-in-out infinite;
-}
-
-.heheshuis-layer-trail-4 {
-  inset: -50px;
-  z-index: 6;
-  background: linear-gradient(88deg,
-    rgba(60,162,255,0.0) 25%,
-    rgba(60,162,255,0.76) 38%,
-    rgba(46,248,255,0.72) 46%,
-    rgba(159,255,80,0.74) 53%,
-    rgba(255,216,74,0.74) 60%,
-    rgba(255,78,110,0.0) 76%);
-  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 62%, black 72%, black 75%, transparent 86%);
-          mask: radial-gradient(circle at 50% 50%, transparent 62%, black 72%, black 75%, transparent 86%);
-  filter: blur(1.1px);
-  opacity: 0.72;
-  transform: rotate(-34deg);
-  animation: hh-trail-4 9.4s ease-in-out infinite;
-}
-
-.heheshuis-layer-flare-1 {
-  inset: -18px;
-  z-index: 10;
+  -webkit-mask: radial-gradient(circle, transparent 46%, black 55%, black 63%, transparent 72%);
+          mask: radial-gradient(circle, transparent 46%, black 55%, black 63%, transparent 72%);
   background:
-    radial-gradient(circle at 18% 28%, rgba(255,255,255,0.96) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 31% 16%, rgba(46,248,255,0.95) 0 1.4px, transparent 2.5px),
-    radial-gradient(circle at 52% 11%, rgba(60,162,255,0.95) 0 1.4px, transparent 2.5px),
-    radial-gradient(circle at 70% 16%, rgba(157,83,255,0.95) 0 1.4px, transparent 2.5px),
-    radial-gradient(circle at 84% 30%, rgba(255,62,217,0.95) 0 1.4px, transparent 2.5px);
-  -webkit-mask: radial-gradient(circle, transparent 52%, black 62%, black 74%, transparent 84%);
-          mask: radial-gradient(circle, transparent 52%, black 62%, black 74%, transparent 84%);
-  filter: blur(0.18px);
-  opacity: 0.95;
-  animation: hh-flare-1 2.4s ease-in-out infinite;
-}
-
-.heheshuis-layer-flare-2 {
-  inset: -30px;
-  z-index: 9;
-  background:
-    radial-gradient(circle at 88% 50%, rgba(255,216,74,0.98) 0 1.6px, transparent 2.6px),
-    radial-gradient(circle at 80% 70%, rgba(255,138,57,0.95) 0 1.6px, transparent 2.6px),
-    radial-gradient(circle at 63% 84%, rgba(255,78,110,0.95) 0 1.6px, transparent 2.6px),
-    radial-gradient(circle at 42% 88%, rgba(255,62,217,0.95) 0 1.6px, transparent 2.6px),
-    radial-gradient(circle at 22% 80%, rgba(157,83,255,0.95) 0 1.6px, transparent 2.6px);
-  -webkit-mask: radial-gradient(circle, transparent 56%, black 66%, black 76%, transparent 86%);
-          mask: radial-gradient(circle, transparent 56%, black 66%, black 76%, transparent 86%);
-  filter: blur(0.28px);
-  opacity: 0.88;
-  animation: hh-flare-2 3.7s ease-in-out infinite;
-}
-
-.heheshuis-layer-flare-3 {
-  inset: -42px;
-  z-index: 8;
-  background:
-    radial-gradient(circle at 10% 58%, rgba(46,248,255,0.9) 0 1.8px, transparent 2.8px),
-    radial-gradient(circle at 16% 40%, rgba(60,162,255,0.88) 0 1.8px, transparent 2.8px),
-    radial-gradient(circle at 28% 24%, rgba(157,83,255,0.88) 0 1.8px, transparent 2.8px),
-    radial-gradient(circle at 46% 14%, rgba(255,62,217,0.9) 0 1.8px, transparent 2.8px),
-    radial-gradient(circle at 66% 14%, rgba(255,216,74,0.88) 0 1.8px, transparent 2.8px),
-    radial-gradient(circle at 82% 24%, rgba(159,255,80,0.88) 0 1.8px, transparent 2.8px);
-  -webkit-mask: radial-gradient(circle, transparent 60%, black 69%, black 79%, transparent 88%);
-          mask: radial-gradient(circle, transparent 60%, black 69%, black 79%, transparent 88%);
-  filter: blur(0.44px);
+    conic-gradient(from 36deg,
+      rgba(46, 248, 255, 0.0) 0deg,
+      rgba(46, 248, 255, 0.8) 38deg,
+      rgba(106, 177, 255, 0.84) 88deg,
+      rgba(180, 83, 255, 0.84) 132deg,
+      rgba(255, 74, 212, 0.8) 176deg,
+      rgba(255, 196, 80, 0.82) 234deg,
+      rgba(46, 248, 255, 0.0) 306deg,
+      rgba(46, 248, 255, 0.0) 360deg
+    );
+  filter: blur(0.35px);
   opacity: 0.82;
-  animation: hh-flare-3 5.1s linear infinite;
+  animation: hh-sweep-2 7.8s linear infinite;
 }
 
-.heheshuis-layer-flare-4 {
-  inset: -58px;
-  z-index: 7;
-  background:
-    radial-gradient(circle at 50% 6%, rgba(255,255,255,0.9) 0 2px, transparent 3px),
-    radial-gradient(circle at 94% 50%, rgba(255,255,255,0.9) 0 2px, transparent 3px),
-    radial-gradient(circle at 50% 94%, rgba(255,255,255,0.9) 0 2px, transparent 3px),
-    radial-gradient(circle at 6% 50%, rgba(255,255,255,0.9) 0 2px, transparent 3px);
-  -webkit-mask: radial-gradient(circle, transparent 66%, black 74%, black 82%, transparent 90%);
-          mask: radial-gradient(circle, transparent 66%, black 74%, black 82%, transparent 90%);
-  filter: blur(0.65px);
-  opacity: 0.78;
-  animation: hh-flare-4 6.7s ease-in-out infinite;
-}
-
-.heheshuis-layer-spark-1 {
-  inset: -16px;
-  z-index: 11;
-  background:
-    radial-gradient(circle at 20% 20%, rgba(255,255,255,0.95) 0 1.2px, transparent 2.2px),
-    radial-gradient(circle at 78% 26%, rgba(255,255,255,0.95) 0 1.2px, transparent 2.2px),
-    radial-gradient(circle at 22% 78%, rgba(255,255,255,0.95) 0 1.2px, transparent 2.2px),
-    radial-gradient(circle at 76% 76%, rgba(255,255,255,0.95) 0 1.2px, transparent 2.2px);
-  opacity: 0.72;
-  animation: hh-spark-1 2.1s steps(6, end) infinite;
-}
-
-.heheshuis-layer-spark-2 {
-  inset: -34px;
-  z-index: 10;
-  background:
-    radial-gradient(circle at 8% 44%, rgba(46,248,255,0.92) 0 1.3px, transparent 2.3px),
-    radial-gradient(circle at 26% 8%, rgba(60,162,255,0.9) 0 1.3px, transparent 2.3px),
-    radial-gradient(circle at 62% 12%, rgba(157,83,255,0.9) 0 1.3px, transparent 2.3px),
-    radial-gradient(circle at 88% 40%, rgba(255,62,217,0.9) 0 1.3px, transparent 2.3px),
-    radial-gradient(circle at 82% 72%, rgba(255,216,74,0.9) 0 1.3px, transparent 2.3px),
-    radial-gradient(circle at 52% 90%, rgba(159,255,80,0.9) 0 1.3px, transparent 2.3px),
-    radial-gradient(circle at 18% 80%, rgba(255,138,57,0.9) 0 1.3px, transparent 2.3px);
-  opacity: 0.66;
-  animation: hh-spark-2 3.2s steps(8, end) infinite;
-}
-
-.heheshuis-layer-spark-3 {
-  inset: -48px;
-  z-index: 9;
-  background:
-    radial-gradient(circle at 14% 60%, rgba(255,255,255,0.85) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 32% 22%, rgba(255,255,255,0.85) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 58% 8%, rgba(255,255,255,0.85) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 80% 24%, rgba(255,255,255,0.85) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 92% 54%, rgba(255,255,255,0.85) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 76% 84%, rgba(255,255,255,0.85) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 48% 94%, rgba(255,255,255,0.85) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 18% 82%, rgba(255,255,255,0.85) 0 1.4px, transparent 2.4px);
-  opacity: 0.58;
-  animation: hh-spark-3 4.1s steps(10, end) infinite;
-}
-
-.heheshuis-layer-spark-4 {
-  inset: -68px;
-  z-index: 8;
-  background:
-    radial-gradient(circle at 50% 2%, rgba(255,255,255,0.8) 0 1.5px, transparent 2.5px),
-    radial-gradient(circle at 96% 50%, rgba(255,255,255,0.8) 0 1.5px, transparent 2.5px),
-    radial-gradient(circle at 50% 98%, rgba(255,255,255,0.8) 0 1.5px, transparent 2.5px),
-    radial-gradient(circle at 4% 50%, rgba(255,255,255,0.8) 0 1.5px, transparent 2.5px),
-    radial-gradient(circle at 20% 14%, rgba(255,255,255,0.7) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 84% 18%, rgba(255,255,255,0.7) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 82% 84%, rgba(255,255,255,0.7) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 18% 82%, rgba(255,255,255,0.7) 0 1.4px, transparent 2.4px);
-  opacity: 0.5;
-  animation: hh-spark-4 5.7s steps(12, end) infinite;
-}
-
-@keyframes hh-core-rotate {
+@keyframes hh-core-spin {
   from { transform: rotate(0deg) scale(1); }
   to { transform: rotate(360deg) scale(1); }
 }
 
-@keyframes hh-core-breathe {
-  0%, 100% { opacity: 0.9; filter: saturate(1.18) brightness(1.02); }
-  50% { opacity: 1; filter: saturate(1.32) brightness(1.16); }
+@keyframes hh-core-pulse {
+  0%, 100% { opacity: 0.86; filter: saturate(1.05) brightness(0.98); }
+  50% { opacity: 1; filter: saturate(1.22) brightness(1.12); }
 }
 
-@keyframes hh-core-warp {
-  0%, 100% { transform: rotate(0deg) scale(1); }
-  35% { transform: rotate(18deg) scale(1.02); }
-  68% { transform: rotate(6deg) scale(1.01); }
-}
-
-@keyframes hh-strike-sweep {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes hh-strike-shimmer {
-  0%, 100% { opacity: 0.58; filter: blur(1.4px) brightness(0.92); }
-  50% { opacity: 0.98; filter: blur(0.55px) brightness(1.3); }
-}
-
-@keyframes hh-nebula-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
-}
-
-@keyframes hh-nebula-bloom {
-  0%, 100% { opacity: 0.62; transform: scale(0.98); }
-  50% { opacity: 0.9; transform: scale(1.06); }
-}
-
-@keyframes hh-ring-core-a {
-  from { transform: rotate(0deg) scale(1.01); }
-  50% { transform: rotate(180deg) scale(1.03); }
-  to { transform: rotate(360deg) scale(1.01); }
-}
-
-@keyframes hh-ring-core-b {
-  from { transform: rotate(0deg) scale(1.02); }
-  50% { transform: rotate(-180deg) scale(1.05); }
-  to { transform: rotate(-360deg) scale(1.02); }
-}
-
-@keyframes hh-ring-core-c {
-  from { transform: rotate(0deg); opacity: 0.78; }
+@keyframes hh-sweep-1 {
+  from { transform: rotate(0deg); opacity: 0.62; }
   50% { transform: rotate(180deg); opacity: 1; }
-  to { transform: rotate(360deg); opacity: 0.78; }
+  to { transform: rotate(360deg); opacity: 0.62; }
 }
 
-@keyframes hh-core-drift {
-  0%, 100% { transform: translate(0, 0) rotate(0deg); opacity: 0.72; }
-  25% { transform: translate(2%, -1%) rotate(28deg); opacity: 0.86; }
-  50% { transform: translate(-1%, 2%) rotate(64deg); opacity: 0.78; }
-  75% { transform: translate(1%, 1%) rotate(96deg); opacity: 0.88; }
-}
-
-@keyframes hh-ring-1-orbit {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes hh-ring-2-orbit {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
-}
-
-@keyframes hh-ring-3-orbit {
-  from { transform: rotate(0deg) scale(1); }
-  50% { transform: rotate(180deg) scale(1.02); }
-  to { transform: rotate(360deg) scale(1); }
-}
-
-@keyframes hh-ring-4-orbit {
-  from { transform: rotate(0deg); opacity: 0.68; }
-  50% { transform: rotate(180deg); opacity: 0.96; }
-  to { transform: rotate(360deg); opacity: 0.68; }
-}
-
-@keyframes hh-ring-5-orbit {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
-}
-
-@keyframes hh-ring-6-orbit {
-  from { transform: rotate(0deg); opacity: 0.52; }
-  50% { transform: rotate(180deg); opacity: 0.78; }
-  to { transform: rotate(360deg); opacity: 0.52; }
-}
-
-@keyframes hh-trail-1 {
-  0%, 100% { transform: rotate(8deg) translateX(0) scale(1); opacity: 0.66; }
-  50% { transform: rotate(182deg) translateX(2%) scale(1.03); opacity: 1; }
-}
-
-@keyframes hh-trail-2 {
-  0%, 100% { transform: rotate(-18deg) translateY(0) scale(1); opacity: 0.58; }
-  50% { transform: rotate(162deg) translateY(-2%) scale(1.04); opacity: 0.94; }
-}
-
-@keyframes hh-trail-3 {
-  0%, 100% { transform: rotate(30deg) scale(1); opacity: 0.56; }
-  50% { transform: rotate(-150deg) scale(1.05); opacity: 0.92; }
-}
-
-@keyframes hh-trail-4 {
-  0%, 100% { transform: rotate(-34deg) scale(1); opacity: 0.5; }
-  50% { transform: rotate(146deg) scale(1.06); opacity: 0.88; }
-}
-
-@keyframes hh-flare-1 {
-  0%, 100% { opacity: 0.58; transform: rotate(0deg); }
-  50% { opacity: 1; transform: rotate(180deg); }
-}
-
-@keyframes hh-flare-2 {
-  0%, 100% { opacity: 0.5; transform: rotate(0deg); }
-  50% { opacity: 0.95; transform: rotate(-180deg); }
-}
-
-@keyframes hh-flare-3 {
-  0%, 100% { opacity: 0.42; transform: rotate(0deg); }
-  50% { opacity: 0.86; transform: rotate(180deg); }
-}
-
-@keyframes hh-flare-4 {
-  0%, 100% { opacity: 0.36; transform: rotate(0deg); }
-  50% { opacity: 0.74; transform: rotate(-180deg); }
-}
-
-@keyframes hh-spark-1 {
-  0%, 100% { opacity: 0.2; }
-  30% { opacity: 0.74; }
-  58% { opacity: 0.3; }
-  76% { opacity: 0.9; }
-}
-
-@keyframes hh-spark-2 {
-  0%, 100% { opacity: 0.14; }
-  22% { opacity: 0.66; }
-  50% { opacity: 0.3; }
-  80% { opacity: 0.82; }
-}
-
-@keyframes hh-spark-3 {
-  0%, 100% { opacity: 0.12; }
-  28% { opacity: 0.6; }
-  44% { opacity: 0.22; }
-  72% { opacity: 0.74; }
-}
-
-@keyframes hh-spark-4 {
-  0%, 100% { opacity: 0.08; }
-  25% { opacity: 0.52; }
-  48% { opacity: 0.16; }
-  82% { opacity: 0.66; }
-}
-
-@media (max-width: 1024px) {
-  .avatar-deco.deco-heheshuis_aura {
-    inset: -22px;
-    filter: saturate(1.15) brightness(1.04);
-  }
-
-  .avatar-deco.deco-heheshuis_aura::after {
-    inset: -30px;
-    filter: blur(12px);
-  }
-
-  .heheshuis-layer-ring-6 {
-    inset: -58px;
-  }
+@keyframes hh-sweep-2 {
+  from { transform: rotate(0deg); opacity: 0.5; }
+  50% { transform: rotate(-180deg); opacity: 0.92; }
+  to { transform: rotate(-360deg); opacity: 0.5; }
 }
 
 @media (max-width: 680px) {
-  .avatar-deco.deco-heheshuis_aura {
-    inset: -18px;
-    box-shadow:
-      0 0 18px rgba(60, 162, 255, 0.54),
-      0 0 28px rgba(255, 62, 217, 0.36),
-      0 0 42px rgba(255, 216, 74, 0.24);
-  }
-
-  .avatar-deco.deco-heheshuis_aura::before {
-    inset: -10px;
-  }
-
-  .avatar-deco.deco-heheshuis_aura::after {
-    inset: -24px;
-    filter: blur(10px);
-  }
-
-  .heheshuis-layer-ring-5 {
-    inset: -50px;
-  }
-
-  .heheshuis-layer-ring-6,
-  .heheshuis-layer-flare-4,
-  .heheshuis-layer-spark-4 {
-    display: none;
+  .avatar-deco.deco-heheshuis_aura,
+  .heheshuis-layer-a,
+  .heheshuis-layer-b {
+    inset: -6px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .avatar-deco.deco-heheshuis_aura,
-  .avatar-deco.deco-heheshuis_aura::before,
-  .avatar-deco.deco-heheshuis_aura::after,
-  .heheshuis-layer {
+  .heheshuis-layer-a,
+  .heheshuis-layer-b {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
   }

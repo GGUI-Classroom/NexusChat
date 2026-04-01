@@ -195,13 +195,7 @@
   function addHeheshuisLayers(wrap) {
     if (!wrap) return;
     wrap.querySelectorAll('.heheshuis-layer').forEach(e => e.remove());
-    const layerNames = [
-      'core-a', 'core-b', 'core-c', 'core-d',
-      'ring-1', 'ring-2', 'ring-3', 'ring-4', 'ring-5', 'ring-6',
-      'trail-1', 'trail-2', 'trail-3', 'trail-4',
-      'flare-1', 'flare-2', 'flare-3', 'flare-4',
-      'spark-1', 'spark-2', 'spark-3', 'spark-4'
-    ];
+    const layerNames = ['a', 'b'];
     layerNames.forEach(name => {
       const layer = document.createElement('span');
       layer.className = 'heheshuis-layer heheshuis-layer-' + name;
