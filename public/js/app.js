@@ -192,6 +192,23 @@
     });
   }
 
+  function addHeheshuisLayers(wrap) {
+    if (!wrap) return;
+    wrap.querySelectorAll('.heheshuis-layer').forEach(e => e.remove());
+    const layerNames = [
+      'core-a', 'core-b', 'core-c', 'core-d',
+      'ring-1', 'ring-2', 'ring-3', 'ring-4', 'ring-5', 'ring-6',
+      'trail-1', 'trail-2', 'trail-3', 'trail-4',
+      'flare-1', 'flare-2', 'flare-3', 'flare-4',
+      'spark-1', 'spark-2', 'spark-3', 'spark-4'
+    ];
+    layerNames.forEach(name => {
+      const layer = document.createElement('span');
+      layer.className = 'heheshuis-layer heheshuis-layer-' + name;
+      wrap.appendChild(layer);
+    });
+  }
+
   function renderAvatar(el, user, showDeco = true) {
     const url = user && user.avatarDataUrl;
     // Don't show deco on grouped messages (avatar is hidden anyway)
@@ -222,7 +239,7 @@
         stopYinYangCanvas(oldWrap);
         stopHydroCanvas(oldWrap);
         stopShatterCanvas(oldWrap);
-        oldWrap.querySelectorAll('.admin-crown,.deco-shine-overlay,.stormveil-layer').forEach(e=>e.remove());
+        oldWrap.querySelectorAll('.admin-crown,.deco-shine-overlay,.stormveil-layer,.heheshuis-layer').forEach(e=>e.remove());
       }
       return;
     }
@@ -245,7 +262,7 @@
     }
 
     // Remove stale deco elements and canvases
-    wrap.querySelectorAll('.avatar-deco, .storm-canvas, .stormveil-layer').forEach(e => e.remove());
+    wrap.querySelectorAll('.avatar-deco, .storm-canvas, .stormveil-layer, .heheshuis-layer').forEach(e => e.remove());
     // Stop any running canvas engines first
     stopStormCanvas(wrap); stopInfernoCanvas(wrap); stopYinYangCanvas(wrap);
     stopHydroCanvas(wrap);
@@ -260,6 +277,8 @@
 
       if (deco === 'stormveil') {
         addStormveilLayers(wrap);
+      } else if (deco === 'heheshuis_aura') {
+        addHeheshuisLayers(wrap);
       }
     }
     wrap.dataset.deco = deco;
@@ -4551,6 +4570,11 @@
       const wrap = document.querySelector(`#shopcard-${d.id} .avatar-wrap`);
       if (wrap) addStormveilLayers(wrap);
     });
+    visibleDecorations.forEach(d => {
+      if (d.id !== 'heheshuis_aura') return;
+      const wrap = document.querySelector(`#shopcard-${d.id} .avatar-wrap`);
+      if (wrap) addHeheshuisLayers(wrap);
+    });
   }
 
   window.shopAction = async function(decoId, action) {
@@ -5007,6 +5031,7 @@
       decoEl.className = 'avatar-deco deco-' + decoration.id;
       wrap.appendChild(decoEl);
       if (decoration.id === 'stormveil') addStormveilLayers(wrap);
+      if (decoration.id === 'heheshuis_aura') addHeheshuisLayers(wrap);
       if (decoration.id === 'nexus_admin') {
         const crown = document.createElement('span');
         crown.className = 'admin-crown';
@@ -5271,11 +5296,12 @@
 
       const secretPreviewId = decoration && decoration.id ? decoration.id : SECRET_DECORATION_ID;
 
-      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas,.stormveil-layer').forEach(e => e.remove());
+      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas,.stormveil-layer,.heheshuis-layer').forEach(e => e.remove());
       const decoEl = document.createElement('div');
       decoEl.className = 'avatar-deco deco-' + secretPreviewId;
       wrap.appendChild(decoEl);
       if (secretPreviewId === 'stormveil') addStormveilLayers(wrap);
+      if (secretPreviewId === 'heheshuis_aura') addHeheshuisLayers(wrap);
 
       const particles = [];
       function spawnBurst(amount, hueStart = 210, hueRange = 60, spread = 3.8) {
