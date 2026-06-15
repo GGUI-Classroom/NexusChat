@@ -1,0 +1,18 @@
+[Unit]
+Description=Nexus Chat
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/nexus-chat
+EnvironmentFile=/etc/nexus-chat/nexus-chat.env
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+User=nexus
+Group=nexus
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

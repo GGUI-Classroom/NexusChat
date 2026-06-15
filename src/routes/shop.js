@@ -159,6 +159,37 @@ const DECORATIONS = [
   { id: 'yinyang',      nexalPrice: 10000, name: 'Yin & Yang',     description: 'Balance of light and dark. Every 5s, the symbol manifests.', rarity: 'mythical', preview: 'yinyang' },
   { id: 'aether_mist',  nexalPrice: 10000, name: 'Aether Mist',   description: 'Iridescent mist swirls with astral sparks in a premium aura.', rarity: 'mythical', preview: 'aether_mist' },
   { id: 'magma',        nexalPrice: 10000, name: 'Magma',         description: 'Molten lava drips from above your profile in a fiery flow.', rarity: 'mythical', preview: 'magma' },
+  // Pack-exclusive decorations
+  { id: 'ember_trace', nexalPrice: null, name: 'Ember Trace', description: 'Warm sparks trace the edge of your avatar.', rarity: 'common', preview: 'ember_trace', packOnly: true },
+  { id: 'mint_signal', nexalPrice: null, name: 'Mint Signal', description: 'A clean mint ping pulses from the border.', rarity: 'common', preview: 'mint_signal', packOnly: true },
+  { id: 'pixel_pop', nexalPrice: null, name: 'Pixel Pop', description: 'Tiny pixel bits blink in and out around you.', rarity: 'common', preview: 'pixel_pop', packOnly: true },
+  { id: 'soft_static', nexalPrice: null, name: 'Soft Static', description: 'A low static shimmer hums around the rim.', rarity: 'common', preview: 'soft_static', packOnly: true },
+  { id: 'lime_loop', nexalPrice: null, name: 'Lime Loop', description: 'A bright lime ring loops with playful energy.', rarity: 'common', preview: 'lime_loop', packOnly: true },
+  { id: 'neon_grid', nexalPrice: null, name: 'Neon Grid', description: 'Grid lines scan around your avatar like a city map.', rarity: 'rare', preview: 'neon_grid', packOnly: true },
+  { id: 'violet_comet', nexalPrice: null, name: 'Violet Comet', description: 'A violet comet tail circles in a sharp arc.', rarity: 'rare', preview: 'violet_comet', packOnly: true },
+  { id: 'signal_wave', nexalPrice: null, name: 'Signal Wave', description: 'Blue signal waves ripple from your profile.', rarity: 'rare', preview: 'signal_wave', packOnly: true },
+  { id: 'chrome_edge', nexalPrice: null, name: 'Chrome Edge', description: 'A polished chrome outline flashes with cold light.', rarity: 'rare', preview: 'chrome_edge', packOnly: true },
+  { id: 'solar_flare', nexalPrice: null, name: 'Solar Flare', description: 'Small solar lashes flare across the border.', rarity: 'rare', preview: 'solar_flare', packOnly: true },
+  { id: 'void_pulse', nexalPrice: null, name: 'Void Pulse', description: 'A dark pulse bends light around the avatar.', rarity: 'epic', preview: 'void_pulse', packOnly: true },
+  { id: 'plasma_arc', nexalPrice: null, name: 'Plasma Arc', description: 'Hot plasma arcs snap across the rim.', rarity: 'epic', preview: 'plasma_arc', packOnly: true },
+  { id: 'crystal_bloom', nexalPrice: null, name: 'Crystal Bloom', description: 'Crystal petals bloom outward in icy color.', rarity: 'epic', preview: 'crystal_bloom', packOnly: true },
+  { id: 'toxic_slime', nexalPrice: null, name: 'Toxic Slime', description: 'Glossy green drips crawl around the border.', rarity: 'epic', preview: 'toxic_slime', packOnly: true },
+  { id: 'nebula_dust', nexalPrice: null, name: 'Nebula Dust', description: 'Soft star dust swirls in a purple-blue ring.', rarity: 'epic', preview: 'nebula_dust', packOnly: true },
+  { id: 'ion_crown', nexalPrice: null, name: 'Ion Crown', description: 'Electric crown points rise from the top edge.', rarity: 'legendary', preview: 'ion_crown', packOnly: true },
+  { id: 'ruby_circuit', nexalPrice: null, name: 'Ruby Circuit', description: 'Ruby-red circuitry races around your avatar.', rarity: 'legendary', preview: 'ruby_circuit', packOnly: true },
+  { id: 'starforge', nexalPrice: null, name: 'Starforge', description: 'Forged star metal glows in rotating segments.', rarity: 'legendary', preview: 'starforge', packOnly: true },
+  { id: 'quantum_ring', nexalPrice: null, name: 'Quantum Ring', description: 'A split ring phases in and out of sync.', rarity: 'legendary', preview: 'quantum_ring', packOnly: true },
+  { id: 'midnight_sun', nexalPrice: null, name: 'Midnight Sun', description: 'Black-gold heat radiates from an eclipse rim.', rarity: 'legendary', preview: 'midnight_sun', packOnly: true },
+  { id: 'dragon_core', nexalPrice: null, name: 'Dragon Core', description: 'A molten core breathes with sharp scale sparks.', rarity: 'mythical', preview: 'dragon_core', packOnly: true },
+  { id: 'cosmic_crown', nexalPrice: null, name: 'Cosmic Crown', description: 'A crown of tiny stars drifts above the profile.', rarity: 'mythical', preview: 'cosmic_crown', packOnly: true },
+  { id: 'phantom_blade', nexalPrice: null, name: 'Phantom Blade', description: 'Ghostly blade arcs cut around the avatar.', rarity: 'mythical', preview: 'phantom_blade', packOnly: true },
+  { id: 'time_rift', nexalPrice: null, name: 'Time Rift', description: 'Clocklike rifts tick and warp around the edge.', rarity: 'mythical', preview: 'time_rift', packOnly: true },
+  { id: 'zero_gravity', nexalPrice: null, name: 'Zero Gravity', description: 'Small orbiting shards float in low gravity.', rarity: 'mythical', preview: 'zero_gravity', packOnly: true },
+  { id: 'singularity', nexalPrice: null, name: 'Singularity', description: 'A tiny black-hole ring pulls light inward.', rarity: 'mythical', preview: 'singularity', packOnly: true },
+  { id: 'celestial_wings', nexalPrice: null, name: 'Celestial Wings', description: 'Bright wing flares open with golden starlight.', rarity: 'mythical', preview: 'celestial_wings', packOnly: true },
+  { id: 'apex_storm', nexalPrice: null, name: 'Apex Storm', description: 'A premium storm ring surges with blue-white strikes.', rarity: 'mythical', preview: 'apex_storm', packOnly: true },
+  { id: 'prism_overdrive', nexalPrice: null, name: 'Prism Overdrive', description: 'Prismatic light races around in overdrive.', rarity: 'mythical', preview: 'prism_overdrive', packOnly: true },
+  { id: 'eternal_flame', nexalPrice: null, name: 'Eternal Flame', description: 'An everlasting flame crown rolls over the border.', rarity: 'mythical', preview: 'eternal_flame', packOnly: true },
   {
     id: 'stormveil',
     nexalPrice: null,
@@ -183,6 +214,57 @@ const DECORATIONS = [
   },
 ];
 
+const DECORATION_PACKS = [
+  {
+    id: 'starter_pack',
+    name: 'Starter Pack',
+    price: 500,
+    rarity: 'common',
+    description: 'Five clean starter auras for everyday flexing.',
+    decorationIds: ['ember_trace', 'mint_signal', 'pixel_pop', 'soft_static', 'lime_loop']
+  },
+  {
+    id: 'neon_pack',
+    name: 'Neon Pack',
+    price: 1500,
+    rarity: 'rare',
+    description: 'Sharper animated tech looks with bright neon motion.',
+    decorationIds: ['neon_grid', 'violet_comet', 'signal_wave', 'chrome_edge', 'solar_flare']
+  },
+  {
+    id: 'rift_pack',
+    name: 'Rift Pack',
+    price: 3500,
+    rarity: 'epic',
+    description: 'Epic effects with plasma, crystals, slime, and nebula energy.',
+    decorationIds: ['void_pulse', 'plasma_arc', 'crystal_bloom', 'toxic_slime', 'nebula_dust']
+  },
+  {
+    id: 'forge_pack',
+    name: 'Forge Pack',
+    price: 8000,
+    rarity: 'legendary',
+    description: 'Legendary crafted borders with metal, ruby circuits, and eclipse heat.',
+    decorationIds: ['ion_crown', 'ruby_circuit', 'starforge', 'quantum_ring', 'midnight_sun']
+  },
+  {
+    id: 'mythic_pack',
+    name: 'Mythic Pack',
+    price: 12000,
+    rarity: 'mythical',
+    description: 'Five high-power mythical effects for the top shelf.',
+    decorationIds: ['dragon_core', 'cosmic_crown', 'phantom_blade', 'time_rift', 'zero_gravity']
+  },
+  {
+    id: 'apex_pack',
+    name: 'Apex Pack',
+    price: 20000,
+    rarity: 'mythical',
+    description: 'The most expensive pack: singularity, wings, storms, prisms, and flame.',
+    decorationIds: ['singularity', 'celestial_wings', 'apex_storm', 'prism_overdrive', 'eternal_flame']
+  }
+];
+
 const SECRET_DECORATION_IDS = new Set(
   DECORATIONS.filter(d => d.hidden && d.category === SECRET_CATEGORY).map(d => d.id)
 );
@@ -197,7 +279,27 @@ function toClientDecoration(d, owned) {
     rarity: d.rarity,
     preview: d.preview,
     category: d.category || null,
+    packOnly: !!d.packOnly,
     owned: !!owned
+  };
+}
+
+function toClientPack(pack, ownedIds) {
+  const decorations = pack.decorationIds
+    .map(id => DECORATIONS.find(d => d.id === id))
+    .filter(Boolean)
+    .map(d => toClientDecoration(d, ownedIds.has(d.id)));
+  const ownedCount = decorations.filter(d => d.owned).length;
+  return {
+    id: pack.id,
+    name: pack.name,
+    price: pack.price,
+    rarity: pack.rarity,
+    description: pack.description,
+    ownedCount,
+    totalCount: decorations.length,
+    owned: ownedCount === decorations.length,
+    decorations
   };
 }
 
@@ -245,6 +347,7 @@ router.get('/', async (req, res) => {
     decorations: DECORATIONS
       .filter(d => !d.hidden || (d.hidden && ownedIds.has(d.id)))
       .map(d => toClientDecoration(d, ownedIds.has(d.id))),
+    packs: DECORATION_PACKS.map(pack => toClientPack(pack, ownedIds)),
     active: user.rows[0]?.active_decoration || null,
     nexals: nexalsRes.rows[0]?.nexals || 0
   });
@@ -397,6 +500,55 @@ router.post('/buy', async (req, res) => {
   res.json({ success: true, nexals: updated.rows[0].nexals, decoration: toClientDecoration(deco, true) });
 });
 
+router.post('/packs/buy', async (req, res) => {
+  const { packId } = req.body;
+  const pack = DECORATION_PACKS.find(p => p.id === packId);
+  if (!pack) return res.status(404).json({ error: 'Pack not found' });
+
+  const user = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
+  const balance = user.rows[0]?.nexals || 0;
+  if (balance < pack.price) {
+    return res.status(400).json({ error: `Not enough Nexals (need ${pack.price.toLocaleString()}, have ${balance.toLocaleString()})` });
+  }
+
+  const owned = await pool.query(
+    'SELECT decoration_id FROM user_decorations WHERE user_id=$1 AND decoration_id = ANY($2)',
+    [req.session.userId, pack.decorationIds]
+  );
+  const ownedIds = new Set(owned.rows.map(r => r.decoration_id));
+  const grantIds = pack.decorationIds.filter(id => !ownedIds.has(id));
+  if (!grantIds.length) return res.status(409).json({ error: 'You already own every decoration in this pack' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('UPDATE users SET nexals = nexals - $1 WHERE id=$2', [pack.price, req.session.userId]);
+    for (const decorationId of grantIds) {
+      await client.query(
+        'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+        [uuidv4(), req.session.userId, decorationId]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Pack purchase failed:', err.message);
+    return res.status(500).json({ error: 'Pack purchase failed' });
+  } finally {
+    client.release();
+  }
+
+  const updated = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
+  const refreshedOwned = new Set([...ownedIds, ...grantIds]);
+  await syncAchievementFields(req.session.userId, ['decos_owned']);
+  res.json({
+    success: true,
+    nexals: updated.rows[0].nexals,
+    pack: toClientPack(pack, refreshedOwned),
+    granted: grantIds.map(id => toClientDecoration(DECORATIONS.find(d => d.id === id), true))
+  });
+});
+
 // Remove (unclaim) a decoration
 router.delete('/unclaim/:decorationId', async (req, res) => {
   const { decorationId } = req.params;
@@ -414,3 +566,4 @@ router.delete('/unclaim/:decorationId', async (req, res) => {
 
 module.exports = router;
 module.exports.DECORATIONS = DECORATIONS;
+module.exports.DECORATION_PACKS = DECORATION_PACKS;

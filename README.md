@@ -22,6 +22,11 @@ DATABASE_URL=postgres://user:pass@localhost:5432/nexus npm run dev
 # Open http://localhost:3000
 ```
 
+## Host on a Linux PC
+
+Use [LINUX_HOSTING.md](./LINUX_HOSTING.md) for a plain Linux PC setup with PostgreSQL, optional Redis, systemd, and optional Nginx.
+For the bundled local database path, run `npm run db:up` to start PostgreSQL and Redis with Docker Compose.
+
 ## Deploy to Render (Free Tier) — Web Service
 
 ### 1. Create a free PostgreSQL database

@@ -4481,6 +4481,7 @@
     if (r.error) return;
     shopData = r;
     updateNexalDisplay(r.nexals || 0);
+    renderPackShop(r.packs || []);
     renderShop(r.decorations, r.active);
     await loadRingtones();
   }
@@ -4497,8 +4498,6 @@
     const grid = $('shop-grid');
     if (!grid) return;
     const visibleDecorations = decorations || [];
-    const tabsHost = $('shop-dynamic-tabs');
-    if (tabsHost) tabsHost.innerHTML = '';
     // Stop any existing storm canvases in the shop before re-rendering
     grid.querySelectorAll('.avatar-wrap').forEach(w => stopStormCanvas(w));
 
@@ -4570,6 +4569,64 @@
       if (wrap) addHeheshuisLayers(wrap);
     });
   }
+
+  function renderPackShop(packs) {
+    const tabsHost = $('shop-dynamic-tabs');
+    if (!tabsHost) return;
+    const myNexals = (shopData && shopData.nexals) || 0;
+    tabsHost.innerHTML = `
+      <div class="shop-subsection shop-pack-section">
+        <h2>Decoration Packs</h2>
+        <p>Buy packs to unlock five exclusive decorations at once.</p>
+      </div>
+      <div class="shop-pack-grid">
+        ${(packs || []).map(pack => {
+          const canBuy = !pack.owned && myNexals >= pack.price;
+          const rarityClass = 'rarity-' + String(pack.rarity || 'common').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+          const btnClass = pack.owned ? 'locked' : canBuy ? 'buy' : 'locked';
+          const btnText = pack.owned ? 'Owned' : canBuy ? 'Buy Pack' : 'Lock ' + pack.price.toLocaleString() + ' Nexals';
+          return `
+            <div class="shop-card shop-pack-card ${pack.owned ? 'owned' : ''}" id="packcard-${pack.id}">
+              <div class="shop-pack-topline">
+                <span class="shop-rarity ${rarityClass}">${esc(pack.rarity)}</span>
+                <span class="shop-card-price">${pack.price.toLocaleString()} Nexals</span>
+              </div>
+              <div class="shop-card-name">${esc(pack.name)}</div>
+              <div class="shop-card-desc">${esc(pack.description)}</div>
+              <div class="shop-pack-previews">
+                ${(pack.decorations || []).map(d => `
+                  <div class="avatar-wrap shop-pack-mini ${d.owned ? 'owned' : ''}" title="${esc(d.name)}">
+                    <div class="avatar">N</div>
+                    <div class="avatar-deco deco-${d.id}"></div>
+                  </div>
+                `).join('')}
+              </div>
+              <div class="shop-pack-owned">${pack.ownedCount}/${pack.totalCount} owned</div>
+              <button class="shop-card-btn ${btnClass}" onclick="buyDecorationPack('${pack.id}','${canBuy ? 'buy' : 'locked'}')">${btnText}</button>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  window.buyDecorationPack = async function(packId, action) {
+    const pack = shopData && (shopData.packs || []).find(p => p.id === packId);
+    if (action === 'locked') {
+      if (pack && pack.owned) toast('You already own every decoration in this pack.', 'info');
+      else if (pack) toast('Not enough Nexals! Need ' + pack.price.toLocaleString(), 'error');
+      return;
+    }
+    if (!pack) return;
+    if (!confirm('Buy "' + pack.name + '" for ' + pack.price.toLocaleString() + ' Nexals?')) return;
+    const r = await api('POST', '/api/shop/packs/buy', { packId });
+    if (r.error) return toast(r.error, 'error');
+    shopData.nexals = r.nexals;
+    updateNexalDisplay(r.nexals);
+    const names = (r.granted || []).map(d => d.name).join(', ');
+    toast('Pack opened: ' + names, 'success', 6500);
+    const mythical = (r.granted || []).find(d => d.rarity === 'mythical');
+    if (mythical) await showClaimAnimation(mythical);
+    await loadShop();
+  };
 
   window.shopAction = async function(decoId, action) {
     if (action === 'locked') {

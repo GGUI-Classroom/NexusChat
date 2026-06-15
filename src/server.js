@@ -7,6 +7,7 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const { envFlag } = require('./config/env');
 const { pool, initDb } = require('./models/db');
 
 const app = express();
@@ -17,9 +18,13 @@ const isProd = process.env.NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nexus-dev-secret-change-in-prod';
 const DATABASE_URL = process.env.DATABASE_URL;
 const REDIS_URL = process.env.REDIS_URL;
+const COOKIE_SECURE = envFlag('COOKIE_SECURE', isProd);
+const REQUIRE_REDIS = envFlag('REQUIRE_REDIS', false);
+const TRUST_PROXY = process.env.TRUST_PROXY || (isProd ? '1' : '');
 
-// Trust Render's proxy so secure cookies work over HTTPS
-if (isProd) app.set('trust proxy', 1);
+if (TRUST_PROXY && !['0', 'false', 'no', 'off'].includes(TRUST_PROXY.toLowerCase())) {
+  app.set('trust proxy', /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY);
+}
 
 const sessionMiddleware = session({
   store: new pgSession({ pool, createTableIfMissing: true }),
@@ -28,7 +33,7 @@ const sessionMiddleware = session({
   saveUninitialized: false,
   name: 'nexus.sid',
   cookie: {
-    secure: isProd,       // true on Render (HTTPS), false locally
+    secure: COOKIE_SECURE,
     httpOnly: true,
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000
@@ -54,6 +59,10 @@ app.use('/api/achievements', require('./routes/achievements'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/colors', require('./routes/colors'));
 app.use('/api/ringtones', require('./routes/ringtones'));
+
+app.get('/health', (req, res) => {
+  res.json({ ok: true });
+});
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
@@ -1368,17 +1377,15 @@ async function broadcastStatusChange(userId, status) {
 const PORT = process.env.PORT || 3000;
 
 async function start() {
-  if (isProd) {
-    const missing = [];
-    if (!DATABASE_URL) missing.push('DATABASE_URL');
-    if (!REDIS_URL) missing.push('REDIS_URL');
-    if (missing.length) {
-      console.error(
-        `Missing required production environment variables: ${missing.join(', ')}. ` +
-        'Configure these secrets before starting the service.'
-      );
-      process.exit(1);
-    }
+  const missing = [];
+  if (!DATABASE_URL) missing.push('DATABASE_URL');
+  if (REQUIRE_REDIS && !REDIS_URL) missing.push('REDIS_URL');
+  if (missing.length) {
+    console.error(
+      `Missing required environment variables: ${missing.join(', ')}. ` +
+      'Configure these values in .env, systemd EnvironmentFile, or your host secrets.'
+    );
+    process.exit(1);
   }
 
   await initDb();

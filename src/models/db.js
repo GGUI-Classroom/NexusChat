@@ -1,8 +1,14 @@
 const { Pool } = require('pg');
+const { envFlag } = require('../config/env');
+
+const databaseSsl = process.env.DATABASE_SSL === undefined
+  ? process.env.NODE_ENV === 'production'
+  : envFlag('DATABASE_SSL', false);
+const rejectUnauthorized = envFlag('DATABASE_SSL_REJECT_UNAUTHORIZED', false);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: databaseSsl ? { rejectUnauthorized } : false
 });
 
 async function runSql(sql, label) {
