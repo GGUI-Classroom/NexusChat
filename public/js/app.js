@@ -203,6 +203,93 @@
     });
   }
 
+  const PREMIUM_DECORATIONS = {
+    ember_trace: ['ember', '#ff8b38', '#ff3f24', '#ffd06a', 'spark'],
+    mint_signal: ['signal', '#68ffd0', '#44d9ff', '#caffed', 'wave'],
+    pixel_pop: ['pixel', '#76beff', '#ff76e6', '#ffe86d', 'glints'],
+    soft_static: ['static', '#dbe7ff', '#8fa0c6', '#ffffff', 'dust'],
+    lime_loop: ['loop', '#b9ff4c', '#3effa8', '#edff86', 'arc'],
+    neon_grid: ['grid', '#54f4ff', '#526cff', '#46ffca', 'scan'],
+    violet_comet: ['comet', '#cc84ff', '#60ceff', '#f6d2ff', 'comet'],
+    signal_wave: ['wave', '#48b4ff', '#40eeff', '#78ffce', 'wave'],
+    chrome_edge: ['chrome', '#f7fbff', '#7d8fa5', '#c6dcff', 'shine'],
+    solar_flare: ['solar', '#ffd448', '#ff6830', '#fff6a2', 'flare'],
+    void_pulse: ['void', '#7c5cff', '#170d43', '#ca80ff', 'rift'],
+    plasma_arc: ['plasma', '#4eecff', '#ff56da', '#ffffff', 'arc'],
+    crystal_bloom: ['crystal', '#c4f6ff', '#96beff', '#ffffff', 'crystal'],
+    toxic_slime: ['slime', '#7eff2e', '#26be2e', '#d6ff62', 'drip'],
+    nebula_dust: ['nebula', '#5ce0ff', '#ba54ff', '#ff5cda', 'dust'],
+    ion_crown: ['crown', '#62ecff', '#5a70ff', '#ffffff', 'crown'],
+    ruby_circuit: ['ruby', '#ff4870', '#ffa056', '#ffd6d6', 'scan'],
+    starforge: ['forge', '#ffd254', '#788494', '#fff6b2', 'shine'],
+    quantum_ring: ['quantum', '#6cffe2', '#c468ff', '#5c8eff', 'rift'],
+    midnight_sun: ['eclipse', '#ffbc40', '#12102a', '#ffee8e', 'eclipse'],
+    dragon_core: ['dragon', '#ff4a2a', '#ffb24a', '#5e0a04', 'flare'],
+    cosmic_crown: ['cosmic', '#ffeea0', '#7484ff', '#6eeeff', 'crown'],
+    phantom_blade: ['blade', '#eaf6ff', '#96a8ff', '#96f6ff', 'blade'],
+    time_rift: ['time', '#76ffe0', '#7e5cff', '#ffffff', 'rift'],
+    zero_gravity: ['gravity', '#96daff', '#d894ff', '#ffe678', 'float'],
+    singularity: ['singularity', '#8e68ff', '#040210', '#c898ff', 'rift'],
+    celestial_wings: ['wings', '#ffeeb8', '#70d2ff', '#ffffff', 'wings'],
+    apex_storm: ['storm', '#76e2ff', '#5268ff', '#ffffff', 'storm'],
+    prism_overdrive: ['prism', '#ff54d8', '#52e6ff', '#ffe252', 'prism'],
+    eternal_flame: ['flame', '#ff7a2a', '#ff2612', '#ffde62', 'flare'],
+    magic_mists: ['magic-mists', '#60e0ff', '#ba4cff', '#44f8d2', 'mist']
+  };
+
+  function isPremiumDecoration(deco) {
+    return !!PREMIUM_DECORATIONS[deco];
+  }
+
+  function clearDecorationDom(wrap) {
+    if (!wrap) return;
+    wrap.querySelectorAll('.avatar-deco,.premium-deco,.admin-crown,.deco-shine-overlay,.stormveil-layer,.heheshuis-layer').forEach(e => e.remove());
+  }
+
+  function renderPremiumDecoration(wrap, deco) {
+    const preset = PREMIUM_DECORATIONS[deco];
+    if (!wrap || !preset) return;
+    const [style, a, b, c, motif] = preset;
+    const el = document.createElement('div');
+    el.className = `premium-deco premium-${style}`;
+    el.dataset.deco = deco;
+    el.style.setProperty('--fx-a', a);
+    el.style.setProperty('--fx-b', b);
+    el.style.setProperty('--fx-c', c);
+    el.innerHTML = `
+      <span class="premium-shell"></span>
+      <span class="premium-glass"></span>
+      <span class="premium-rim premium-rim-a"></span>
+      <span class="premium-rim premium-rim-b"></span>
+      <span class="premium-wisp premium-wisp-a"></span>
+      <span class="premium-wisp premium-wisp-b"></span>
+      <span class="premium-motif premium-motif-${motif}"></span>
+      <span class="premium-sparks"></span>
+    `;
+    wrap.appendChild(el);
+  }
+
+  function applyDecorationToWrap(wrap, deco) {
+    if (!wrap || !deco) return;
+    if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+    wrap.style.overflow = 'visible';
+    clearDecorationDom(wrap);
+    stopStormCanvas(wrap); stopInfernoCanvas(wrap); stopYinYangCanvas(wrap); stopHydroCanvas(wrap); stopShatterCanvas(wrap);
+
+    const canvasOnlyDecos = new Set(['storm','inferno','yinyang','hydro','shatter']);
+    if (isPremiumDecoration(deco)) {
+      renderPremiumDecoration(wrap, deco);
+    } else if (!canvasOnlyDecos.has(deco)) {
+      const decoEl = document.createElement('div');
+      decoEl.className = 'avatar-deco deco-' + deco;
+      wrap.appendChild(decoEl);
+      if (deco === 'stormveil') addStormveilLayers(wrap);
+      if (deco === 'heheshuis_aura') addHeheshuisLayers(wrap);
+    }
+
+    wrap.dataset.deco = deco;
+  }
+
   function renderAvatar(el, user, showDeco = true) {
     const url = user && user.avatarDataUrl;
     // Don't show deco on grouped messages (avatar is hidden anyway)
@@ -225,15 +312,13 @@
       // Clean up any old deco on this element's wrap
       const oldWrap = el.parentElement;
       if (oldWrap) {
-        const old = oldWrap.querySelector('.avatar-deco');
-        if (old) old.remove();
+        clearDecorationDom(oldWrap);
         delete oldWrap.dataset.deco;
         stopStormCanvas(oldWrap);
         stopInfernoCanvas(oldWrap);
         stopYinYangCanvas(oldWrap);
         stopHydroCanvas(oldWrap);
         stopShatterCanvas(oldWrap);
-        oldWrap.querySelectorAll('.admin-crown,.deco-shine-overlay,.stormveil-layer,.heheshuis-layer').forEach(e=>e.remove());
       }
       return;
     }
@@ -256,7 +341,7 @@
     }
 
     // Remove stale deco elements and canvases
-    wrap.querySelectorAll('.avatar-deco, .storm-canvas, .stormveil-layer, .heheshuis-layer').forEach(e => e.remove());
+    wrap.querySelectorAll('.avatar-deco, .premium-deco, .storm-canvas, .stormveil-layer, .heheshuis-layer').forEach(e => e.remove());
     // Stop any running canvas engines first
     stopStormCanvas(wrap); stopInfernoCanvas(wrap); stopYinYangCanvas(wrap);
     stopHydroCanvas(wrap);
@@ -265,14 +350,18 @@
     // Canvas-only decos don't need an avatar-deco div — the canvas IS the visual
     const canvasOnlyDecos = new Set(['storm','inferno','yinyang','hydro','shatter']);
     if (!canvasOnlyDecos.has(deco)) {
-      const decoEl = document.createElement('div');
-      decoEl.className = 'avatar-deco deco-' + deco;
-      wrap.appendChild(decoEl);
+      if (isPremiumDecoration(deco)) {
+        renderPremiumDecoration(wrap, deco);
+      } else {
+        const decoEl = document.createElement('div');
+        decoEl.className = 'avatar-deco deco-' + deco;
+        wrap.appendChild(decoEl);
 
-      if (deco === 'stormveil') {
-        addStormveilLayers(wrap);
-      } else if (deco === 'heheshuis_aura') {
-        addHeheshuisLayers(wrap);
+        if (deco === 'stormveil') {
+          addStormveilLayers(wrap);
+        } else if (deco === 'heheshuis_aura') {
+          addHeheshuisLayers(wrap);
+        }
       }
     }
     wrap.dataset.deco = deco;
@@ -4521,9 +4610,8 @@
       return `
         <div class="shop-card ${isOwned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}" id="shopcard-${d.id}">
           <div class="shop-card-preview">
-            <div class="avatar-wrap" style="width:48px;height:48px;position:relative;overflow:visible;display:inline-flex;align-items:center;justify-content:center">
+            <div class="avatar-wrap" data-deco-id="${d.id}" style="width:48px;height:48px;position:relative;overflow:visible;display:inline-flex;align-items:center;justify-content:center">
               <div class="avatar" style="width:48px;height:48px;font-size:18px;font-weight:800;flex-shrink:0">N</div>
-              <div class="avatar-deco deco-${d.id}"></div>
             </div>
           </div>
           <span class="shop-rarity ${rarityClass}">${d.rarity}</span>
@@ -4536,6 +4624,11 @@
           ${isOwned ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="unclaimDeco('${d.id}','${esc(d.name)}')">Remove</button>` : ''}
         </div>`;
     }).join('');
+
+    visibleDecorations.forEach(d => {
+      const wrap = document.querySelector(`#shopcard-${d.id} .avatar-wrap`);
+      if (wrap) applyDecorationToWrap(wrap, d.id);
+    });
 
     // Start canvas engines for all canvas-based decos (always show preview)
     const canvasDecos = { storm: startStormCanvas, inferno: startInfernoCanvas, yinyang: startYinYangCanvas, hydro: startHydroCanvas, shatter: startShatterCanvas };
@@ -4596,9 +4689,8 @@
               <div class="shop-card-desc">${esc(pack.description)}</div>
               <div class="shop-pack-previews">
                 ${(pack.decorations || []).map(d => `
-                  <div class="avatar-wrap shop-pack-mini ${d.owned ? 'owned' : ''}" title="${esc(d.name)} - ${d.chance}%">
+                  <div class="avatar-wrap shop-pack-mini ${d.owned ? 'owned' : ''}" data-deco-id="${d.id}" title="${esc(d.name)} - ${d.chance}%">
                     <div class="avatar">N</div>
-                    <div class="avatar-deco deco-${d.id}"></div>
                     <span class="shop-pack-odds">${d.chance}%</span>
                   </div>
                 `).join('')}
@@ -4608,6 +4700,10 @@
             </div>`;
         }).join('')}
       </div>`;
+
+    tabsHost.querySelectorAll('.avatar-wrap[data-deco-id]').forEach(wrap => {
+      applyDecorationToWrap(wrap, wrap.dataset.decoId);
+    });
   }
 
   window.buyDecorationPack = async function(packId, action) {
@@ -5079,12 +5175,7 @@
       $('claim-dismiss').style.opacity = '0';
 
       // Apply decoration to preview avatar
-      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
-      const decoEl = document.createElement('div');
-      decoEl.className = 'avatar-deco deco-' + decoration.id;
-      wrap.appendChild(decoEl);
-      if (decoration.id === 'stormveil') addStormveilLayers(wrap);
-      if (decoration.id === 'heheshuis_aura') addHeheshuisLayers(wrap);
+      applyDecorationToWrap(wrap, decoration.id);
       if (decoration.id === 'nexus_admin') {
         const crown = document.createElement('span');
         crown.className = 'admin-crown';
@@ -5198,7 +5289,7 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         overlay.style.display = 'none';
         if (decoration.id === 'storm') stopStormCanvas(wrap);
-        wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
+        wrap.querySelectorAll('.avatar-deco,.premium-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
         resolve();
       }
 
@@ -5349,12 +5440,7 @@
 
       const secretPreviewId = decoration && decoration.id ? decoration.id : SECRET_DECORATION_ID;
 
-      wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas,.stormveil-layer,.heheshuis-layer').forEach(e => e.remove());
-      const decoEl = document.createElement('div');
-      decoEl.className = 'avatar-deco deco-' + secretPreviewId;
-      wrap.appendChild(decoEl);
-      if (secretPreviewId === 'stormveil') addStormveilLayers(wrap);
-      if (secretPreviewId === 'heheshuis_aura') addHeheshuisLayers(wrap);
+      applyDecorationToWrap(wrap, secretPreviewId);
 
       const particles = [];
       function spawnBurst(amount, hueStart = 210, hueRange = 60, spread = 3.8) {
@@ -5560,7 +5646,7 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         overlay.style.display = 'none';
         overlay.classList.remove('stage-blackout', 'stage-sky', 'stage-descent', 'stage-silhouette', 'stage-strike', 'stage-reveal', 'stage-engulf', 'stage-finalflash', 'stage-card');
-        wrap.querySelectorAll('.avatar-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
+        wrap.querySelectorAll('.avatar-deco,.premium-deco,.admin-crown,.storm-canvas').forEach(e => e.remove());
         resolve();
       }
 

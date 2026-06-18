@@ -4529,6 +4529,283 @@ html, body {
   76% { transform: rotate(-12deg) scale(1.01); opacity: 0.78; }
 }
 
+/* ===== DATA-DRIVEN PRISTINE DECORATION ENGINE ===== */
+.premium-deco {
+  --fx-a: #60e0ff;
+  --fx-b: #ba4cff;
+  --fx-c: #44f8d2;
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 4;
+  overflow: visible;
+  filter: saturate(1.18);
+}
+
+.premium-deco span {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.premium-shell {
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255,255,255,0.28), transparent 18%),
+    radial-gradient(circle at 50% 52%, transparent 58%, color-mix(in srgb, var(--fx-a) 18%, transparent) 65%, transparent 76%),
+    conic-gradient(from 210deg, transparent 0 20deg, color-mix(in srgb, var(--fx-a) 92%, white 8%) 34deg, transparent 70deg, transparent 132deg, var(--fx-b) 164deg, transparent 208deg, transparent 262deg, var(--fx-c) 296deg, transparent 336deg);
+  -webkit-mask: radial-gradient(circle, transparent 59%, #000 64%, #000 76%, transparent 87%);
+          mask: radial-gradient(circle, transparent 59%, #000 64%, #000 76%, transparent 87%);
+  box-shadow:
+    0 0 10px color-mix(in srgb, var(--fx-a) 44%, transparent),
+    0 0 24px color-mix(in srgb, var(--fx-b) 34%, transparent);
+  animation: pristine-spin 8s linear infinite, pristine-breathe 4s ease-in-out infinite;
+}
+
+.premium-glass {
+  inset: 4px;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 54%, rgba(255,255,255,0.1) 60%, transparent 68%),
+    linear-gradient(132deg, transparent 0 36%, rgba(255,255,255,0.22) 47%, transparent 58%),
+    radial-gradient(ellipse at 30% 12%, rgba(255,255,255,0.28), transparent 24%);
+  -webkit-mask: radial-gradient(circle, transparent 52%, #000 58%, #000 66%, transparent 74%);
+          mask: radial-gradient(circle, transparent 52%, #000 58%, #000 66%, transparent 74%);
+  opacity: 0.78;
+  animation: pristine-glass 5.6s ease-in-out infinite;
+}
+
+.premium-rim-a {
+  inset: -1px;
+  background:
+    conic-gradient(from 32deg, transparent 0 38deg, rgba(255,255,255,0.88) 48deg, var(--fx-a) 58deg, transparent 78deg, transparent 172deg, var(--fx-b) 194deg, transparent 230deg, transparent 312deg, var(--fx-c) 330deg, transparent 360deg);
+  -webkit-mask: radial-gradient(circle, transparent 62%, #000 66%, #000 72%, transparent 80%);
+          mask: radial-gradient(circle, transparent 62%, #000 66%, #000 72%, transparent 80%);
+  filter: blur(0.15px) drop-shadow(0 0 6px var(--fx-a));
+  animation: pristine-spin 4.8s linear infinite reverse;
+}
+
+.premium-rim-b {
+  inset: -5px;
+  background:
+    radial-gradient(ellipse at 12% 26%, var(--fx-b), transparent 34%),
+    radial-gradient(ellipse at 84% 28%, var(--fx-a), transparent 36%),
+    radial-gradient(ellipse at 32% 92%, var(--fx-c), transparent 34%);
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 64%, #000 80%, transparent 88%);
+          mask: radial-gradient(circle, transparent 58%, #000 64%, #000 80%, transparent 88%);
+  filter: blur(1.2px);
+  opacity: 0.82;
+  animation: pristine-warp 6.8s ease-in-out infinite;
+}
+
+.premium-wisp {
+  inset: -13px;
+  opacity: 0.8;
+  filter: blur(2.4px) saturate(1.18);
+  -webkit-mask: radial-gradient(circle, transparent 50%, #000 58%, #000 72%, transparent 84%);
+          mask: radial-gradient(circle, transparent 50%, #000 58%, #000 72%, transparent 84%);
+}
+
+.premium-wisp-a {
+  background:
+    radial-gradient(ellipse at 50% 0%, var(--fx-b), transparent 34%),
+    radial-gradient(ellipse at 100% 54%, var(--fx-a), transparent 32%),
+    radial-gradient(ellipse at 0% 64%, var(--fx-c), transparent 34%);
+  animation: pristine-wisp-a 7s ease-in-out infinite;
+}
+
+.premium-wisp-b {
+  background:
+    conic-gradient(from 280deg, transparent 0 58deg, color-mix(in srgb, var(--fx-a) 84%, white 16%) 74deg, transparent 98deg, transparent 188deg, var(--fx-b) 220deg, transparent 250deg, transparent 360deg);
+  animation: pristine-wisp-b 5.8s ease-in-out infinite;
+}
+
+.premium-motif,
+.premium-sparks {
+  inset: -7px;
+  -webkit-mask: radial-gradient(circle, transparent 55%, #000 63%, #000 82%, transparent 91%);
+          mask: radial-gradient(circle, transparent 55%, #000 63%, #000 82%, transparent 91%);
+}
+
+.premium-sparks {
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255,255,255,0.9) 0 1px, transparent 2px),
+    radial-gradient(circle at 78% 18%, var(--fx-a) 0 1px, transparent 2px),
+    radial-gradient(circle at 88% 66%, rgba(255,255,255,0.86) 0 1px, transparent 2px),
+    radial-gradient(circle at 24% 82%, var(--fx-c) 0 1px, transparent 2px),
+    radial-gradient(circle at 50% 6%, var(--fx-b) 0 1px, transparent 2px);
+  animation: pristine-sparks 2.4s ease-in-out infinite;
+}
+
+.premium-motif-mist {
+  background:
+    radial-gradient(ellipse at 24% 28%, rgba(255,255,255,0.34), transparent 20%),
+    conic-gradient(from 120deg, transparent 0 24deg, var(--fx-b) 46deg, transparent 78deg, transparent 136deg, var(--fx-a) 170deg, transparent 212deg, transparent 270deg, var(--fx-c) 302deg, transparent 336deg);
+  filter: blur(1.4px);
+  animation: pristine-motif-slow 9s linear infinite;
+}
+
+.premium-motif-comet,
+.premium-motif-blade,
+.premium-motif-arc {
+  background: conic-gradient(from 300deg, transparent 0 48deg, rgba(255,255,255,0.92) 58deg, var(--fx-a) 68deg, transparent 88deg, transparent 360deg);
+  filter: drop-shadow(0 0 7px var(--fx-a));
+  animation: pristine-motif-fast 2.8s linear infinite;
+}
+
+.premium-motif-crown,
+.premium-motif-wings {
+  background:
+    radial-gradient(ellipse at 50% 4%, rgba(255,255,255,0.9), transparent 18%),
+    radial-gradient(ellipse at 24% 20%, var(--fx-c), transparent 22%),
+    radial-gradient(ellipse at 76% 20%, var(--fx-b), transparent 22%);
+  filter: drop-shadow(0 0 8px var(--fx-c));
+  animation: pristine-crown 3s ease-in-out infinite;
+}
+
+.premium-motif-rift,
+.premium-motif-eclipse,
+.premium-motif-singularity {
+  background:
+    conic-gradient(from 0deg, transparent 0 70deg, var(--fx-b) 86deg, transparent 104deg, transparent 180deg, var(--fx-a) 194deg, transparent 214deg, transparent 360deg);
+  filter: blur(0.8px) contrast(1.25);
+  animation: pristine-rift 4.4s steps(8) infinite;
+}
+
+.premium-motif-grid,
+.premium-motif-scan {
+  background:
+    repeating-conic-gradient(from 0deg, transparent 0 11deg, color-mix(in srgb, var(--fx-a) 65%, transparent) 12deg 13deg, transparent 14deg 24deg),
+    conic-gradient(from 270deg, transparent 0 66deg, rgba(255,255,255,0.7) 76deg, transparent 90deg);
+  filter: drop-shadow(0 0 6px var(--fx-a));
+  animation: pristine-motif-slow 5.6s linear infinite;
+}
+
+.premium-motif-spark,
+.premium-motif-glints,
+.premium-motif-dust {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255,255,255,0.95) 0 2px, transparent 3px),
+    radial-gradient(circle at 72% 18%, var(--fx-a) 0 2px, transparent 3px),
+    radial-gradient(circle at 86% 64%, var(--fx-c) 0 1.5px, transparent 3px),
+    radial-gradient(circle at 28% 82%, var(--fx-b) 0 1.5px, transparent 3px),
+    radial-gradient(circle at 50% 7%, rgba(255,255,255,0.8) 0 1px, transparent 2px);
+  filter: drop-shadow(0 0 5px var(--fx-a));
+  animation: pristine-sparkle 2.4s ease-in-out infinite;
+}
+
+.premium-motif-wave {
+  background:
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 8px, color-mix(in srgb, var(--fx-a) 44%, transparent) 9px 10px, transparent 11px 18px),
+    conic-gradient(from 220deg, transparent 0 54deg, var(--fx-a) 70deg, transparent 96deg, transparent 210deg, var(--fx-c) 232deg, transparent 260deg);
+  filter: blur(0.5px) drop-shadow(0 0 6px var(--fx-a));
+  animation: pristine-wave 3.6s ease-in-out infinite;
+}
+
+.premium-motif-shine {
+  background:
+    linear-gradient(118deg, transparent 0 38%, rgba(255,255,255,0.9) 48%, transparent 58%),
+    conic-gradient(from 260deg, transparent 0 70deg, var(--fx-a) 82deg, transparent 98deg, transparent 360deg);
+  filter: drop-shadow(0 0 8px var(--fx-a));
+  animation: pristine-shine-sweep 4.2s ease-in-out infinite;
+}
+
+.premium-motif-crystal {
+  background:
+    conic-gradient(from 45deg, transparent 0 22deg, rgba(255,255,255,0.82) 32deg, var(--fx-a) 44deg, transparent 58deg, transparent 118deg, var(--fx-b) 136deg, transparent 156deg, transparent 236deg, var(--fx-c) 254deg, transparent 276deg),
+    radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.52), transparent 22%);
+  filter: contrast(1.16) drop-shadow(0 0 8px var(--fx-a));
+  animation: pristine-crystal 5.2s ease-in-out infinite;
+}
+
+.premium-motif-float {
+  background:
+    radial-gradient(circle at 50% 0%, var(--fx-a) 0 2px, transparent 4px),
+    radial-gradient(circle at 88% 45%, var(--fx-b) 0 2px, transparent 4px),
+    radial-gradient(circle at 12% 56%, var(--fx-c) 0 2px, transparent 4px),
+    radial-gradient(circle at 52% 100%, rgba(255,255,255,0.86) 0 1.5px, transparent 4px);
+  filter: drop-shadow(0 0 7px var(--fx-a));
+  animation: pristine-float 4.8s ease-in-out infinite;
+}
+
+.premium-motif-flare,
+.premium-motif-drip,
+.premium-motif-storm {
+  background:
+    radial-gradient(ellipse at 50% 0%, var(--fx-c), transparent 20%),
+    radial-gradient(ellipse at 92% 50%, var(--fx-a), transparent 26%),
+    radial-gradient(ellipse at 18% 72%, var(--fx-b), transparent 24%);
+  filter: blur(1px) drop-shadow(0 0 9px var(--fx-a));
+  animation: pristine-flare 2.2s ease-in-out infinite;
+}
+
+.premium-motif-prism {
+  background: conic-gradient(#ff54d8, #ffe252, #52ff98, #52e6ff, #8a5cff, #ff54d8);
+  filter: saturate(1.4) drop-shadow(0 0 8px #52e6ff);
+  animation: pristine-motif-fast 1.9s linear infinite;
+}
+
+@keyframes pristine-spin { to { transform: rotate(360deg); } }
+@keyframes pristine-breathe {
+  0%,100% { opacity: 0.82; filter: brightness(1) saturate(1.12); }
+  50% { opacity: 1; filter: brightness(1.22) saturate(1.35); }
+}
+@keyframes pristine-glass {
+  0%,100% { transform: rotate(-8deg) scale(0.98); opacity: 0.56; }
+  50% { transform: rotate(10deg) scale(1.05); opacity: 0.86; }
+}
+@keyframes pristine-warp {
+  0%,100% { transform: rotate(0deg) scale(0.98); opacity: 0.64; }
+  45% { transform: rotate(-18deg) scale(1.08); opacity: 1; }
+  72% { transform: rotate(12deg) scale(1.02); opacity: 0.76; }
+}
+@keyframes pristine-wisp-a {
+  0%,100% { transform: rotate(0deg) scale(0.95); opacity: 0.46; }
+  50% { transform: rotate(24deg) scale(1.1); opacity: 0.9; }
+}
+@keyframes pristine-wisp-b {
+  0%,100% { transform: rotate(0deg) scale(1.02); opacity: 0.4; }
+  55% { transform: rotate(-32deg) scale(1.12); opacity: 0.86; }
+}
+@keyframes pristine-sparks {
+  0%,100% { opacity: 0.22; transform: rotate(0deg); }
+  50% { opacity: 0.9; transform: rotate(18deg); }
+}
+@keyframes pristine-motif-slow { to { transform: rotate(360deg); } }
+@keyframes pristine-motif-fast { to { transform: rotate(-360deg); } }
+@keyframes pristine-crown {
+  0%,100% { transform: translateY(0) scale(0.96); opacity: 0.58; }
+  50% { transform: translateY(-3px) scale(1.08); opacity: 1; }
+}
+@keyframes pristine-rift {
+  0%,100% { transform: rotate(0deg) scale(1); opacity: 0.62; }
+  50% { transform: rotate(180deg) scale(1.08); opacity: 1; }
+}
+@keyframes pristine-flare {
+  0%,100% { transform: scale(0.96); opacity: 0.56; }
+  50% { transform: scale(1.12); opacity: 1; }
+}
+@keyframes pristine-sparkle {
+  0%,100% { transform: rotate(0deg) scale(0.96); opacity: 0.34; }
+  50% { transform: rotate(20deg) scale(1.08); opacity: 1; }
+}
+@keyframes pristine-wave {
+  0%,100% { transform: rotate(0deg) scale(0.96); opacity: 0.48; }
+  50% { transform: rotate(-18deg) scale(1.1); opacity: 0.92; }
+}
+@keyframes pristine-shine-sweep {
+  0%,100% { transform: rotate(-20deg) translateX(-4px); opacity: 0.24; }
+  45% { transform: rotate(16deg) translateX(4px); opacity: 0.92; }
+}
+@keyframes pristine-crystal {
+  0%,100% { transform: rotate(0deg) scale(0.98); opacity: 0.56; }
+  50% { transform: rotate(45deg) scale(1.08); opacity: 0.96; }
+}
+@keyframes pristine-float {
+  0%,100% { transform: rotate(0deg) translateY(0); opacity: 0.54; }
+  50% { transform: rotate(180deg) translateY(-3px); opacity: 0.96; }
+}
+
 /* ===== MESSAGE TEXT COLORS ===== */
 .msg-color-red    { color: #ff4444 !important; }
 .msg-color-orange { color: #ff8c00 !important; }
