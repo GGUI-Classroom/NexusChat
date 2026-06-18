@@ -1383,7 +1383,7 @@ async function start() {
   if (missing.length) {
     console.error(
       `Missing required environment variables: ${missing.join(', ')}. ` +
-      'Configure these values in .env, systemd EnvironmentFile, or your host secrets.'
+      'Configure these values in .env or your host secrets.'
     );
     process.exit(1);
   }

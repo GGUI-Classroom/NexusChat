@@ -12,9 +12,11 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
+      - key: DATABASE_SSL
+        value: true
+      - key: DATABASE_SSL_REJECT_UNAUTHORIZED
+        value: false
+      - key: DB_POOL_MAX
+        value: 5
       - key: REDIS_URL
         sync: false
-      - key: DATA_DIR
-        value: /opt/render/project/data
-      - key: UPLOADS_DIR
-        value: /opt/render/project/data/avatars

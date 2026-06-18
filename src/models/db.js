@@ -5,10 +5,12 @@ const databaseSsl = process.env.DATABASE_SSL === undefined
   ? process.env.NODE_ENV === 'production'
   : envFlag('DATABASE_SSL', false);
 const rejectUnauthorized = envFlag('DATABASE_SSL_REJECT_UNAUTHORIZED', false);
+const poolMax = Math.max(1, parseInt(process.env.DB_POOL_MAX, 10) || 10);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: databaseSsl ? { rejectUnauthorized } : false
+  ssl: databaseSsl ? { rejectUnauthorized } : false,
+  max: poolMax
 });
 
 async function runSql(sql, label) {
