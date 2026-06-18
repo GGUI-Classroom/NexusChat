@@ -5305,6 +5305,61 @@ html, body {
   70% { opacity: 0.78; transform: rotate(8deg) scale(1.02); }
 }
 
+/* Pack thumbnails are much smaller than real avatars, so keep premium FX contained. */
+.shop-pack-mini .premium-deco {
+  inset: -4px;
+  border-radius: 50%;
+  overflow: hidden;
+  clip-path: circle(58% at 50% 50%);
+  filter: saturate(1.05) brightness(0.96);
+}
+
+.shop-pack-mini .premium-deco span {
+  inset: 0 !important;
+}
+
+.shop-pack-mini .premium-shell,
+.shop-pack-mini .premium-rim,
+.shop-pack-mini .premium-wisp,
+.shop-pack-mini .premium-motif,
+.shop-pack-mini .premium-sparks,
+.shop-pack-mini .premium-glass {
+  transform-origin: center;
+}
+
+.shop-pack-mini .premium-wisp {
+  filter: blur(0.9px) saturate(1.05);
+}
+
+.shop-pack-mini .premium-rim-b,
+.shop-pack-mini .premium-wisp-b,
+.shop-pack-mini .premium-glass {
+  opacity: 0.42;
+}
+
+.shop-pack-mini .premium-mythical .premium-intrusion,
+.shop-pack-mini .premium-mythical .premium-strike {
+  display: none;
+}
+
+.shop-pack-mini .premium-blade .premium-shell,
+.shop-pack-mini .premium-storm .premium-shell,
+.shop-pack-mini .premium-prism .premium-shell,
+.shop-pack-mini .premium-cosmic .premium-shell,
+.shop-pack-mini .premium-wings .premium-shell,
+.shop-pack-mini .premium-dragon .premium-shell,
+.shop-pack-mini .premium-flame .premium-shell,
+.shop-pack-mini .premium-magic-mists .premium-shell {
+  inset: 0 !important;
+  transform: scale(0.88);
+}
+
+.shop-pack-mini .premium-gravity .premium-shell,
+.shop-pack-mini .premium-singularity .premium-shell,
+.shop-pack-mini .premium-time .premium-shell {
+  transform: scale(0.92);
+}
+
 /* ===== MESSAGE TEXT COLORS ===== */
 .msg-color-red    { color: #ff4444 !important; }
 .msg-color-orange { color: #ff8c00 !important; }
