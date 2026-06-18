@@ -1,1 +1,1 @@
-window.NEXUS_API_URL = 'https://nexus-chat.onrender.com';
+window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
