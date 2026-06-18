@@ -219,49 +219,85 @@ const DECORATION_PACKS = [
     id: 'starter_pack',
     name: 'Starter Pack',
     price: 500,
-    rarity: 'common',
-    description: 'Five clean starter auras for everyday flexing.',
-    decorationIds: ['ember_trace', 'mint_signal', 'pixel_pop', 'soft_static', 'lime_loop']
+    rarity: 'mixed',
+    description: 'Open for one starter decoration. Mostly common, with a rare chase.',
+    items: [
+      { decorationId: 'ember_trace', chance: 34 },
+      { decorationId: 'mint_signal', chance: 28 },
+      { decorationId: 'pixel_pop', chance: 20 },
+      { decorationId: 'soft_static', chance: 13 },
+      { decorationId: 'neon_grid', chance: 5 }
+    ]
   },
   {
     id: 'neon_pack',
     name: 'Neon Pack',
     price: 1500,
-    rarity: 'rare',
-    description: 'Sharper animated tech looks with bright neon motion.',
-    decorationIds: ['neon_grid', 'violet_comet', 'signal_wave', 'chrome_edge', 'solar_flare']
+    rarity: 'mixed',
+    description: 'Open for one neon decoration. Rare-heavy with an epic spark.',
+    items: [
+      { decorationId: 'lime_loop', chance: 25 },
+      { decorationId: 'violet_comet', chance: 24 },
+      { decorationId: 'signal_wave', chance: 21 },
+      { decorationId: 'chrome_edge', chance: 18 },
+      { decorationId: 'plasma_arc', chance: 12 }
+    ]
   },
   {
     id: 'rift_pack',
     name: 'Rift Pack',
     price: 3500,
-    rarity: 'epic',
-    description: 'Epic effects with plasma, crystals, slime, and nebula energy.',
-    decorationIds: ['void_pulse', 'plasma_arc', 'crystal_bloom', 'toxic_slime', 'nebula_dust']
+    rarity: 'mixed',
+    description: 'Open for one unstable rift decoration. Epics with a legendary hit.',
+    items: [
+      { decorationId: 'solar_flare', chance: 22 },
+      { decorationId: 'void_pulse', chance: 24 },
+      { decorationId: 'crystal_bloom', chance: 21 },
+      { decorationId: 'toxic_slime', chance: 18 },
+      { decorationId: 'ion_crown', chance: 15 }
+    ]
   },
   {
     id: 'forge_pack',
     name: 'Forge Pack',
     price: 8000,
-    rarity: 'legendary',
-    description: 'Legendary crafted borders with metal, ruby circuits, and eclipse heat.',
-    decorationIds: ['ion_crown', 'ruby_circuit', 'starforge', 'quantum_ring', 'midnight_sun']
+    rarity: 'mixed',
+    description: 'Open for one forged decoration. Legendary odds with a mythical ember.',
+    items: [
+      { decorationId: 'nebula_dust', chance: 24 },
+      { decorationId: 'ruby_circuit', chance: 23 },
+      { decorationId: 'starforge', chance: 20 },
+      { decorationId: 'quantum_ring', chance: 18 },
+      { decorationId: 'dragon_core', chance: 15 }
+    ]
   },
   {
     id: 'mythic_pack',
     name: 'Mythic Pack',
     price: 12000,
-    rarity: 'mythical',
-    description: 'Five high-power mythical effects for the top shelf.',
-    decorationIds: ['dragon_core', 'cosmic_crown', 'phantom_blade', 'time_rift', 'zero_gravity']
+    rarity: 'mixed',
+    description: 'Open for one high-power decoration. Mythical pulls are common here.',
+    items: [
+      { decorationId: 'midnight_sun', chance: 25 },
+      { decorationId: 'cosmic_crown', chance: 22 },
+      { decorationId: 'phantom_blade', chance: 20 },
+      { decorationId: 'time_rift', chance: 18 },
+      { decorationId: 'singularity', chance: 15 }
+    ]
   },
   {
     id: 'apex_pack',
     name: 'Apex Pack',
     price: 20000,
     rarity: 'mythical',
-    description: 'The most expensive pack: singularity, wings, storms, prisms, and flame.',
-    decorationIds: ['singularity', 'celestial_wings', 'apex_storm', 'prism_overdrive', 'eternal_flame']
+    description: 'Open for one apex decoration. Premium mythical odds, one item per opening.',
+    items: [
+      { decorationId: 'zero_gravity', chance: 24 },
+      { decorationId: 'celestial_wings', chance: 22 },
+      { decorationId: 'apex_storm', chance: 20 },
+      { decorationId: 'prism_overdrive', chance: 18 },
+      { decorationId: 'eternal_flame', chance: 16 }
+    ]
   }
 ];
 
@@ -285,22 +321,57 @@ function toClientDecoration(d, owned) {
 }
 
 function toClientPack(pack, ownedIds) {
-  const decorations = pack.decorationIds
-    .map(id => DECORATIONS.find(d => d.id === id))
-    .filter(Boolean)
-    .map(d => toClientDecoration(d, ownedIds.has(d.id)));
+  const totalChance = pack.items.reduce((sum, item) => sum + item.chance, 0);
+  const decorations = pack.items
+    .map(item => {
+      const d = DECORATIONS.find(deco => deco.id === item.decorationId);
+      if (!d) return null;
+      return {
+        ...toClientDecoration(d, ownedIds.has(d.id)),
+        chance: Math.round((item.chance / totalChance) * 1000) / 10
+      };
+    })
+    .filter(Boolean);
   const ownedCount = decorations.filter(d => d.owned).length;
+  const raritySummary = [...new Set(decorations.map(d => d.rarity))].join(' / ');
   return {
     id: pack.id,
     name: pack.name,
     price: pack.price,
     rarity: pack.rarity,
+    raritySummary,
     description: pack.description,
     ownedCount,
     totalCount: decorations.length,
     owned: ownedCount === decorations.length,
     decorations
   };
+}
+
+function getPackDecorationIds(pack) {
+  return pack.items
+    .map(item => item.decorationId)
+    .map(id => DECORATIONS.find(d => d.id === id))
+    .filter(Boolean)
+    .map(d => d.id);
+}
+
+function rollPackItem(pack, ownedIds) {
+  const candidates = pack.items
+    .map(item => ({
+      ...item,
+      decoration: DECORATIONS.find(d => d.id === item.decorationId)
+    }))
+    .filter(item => item.decoration && !ownedIds.has(item.decorationId));
+  const total = candidates.reduce((sum, item) => sum + item.chance, 0);
+  if (!total) return null;
+
+  let roll = Math.random() * total;
+  for (const item of candidates) {
+    roll -= item.chance;
+    if (roll <= 0) return item.decoration;
+  }
+  return candidates[candidates.length - 1].decoration;
 }
 
 // Special nexal boost codes (not decorations)
@@ -513,22 +584,20 @@ router.post('/packs/buy', async (req, res) => {
 
   const owned = await pool.query(
     'SELECT decoration_id FROM user_decorations WHERE user_id=$1 AND decoration_id = ANY($2)',
-    [req.session.userId, pack.decorationIds]
+    [req.session.userId, getPackDecorationIds(pack)]
   );
   const ownedIds = new Set(owned.rows.map(r => r.decoration_id));
-  const grantIds = pack.decorationIds.filter(id => !ownedIds.has(id));
-  if (!grantIds.length) return res.status(409).json({ error: 'You already own every decoration in this pack' });
+  const rolledDeco = rollPackItem(pack, ownedIds);
+  if (!rolledDeco) return res.status(409).json({ error: 'You already own every decoration in this pack' });
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query('UPDATE users SET nexals = nexals - $1 WHERE id=$2', [pack.price, req.session.userId]);
-    for (const decorationId of grantIds) {
-      await client.query(
-        'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
-        [uuidv4(), req.session.userId, decorationId]
-      );
-    }
+    await client.query(
+      'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+      [uuidv4(), req.session.userId, rolledDeco.id]
+    );
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -539,13 +608,13 @@ router.post('/packs/buy', async (req, res) => {
   }
 
   const updated = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
-  const refreshedOwned = new Set([...ownedIds, ...grantIds]);
+  const refreshedOwned = new Set([...ownedIds, rolledDeco.id]);
   await syncAchievementFields(req.session.userId, ['decos_owned']);
   res.json({
     success: true,
     nexals: updated.rows[0].nexals,
     pack: toClientPack(pack, refreshedOwned),
-    granted: grantIds.map(id => toClientDecoration(DECORATIONS.find(d => d.id === id), true))
+    granted: [toClientDecoration(rolledDeco, true)]
   });
 });
 

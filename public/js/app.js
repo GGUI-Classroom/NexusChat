@@ -4577,14 +4577,14 @@
     tabsHost.innerHTML = `
       <div class="shop-subsection shop-pack-section">
         <h2>Decoration Packs</h2>
-        <p>Buy packs to unlock five exclusive decorations at once.</p>
+        <p>Open a pack to roll one exclusive decoration. Odds are shown on each item.</p>
       </div>
       <div class="shop-pack-grid">
         ${(packs || []).map(pack => {
           const canBuy = !pack.owned && myNexals >= pack.price;
           const rarityClass = 'rarity-' + String(pack.rarity || 'common').toLowerCase().replace(/[^a-z0-9_-]/g, '');
           const btnClass = pack.owned ? 'locked' : canBuy ? 'buy' : 'locked';
-          const btnText = pack.owned ? 'Owned' : canBuy ? 'Buy Pack' : 'Lock ' + pack.price.toLocaleString() + ' Nexals';
+          const btnText = pack.owned ? 'Complete' : canBuy ? 'Open Pack' : 'Need ' + pack.price.toLocaleString() + ' Nexals';
           return `
             <div class="shop-card shop-pack-card ${pack.owned ? 'owned' : ''}" id="packcard-${pack.id}">
               <div class="shop-pack-topline">
@@ -4592,12 +4592,14 @@
                 <span class="shop-card-price">${pack.price.toLocaleString()} Nexals</span>
               </div>
               <div class="shop-card-name">${esc(pack.name)}</div>
+              <div class="shop-pack-owned">${esc(pack.raritySummary || '')}</div>
               <div class="shop-card-desc">${esc(pack.description)}</div>
               <div class="shop-pack-previews">
                 ${(pack.decorations || []).map(d => `
-                  <div class="avatar-wrap shop-pack-mini ${d.owned ? 'owned' : ''}" title="${esc(d.name)}">
+                  <div class="avatar-wrap shop-pack-mini ${d.owned ? 'owned' : ''}" title="${esc(d.name)} - ${d.chance}%">
                     <div class="avatar">N</div>
                     <div class="avatar-deco deco-${d.id}"></div>
+                    <span class="shop-pack-odds">${d.chance}%</span>
                   </div>
                 `).join('')}
               </div>
@@ -4616,13 +4618,13 @@
       return;
     }
     if (!pack) return;
-    if (!confirm('Buy "' + pack.name + '" for ' + pack.price.toLocaleString() + ' Nexals?')) return;
+    if (!confirm('Open "' + pack.name + '" for ' + pack.price.toLocaleString() + ' Nexals? You will receive one item.')) return;
     const r = await api('POST', '/api/shop/packs/buy', { packId });
     if (r.error) return toast(r.error, 'error');
     shopData.nexals = r.nexals;
     updateNexalDisplay(r.nexals);
-    const names = (r.granted || []).map(d => d.name).join(', ');
-    toast('Pack opened: ' + names, 'success', 6500);
+    const won = (r.granted || [])[0];
+    toast('Pack opened: ' + (won ? won.name : 'new decoration'), 'success', 6500);
     const mythical = (r.granted || []).find(d => d.rarity === 'mythical');
     if (mythical) await showClaimAnimation(mythical);
     await loadShop();
