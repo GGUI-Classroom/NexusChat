@@ -4320,6 +4320,215 @@ html, body {
   72% { transform: rotate(12deg) scale(1.02); opacity: 0.8; }
 }
 
+/* ===== PREMIUM PACK EFFECT RENDERER ===== */
+.avatar-deco.deco-ember_trace,
+.avatar-deco.deco-mint_signal,
+.avatar-deco.deco-pixel_pop,
+.avatar-deco.deco-soft_static,
+.avatar-deco.deco-lime_loop,
+.avatar-deco.deco-neon_grid,
+.avatar-deco.deco-violet_comet,
+.avatar-deco.deco-signal_wave,
+.avatar-deco.deco-chrome_edge,
+.avatar-deco.deco-solar_flare,
+.avatar-deco.deco-void_pulse,
+.avatar-deco.deco-plasma_arc,
+.avatar-deco.deco-crystal_bloom,
+.avatar-deco.deco-toxic_slime,
+.avatar-deco.deco-nebula_dust,
+.avatar-deco.deco-ion_crown,
+.avatar-deco.deco-ruby_circuit,
+.avatar-deco.deco-starforge,
+.avatar-deco.deco-quantum_ring,
+.avatar-deco.deco-midnight_sun,
+.avatar-deco.deco-dragon_core,
+.avatar-deco.deco-cosmic_crown,
+.avatar-deco.deco-phantom_blade,
+.avatar-deco.deco-time_rift,
+.avatar-deco.deco-zero_gravity,
+.avatar-deco.deco-singularity,
+.avatar-deco.deco-celestial_wings,
+.avatar-deco.deco-apex_storm,
+.avatar-deco.deco-prism_overdrive,
+.avatar-deco.deco-eternal_flame,
+.avatar-deco.deco-magic_mists {
+  --premium-a: rgba(120, 220, 255, 0.94);
+  --premium-b: rgba(180, 88, 255, 0.9);
+  --premium-c: rgba(68, 245, 205, 0.76);
+  --premium-soft: rgba(120, 220, 255, 0.2);
+  --premium-speed: 7s;
+  --premium-breathe: 3.8s;
+  inset: -7px;
+  border: 0;
+  border-radius: 50%;
+  overflow: visible;
+  background:
+    conic-gradient(
+      from 22deg,
+      transparent 0 12deg,
+      var(--premium-a) 28deg,
+      transparent 58deg,
+      transparent 116deg,
+      var(--premium-b) 148deg,
+      transparent 188deg,
+      transparent 246deg,
+      var(--premium-c) 282deg,
+      transparent 326deg,
+      transparent 360deg
+    );
+  box-shadow:
+    0 0 10px color-mix(in srgb, var(--premium-a) 50%, transparent),
+    0 0 22px color-mix(in srgb, var(--premium-b) 42%, transparent),
+    inset 0 0 0 1px rgba(255,255,255,0.1);
+  -webkit-mask: radial-gradient(circle, transparent 61%, #000 66%, #000 76%, transparent 85%);
+          mask: radial-gradient(circle, transparent 61%, #000 66%, #000 76%, transparent 85%);
+  animation: premium-ring-spin var(--premium-speed) linear infinite, premium-ring-breathe var(--premium-breathe) ease-in-out infinite;
+  filter: saturate(1.18);
+}
+
+.avatar-deco.deco-ember_trace::before,
+.avatar-deco.deco-mint_signal::before,
+.avatar-deco.deco-pixel_pop::before,
+.avatar-deco.deco-soft_static::before,
+.avatar-deco.deco-lime_loop::before,
+.avatar-deco.deco-neon_grid::before,
+.avatar-deco.deco-violet_comet::before,
+.avatar-deco.deco-signal_wave::before,
+.avatar-deco.deco-chrome_edge::before,
+.avatar-deco.deco-solar_flare::before,
+.avatar-deco.deco-void_pulse::before,
+.avatar-deco.deco-plasma_arc::before,
+.avatar-deco.deco-crystal_bloom::before,
+.avatar-deco.deco-toxic_slime::before,
+.avatar-deco.deco-nebula_dust::before,
+.avatar-deco.deco-ion_crown::before,
+.avatar-deco.deco-ruby_circuit::before,
+.avatar-deco.deco-starforge::before,
+.avatar-deco.deco-quantum_ring::before,
+.avatar-deco.deco-midnight_sun::before,
+.avatar-deco.deco-dragon_core::before,
+.avatar-deco.deco-cosmic_crown::before,
+.avatar-deco.deco-phantom_blade::before,
+.avatar-deco.deco-time_rift::before,
+.avatar-deco.deco-zero_gravity::before,
+.avatar-deco.deco-singularity::before,
+.avatar-deco.deco-celestial_wings::before,
+.avatar-deco.deco-apex_storm::before,
+.avatar-deco.deco-prism_overdrive::before,
+.avatar-deco.deco-eternal_flame::before,
+.avatar-deco.deco-magic_mists::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 18% 18%, var(--premium-b), transparent 35%),
+    radial-gradient(ellipse at 86% 24%, var(--premium-a), transparent 38%),
+    radial-gradient(ellipse at 18% 84%, var(--premium-c), transparent 36%),
+    radial-gradient(ellipse at 82% 78%, var(--premium-soft), transparent 42%);
+  -webkit-mask: radial-gradient(circle, transparent 57%, #000 64%, #000 80%, transparent 90%);
+          mask: radial-gradient(circle, transparent 57%, #000 64%, #000 80%, transparent 90%);
+  filter: blur(1px) saturate(1.18);
+  animation: premium-mist-drift 6.4s ease-in-out infinite;
+}
+
+.avatar-deco.deco-ember_trace::after,
+.avatar-deco.deco-mint_signal::after,
+.avatar-deco.deco-pixel_pop::after,
+.avatar-deco.deco-soft_static::after,
+.avatar-deco.deco-lime_loop::after,
+.avatar-deco.deco-neon_grid::after,
+.avatar-deco.deco-violet_comet::after,
+.avatar-deco.deco-signal_wave::after,
+.avatar-deco.deco-chrome_edge::after,
+.avatar-deco.deco-solar_flare::after,
+.avatar-deco.deco-void_pulse::after,
+.avatar-deco.deco-plasma_arc::after,
+.avatar-deco.deco-crystal_bloom::after,
+.avatar-deco.deco-toxic_slime::after,
+.avatar-deco.deco-nebula_dust::after,
+.avatar-deco.deco-ion_crown::after,
+.avatar-deco.deco-ruby_circuit::after,
+.avatar-deco.deco-starforge::after,
+.avatar-deco.deco-quantum_ring::after,
+.avatar-deco.deco-midnight_sun::after,
+.avatar-deco.deco-dragon_core::after,
+.avatar-deco.deco-cosmic_crown::after,
+.avatar-deco.deco-phantom_blade::after,
+.avatar-deco.deco-time_rift::after,
+.avatar-deco.deco-zero_gravity::after,
+.avatar-deco.deco-singularity::after,
+.avatar-deco.deco-celestial_wings::after,
+.avatar-deco.deco-apex_storm::after,
+.avatar-deco.deco-prism_overdrive::after,
+.avatar-deco.deco-eternal_flame::after,
+.avatar-deco.deco-magic_mists::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  background:
+    conic-gradient(from 260deg, transparent 0 62deg, rgba(255,255,255,0.78) 75deg, transparent 92deg, transparent 190deg, var(--premium-a) 220deg, transparent 248deg, transparent 360deg),
+    radial-gradient(ellipse at 50% 0%, var(--premium-b), transparent 34%),
+    radial-gradient(ellipse at 100% 54%, var(--premium-a), transparent 34%),
+    radial-gradient(ellipse at 0% 60%, var(--premium-c), transparent 34%);
+  -webkit-mask: radial-gradient(circle, transparent 52%, #000 61%, #000 72%, transparent 84%);
+          mask: radial-gradient(circle, transparent 52%, #000 61%, #000 72%, transparent 84%);
+  filter: blur(1.7px) drop-shadow(0 0 9px var(--premium-soft));
+  animation: premium-arc-sweep 5.2s ease-in-out infinite;
+}
+
+.avatar-deco.deco-ember_trace { --premium-a: rgba(255, 144, 64, 0.95); --premium-b: rgba(255, 72, 42, 0.72); --premium-c: rgba(255, 204, 94, 0.58); --premium-speed: 8s; }
+.avatar-deco.deco-mint_signal { --premium-a: rgba(106, 255, 194, 0.95); --premium-b: rgba(74, 216, 255, 0.7); --premium-c: rgba(190, 255, 226, 0.62); }
+.avatar-deco.deco-pixel_pop { --premium-a: rgba(116, 190, 255, 0.96); --premium-b: rgba(255, 118, 230, 0.72); --premium-c: rgba(255, 236, 118, 0.58); --premium-speed: 5.2s; }
+.avatar-deco.deco-soft_static { --premium-a: rgba(218, 230, 255, 0.8); --premium-b: rgba(148, 168, 210, 0.5); --premium-c: rgba(255, 255, 255, 0.42); --premium-speed: 4.6s; }
+.avatar-deco.deco-lime_loop { --premium-a: rgba(184, 255, 74, 0.96); --premium-b: rgba(74, 255, 166, 0.72); --premium-c: rgba(232, 255, 128, 0.58); }
+.avatar-deco.deco-neon_grid { --premium-a: rgba(84, 244, 255, 0.96); --premium-b: rgba(80, 112, 255, 0.72); --premium-c: rgba(70, 255, 202, 0.64); }
+.avatar-deco.deco-violet_comet { --premium-a: rgba(204, 132, 255, 0.98); --premium-b: rgba(96, 206, 255, 0.72); --premium-c: rgba(246, 210, 255, 0.62); --premium-speed: 4.2s; }
+.avatar-deco.deco-signal_wave { --premium-a: rgba(72, 180, 255, 0.96); --premium-b: rgba(64, 238, 255, 0.72); --premium-c: rgba(120, 255, 206, 0.5); }
+.avatar-deco.deco-chrome_edge { --premium-a: rgba(245, 250, 255, 0.98); --premium-b: rgba(120, 138, 158, 0.66); --premium-c: rgba(190, 220, 255, 0.58); --premium-speed: 9s; }
+.avatar-deco.deco-solar_flare { --premium-a: rgba(255, 212, 72, 0.98); --premium-b: rgba(255, 104, 48, 0.78); --premium-c: rgba(255, 246, 162, 0.58); --premium-breathe: 2.6s; }
+.avatar-deco.deco-void_pulse { --premium-a: rgba(124, 92, 255, 0.92); --premium-b: rgba(34, 18, 92, 0.8); --premium-c: rgba(202, 128, 255, 0.54); }
+.avatar-deco.deco-plasma_arc { --premium-a: rgba(78, 236, 255, 0.98); --premium-b: rgba(255, 86, 218, 0.84); --premium-c: rgba(255, 255, 255, 0.58); --premium-speed: 3.4s; }
+.avatar-deco.deco-crystal_bloom { --premium-a: rgba(196, 246, 255, 0.98); --premium-b: rgba(150, 190, 255, 0.72); --premium-c: rgba(255, 255, 255, 0.64); }
+.avatar-deco.deco-toxic_slime { --premium-a: rgba(126, 255, 46, 0.95); --premium-b: rgba(38, 190, 46, 0.72); --premium-c: rgba(214, 255, 98, 0.52); --premium-breathe: 2.4s; }
+.avatar-deco.deco-nebula_dust { --premium-a: rgba(92, 224, 255, 0.9); --premium-b: rgba(186, 84, 255, 0.84); --premium-c: rgba(255, 92, 218, 0.64); --premium-speed: 10s; }
+.avatar-deco.deco-ion_crown { --premium-a: rgba(98, 236, 255, 0.98); --premium-b: rgba(90, 112, 255, 0.76); --premium-c: rgba(255, 255, 255, 0.62); }
+.avatar-deco.deco-ruby_circuit { --premium-a: rgba(255, 72, 112, 0.98); --premium-b: rgba(255, 160, 86, 0.68); --premium-c: rgba(255, 214, 214, 0.58); }
+.avatar-deco.deco-starforge { --premium-a: rgba(255, 210, 84, 0.98); --premium-b: rgba(120, 132, 148, 0.72); --premium-c: rgba(255, 246, 178, 0.6); --premium-speed: 8.8s; }
+.avatar-deco.deco-quantum_ring { --premium-a: rgba(108, 255, 226, 0.98); --premium-b: rgba(196, 104, 255, 0.78); --premium-c: rgba(92, 142, 255, 0.6); --premium-speed: 4s; }
+.avatar-deco.deco-midnight_sun { --premium-a: rgba(255, 188, 64, 0.96); --premium-b: rgba(18, 16, 42, 0.86); --premium-c: rgba(255, 238, 142, 0.56); }
+.avatar-deco.deco-dragon_core { --premium-a: rgba(255, 74, 42, 0.98); --premium-b: rgba(255, 178, 74, 0.76); --premium-c: rgba(94, 10, 4, 0.66); --premium-breathe: 2.2s; }
+.avatar-deco.deco-cosmic_crown { --premium-a: rgba(255, 238, 160, 0.98); --premium-b: rgba(116, 132, 255, 0.76); --premium-c: rgba(110, 238, 255, 0.6); }
+.avatar-deco.deco-phantom_blade { --premium-a: rgba(234, 246, 255, 0.98); --premium-b: rgba(150, 168, 255, 0.76); --premium-c: rgba(150, 246, 255, 0.5); --premium-speed: 3.6s; }
+.avatar-deco.deco-time_rift { --premium-a: rgba(118, 255, 224, 0.98); --premium-b: rgba(126, 92, 255, 0.78); --premium-c: rgba(255, 255, 255, 0.55); --premium-speed: 5s; }
+.avatar-deco.deco-zero_gravity { --premium-a: rgba(150, 218, 255, 0.96); --premium-b: rgba(216, 148, 255, 0.78); --premium-c: rgba(255, 230, 120, 0.6); --premium-speed: 9.6s; }
+.avatar-deco.deco-singularity { --premium-a: rgba(142, 104, 255, 0.95); --premium-b: rgba(4, 2, 16, 0.86); --premium-c: rgba(200, 152, 255, 0.62); --premium-breathe: 2.6s; }
+.avatar-deco.deco-celestial_wings { --premium-a: rgba(255, 238, 184, 0.98); --premium-b: rgba(112, 210, 255, 0.68); --premium-c: rgba(255, 255, 255, 0.72); --premium-speed: 8.4s; }
+.avatar-deco.deco-apex_storm { --premium-a: rgba(118, 226, 255, 0.98); --premium-b: rgba(82, 104, 255, 0.84); --premium-c: rgba(255, 255, 255, 0.68); --premium-speed: 3.8s; }
+.avatar-deco.deco-prism_overdrive { --premium-a: rgba(255, 84, 216, 0.98); --premium-b: rgba(82, 230, 255, 0.9); --premium-c: rgba(255, 226, 82, 0.7); --premium-speed: 2.8s; }
+.avatar-deco.deco-eternal_flame { --premium-a: rgba(255, 122, 42, 0.98); --premium-b: rgba(255, 38, 18, 0.78); --premium-c: rgba(255, 222, 98, 0.62); --premium-breathe: 2s; }
+.avatar-deco.deco-magic_mists { --premium-a: rgba(96, 224, 255, 0.98); --premium-b: rgba(186, 76, 255, 0.94); --premium-c: rgba(68, 248, 210, 0.76); --premium-soft: rgba(160, 98, 255, 0.38); --premium-speed: 6.4s; --premium-breathe: 3.2s; }
+
+@keyframes premium-ring-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes premium-ring-breathe {
+  0%,100% { filter: saturate(1.14) brightness(1); }
+  50% { filter: saturate(1.28) brightness(1.18); }
+}
+@keyframes premium-mist-drift {
+  0%,100% { transform: rotate(0deg) scale(0.98); opacity: 0.7; }
+  42% { transform: rotate(-16deg) scale(1.06); opacity: 0.98; }
+  72% { transform: rotate(12deg) scale(1.02); opacity: 0.82; }
+}
+@keyframes premium-arc-sweep {
+  0%,100% { transform: rotate(0deg) scale(0.96); opacity: 0.62; }
+  48% { transform: rotate(28deg) scale(1.08); opacity: 1; }
+  76% { transform: rotate(-12deg) scale(1.01); opacity: 0.78; }
+}
+
 /* ===== MESSAGE TEXT COLORS ===== */
 .msg-color-red    { color: #ff4444 !important; }
 .msg-color-orange { color: #ff8c00 !important; }
