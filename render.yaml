@@ -24,5 +24,11 @@ services:
         value: "false"
       - key: COOKIE_SECURE
         value: "true"
+      - key: COOKIE_SAME_SITE
+        value: "none"
+      - key: ALLOW_FILE_CLIENTS
+        value: "true"
+      - key: STATIC_CLIENT_ORIGINS
+        value: ""
       - key: TRUST_PROXY
         value: "1"

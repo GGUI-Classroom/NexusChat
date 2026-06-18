@@ -12,7 +12,6 @@ const { pool, initDb } = require('./models/db');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: false } });
 
 const isProd = process.env.NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nexus-dev-secret-change-in-prod';
@@ -21,6 +20,30 @@ const REDIS_URL = process.env.REDIS_URL;
 const COOKIE_SECURE = envFlag('COOKIE_SECURE', isProd);
 const REQUIRE_REDIS = envFlag('REQUIRE_REDIS', false);
 const TRUST_PROXY = process.env.TRUST_PROXY || (isProd ? '1' : '');
+const ALLOW_FILE_CLIENTS = envFlag('ALLOW_FILE_CLIENTS', false);
+const COOKIE_SAME_SITE = (process.env.COOKIE_SAME_SITE || (ALLOW_FILE_CLIENTS ? 'none' : 'lax')).toLowerCase();
+const STATIC_CLIENT_ORIGINS = new Set(
+  (process.env.STATIC_CLIENT_ORIGINS || '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean)
+);
+
+function isAllowedClientOrigin(origin) {
+  if (!origin) return true;
+  if (origin === 'null') return ALLOW_FILE_CLIENTS;
+  return STATIC_CLIENT_ORIGINS.has(origin);
+}
+
+const io = new Server(server, {
+  cors: {
+    origin(origin, callback) {
+      if (isAllowedClientOrigin(origin)) return callback(null, true);
+      return callback(new Error('Origin not allowed'));
+    },
+    credentials: true
+  }
+});
 
 if (TRUST_PROXY && !['0', 'false', 'no', 'off'].includes(TRUST_PROXY.toLowerCase())) {
   app.set('trust proxy', /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY);
@@ -35,9 +58,22 @@ const sessionMiddleware = session({
   cookie: {
     secure: COOKIE_SECURE,
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: COOKIE_SAME_SITE,
     maxAge: 7 * 24 * 60 * 60 * 1000
   }
+});
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && isAllowedClientOrigin(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
 });
 
 app.use(express.json({ limit: '4mb' }));
