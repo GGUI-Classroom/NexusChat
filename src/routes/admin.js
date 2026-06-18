@@ -56,6 +56,7 @@ async function sendNexusGuardDM(req, userId, content) {
 const ADMIN_IDS = new Set([
   '7db80df6-0566-4fa0-bbc2-6cde9775f3a4',
   '238a8575-224a-40cb-b699-eba0d9ff7384',
+  '537b58c9-b9cd-4239-b0e6-2f862c30ac01',
 ]);
 
 async function isGlobalAdmin(userId) {
