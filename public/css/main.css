@@ -4745,6 +4745,114 @@ html, body {
   animation: pristine-motif-fast 1.9s linear infinite;
 }
 
+.premium-mythical .premium-intrusion,
+.premium-mythical .premium-strike {
+  inset: 9px;
+  z-index: 3;
+  opacity: 0;
+  mix-blend-mode: screen;
+  -webkit-mask: radial-gradient(circle, transparent 0 20%, #000 34%, #000 66%, transparent 78%);
+          mask: radial-gradient(circle, transparent 0 20%, #000 34%, #000 66%, transparent 78%);
+}
+
+.premium-mythical .premium-intrusion {
+  filter: blur(0.6px) drop-shadow(0 0 8px var(--fx-a));
+  animation: mythical-intrude 6s ease-in-out infinite;
+}
+
+.premium-mythical .premium-strike {
+  inset: 6px;
+  filter: drop-shadow(0 0 8px var(--fx-a));
+  animation: mythical-strike-soft 6s ease-in-out infinite;
+}
+
+.premium-dragon .premium-intrusion,
+.premium-flame .premium-intrusion {
+  background:
+    radial-gradient(ellipse at 50% 90%, var(--fx-b), transparent 30%),
+    radial-gradient(ellipse at 42% 84%, var(--fx-a), transparent 24%),
+    radial-gradient(ellipse at 60% 72%, var(--fx-c), transparent 20%);
+  -webkit-mask: radial-gradient(ellipse at 50% 76%, transparent 0 20%, #000 34%, #000 66%, transparent 80%);
+          mask: radial-gradient(ellipse at 50% 76%, transparent 0 20%, #000 34%, #000 66%, transparent 80%);
+  animation-name: mythical-flame-intrude;
+}
+
+.premium-cosmic .premium-intrusion,
+.premium-wings .premium-intrusion {
+  background:
+    radial-gradient(ellipse at 50% 10%, rgba(255,255,255,0.82), transparent 18%),
+    radial-gradient(ellipse at 18% 46%, var(--fx-c), transparent 28%),
+    radial-gradient(ellipse at 82% 46%, var(--fx-b), transparent 28%);
+  animation-name: mythical-celestial-intrude;
+}
+
+.premium-blade .premium-strike {
+  background:
+    linear-gradient(126deg, transparent 0 42%, rgba(255,255,255,0.95) 48%, var(--fx-a) 51%, transparent 58%),
+    linear-gradient(126deg, transparent 0 35%, color-mix(in srgb, var(--fx-b) 70%, transparent) 42%, transparent 50%);
+  -webkit-mask: radial-gradient(circle, transparent 8%, #000 22%, #000 76%, transparent 86%);
+          mask: radial-gradient(circle, transparent 8%, #000 22%, #000 76%, transparent 86%);
+  animation-name: mythical-blade-strike;
+}
+
+.premium-time .premium-intrusion {
+  background:
+    repeating-conic-gradient(from 0deg, transparent 0 17deg, color-mix(in srgb, var(--fx-a) 62%, transparent) 18deg 20deg, transparent 21deg 36deg),
+    radial-gradient(circle, transparent 0 36%, var(--fx-b) 37% 39%, transparent 40% 62%, var(--fx-a) 63% 65%, transparent 66%);
+  animation-name: mythical-time-intrude;
+}
+
+.premium-gravity .premium-intrusion {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.5), transparent 10%),
+    radial-gradient(circle at 28% 36%, var(--fx-a), transparent 14%),
+    radial-gradient(circle at 72% 64%, var(--fx-b), transparent 14%),
+    radial-gradient(circle, transparent 0 42%, color-mix(in srgb, var(--fx-c) 54%, transparent) 44% 48%, transparent 50%);
+  animation-name: mythical-gravity-intrude;
+}
+
+.premium-singularity .premium-intrusion {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.92) 0 18%, var(--fx-b) 24%, transparent 42%),
+    conic-gradient(from 80deg, transparent 0 80deg, var(--fx-a) 94deg, transparent 116deg, transparent 220deg, var(--fx-c) 240deg, transparent 264deg);
+  filter: blur(0.4px) contrast(1.28) drop-shadow(0 0 10px var(--fx-b));
+  animation-name: mythical-singularity-intrude;
+}
+
+.premium-storm .premium-intrusion {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.55), transparent 13%),
+    repeating-conic-gradient(from 18deg, transparent 0 28deg, color-mix(in srgb, var(--fx-a) 70%, transparent) 29deg 33deg, transparent 34deg 58deg);
+  animation-name: mythical-storm-build;
+}
+
+.premium-storm .premium-strike {
+  background:
+    linear-gradient(108deg, transparent 0 42%, rgba(255,255,255,0.98) 47%, var(--fx-a) 50%, transparent 55%),
+    linear-gradient(73deg, transparent 0 48%, color-mix(in srgb, var(--fx-c) 78%, transparent) 51%, transparent 55%),
+    linear-gradient(145deg, transparent 0 52%, rgba(255,255,255,0.78) 54%, transparent 58%);
+  -webkit-mask: radial-gradient(circle, transparent 0 12%, #000 20%, #000 78%, transparent 88%);
+          mask: radial-gradient(circle, transparent 0 12%, #000 20%, #000 78%, transparent 88%);
+  animation-name: mythical-lightning-strike;
+}
+
+.premium-prism .premium-intrusion {
+  background:
+    linear-gradient(105deg, transparent 0 22%, rgba(255,84,216,0.56) 34%, rgba(82,230,255,0.58) 46%, rgba(255,226,82,0.5) 58%, transparent 72%),
+    conic-gradient(#ff54d8, #ffe252, #52ff98, #52e6ff, #8a5cff, #ff54d8);
+  filter: saturate(1.45) blur(0.35px) drop-shadow(0 0 9px #52e6ff);
+  animation-name: mythical-prism-intrude;
+}
+
+.premium-magic-mists .premium-intrusion {
+  background:
+    radial-gradient(ellipse at 24% 42%, color-mix(in srgb, var(--fx-b) 62%, transparent), transparent 32%),
+    radial-gradient(ellipse at 74% 48%, color-mix(in srgb, var(--fx-a) 58%, transparent), transparent 34%),
+    radial-gradient(ellipse at 52% 70%, color-mix(in srgb, var(--fx-c) 46%, transparent), transparent 32%);
+  filter: blur(2px) saturate(1.18) drop-shadow(0 0 8px var(--fx-b));
+  animation-name: mythical-mist-intrude;
+}
+
 @keyframes pristine-spin { to { transform: rotate(360deg); } }
 @keyframes pristine-breathe {
   0%,100% { opacity: 0.82; filter: brightness(1) saturate(1.12); }
@@ -4804,6 +4912,57 @@ html, body {
 @keyframes pristine-float {
   0%,100% { transform: rotate(0deg) translateY(0); opacity: 0.54; }
   50% { transform: rotate(180deg) translateY(-3px); opacity: 0.96; }
+}
+@keyframes mythical-intrude {
+  0%, 58%, 100% { opacity: 0; transform: scale(0.9) rotate(0deg); }
+  64%, 82% { opacity: 0.5; transform: scale(1.04) rotate(12deg); }
+}
+@keyframes mythical-strike-soft {
+  0%, 63%, 100% { opacity: 0; transform: scale(0.9); }
+  70%, 78% { opacity: 0.36; transform: scale(1.08); }
+}
+@keyframes mythical-flame-intrude {
+  0%, 58%, 100% { opacity: 0; transform: translateY(10px) scale(0.82); }
+  66%, 82% { opacity: 0.62; transform: translateY(-2px) scale(1.08); }
+}
+@keyframes mythical-celestial-intrude {
+  0%, 58%, 100% { opacity: 0; transform: translateY(-8px) scale(0.86); }
+  66%, 82% { opacity: 0.52; transform: translateY(1px) scale(1.08); }
+}
+@keyframes mythical-blade-strike {
+  0%, 64%, 100% { opacity: 0; transform: translate(-12px, 10px) rotate(-6deg) scale(0.92); }
+  70% { opacity: 0.85; transform: translate(0, 0) rotate(0deg) scale(1.08); }
+  78% { opacity: 0.2; transform: translate(9px, -8px) rotate(4deg) scale(1); }
+}
+@keyframes mythical-time-intrude {
+  0%, 56%, 100% { opacity: 0; transform: rotate(0deg) scale(0.82); }
+  66%, 82% { opacity: 0.5; transform: rotate(160deg) scale(1.04); }
+}
+@keyframes mythical-gravity-intrude {
+  0%, 58%, 100% { opacity: 0; transform: scale(1.18) rotate(0deg); }
+  66%, 82% { opacity: 0.55; transform: scale(0.9) rotate(180deg); }
+}
+@keyframes mythical-singularity-intrude {
+  0%, 58%, 100% { opacity: 0; transform: scale(0.76) rotate(0deg); }
+  66%, 82% { opacity: 0.58; transform: scale(1.08) rotate(220deg); }
+}
+@keyframes mythical-storm-build {
+  0%, 54%, 100% { opacity: 0; transform: scale(0.84) rotate(0deg); }
+  62% { opacity: 0.18; transform: scale(0.95) rotate(80deg); }
+  70%, 80% { opacity: 0.58; transform: scale(1.05) rotate(190deg); }
+}
+@keyframes mythical-lightning-strike {
+  0%, 66%, 73%, 100% { opacity: 0; transform: scale(0.92) rotate(0deg); }
+  69% { opacity: 1; transform: scale(1.08) rotate(0deg); }
+  71% { opacity: 0.38; transform: scale(1) rotate(2deg); }
+}
+@keyframes mythical-prism-intrude {
+  0%, 58%, 100% { opacity: 0; transform: translateX(-8px) rotate(-18deg) scale(0.92); }
+  66%, 82% { opacity: 0.54; transform: translateX(4px) rotate(8deg) scale(1.08); }
+}
+@keyframes mythical-mist-intrude {
+  0%, 58%, 100% { opacity: 0; transform: rotate(0deg) scale(0.92); }
+  66%, 82% { opacity: 0.46; transform: rotate(-18deg) scale(1.1); }
 }
 
 /* ===== MESSAGE TEXT COLORS ===== */

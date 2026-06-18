@@ -237,6 +237,20 @@
     magic_mists: ['magic-mists', '#60e0ff', '#ba4cff', '#44f8d2', 'mist']
   };
 
+  const MYTHICAL_PREMIUM_DECORATIONS = new Set([
+    'dragon_core',
+    'cosmic_crown',
+    'phantom_blade',
+    'time_rift',
+    'zero_gravity',
+    'singularity',
+    'celestial_wings',
+    'apex_storm',
+    'prism_overdrive',
+    'eternal_flame',
+    'magic_mists'
+  ]);
+
   function isPremiumDecoration(deco) {
     return !!PREMIUM_DECORATIONS[deco];
   }
@@ -250,8 +264,9 @@
     const preset = PREMIUM_DECORATIONS[deco];
     if (!wrap || !preset) return;
     const [style, a, b, c, motif] = preset;
+    const isMythical = MYTHICAL_PREMIUM_DECORATIONS.has(deco);
     const el = document.createElement('div');
-    el.className = `premium-deco premium-${style}`;
+    el.className = `premium-deco premium-${style}${isMythical ? ' premium-mythical' : ''}`;
     el.dataset.deco = deco;
     el.style.setProperty('--fx-a', a);
     el.style.setProperty('--fx-b', b);
@@ -265,6 +280,7 @@
       <span class="premium-wisp premium-wisp-b"></span>
       <span class="premium-motif premium-motif-${motif}"></span>
       <span class="premium-sparks"></span>
+      ${isMythical ? '<span class="premium-intrusion"></span><span class="premium-strike"></span>' : ''}
     `;
     wrap.appendChild(el);
   }
