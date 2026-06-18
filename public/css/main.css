@@ -4200,6 +4200,53 @@ html, body {
   box-shadow: 0 0 20px rgba(255,92,24,0.58), 0 -9px 16px rgba(255,188,48,0.25);
   animation: pack-warm-pulse 1.3s ease-in-out infinite;
 }
+.avatar-deco.deco-magic_mists {
+  inset: -7px;
+  border-radius: 50%;
+  border: 1px solid rgba(166, 120, 255, 0.46);
+  background:
+    radial-gradient(circle at 50% 48%, rgba(18, 42, 118, 0.22) 0 52%, rgba(30, 76, 168, 0.16) 63%, transparent 75%),
+    conic-gradient(from 22deg, rgba(154, 70, 255, 0.1), rgba(92, 220, 255, 0.7), rgba(72, 244, 206, 0.52), rgba(190, 68, 255, 0.82), rgba(92, 220, 255, 0.68), rgba(154, 70, 255, 0.1));
+  box-shadow:
+    0 0 12px rgba(116, 222, 255, 0.46),
+    0 0 22px rgba(168, 74, 255, 0.42),
+    inset 0 0 16px rgba(86, 190, 255, 0.18),
+    inset 0 0 30px rgba(118, 64, 255, 0.18);
+  overflow: visible;
+  animation: magic-mists-breathe 4s ease-in-out infinite;
+}
+.avatar-deco.deco-magic_mists::before,
+.avatar-deco.deco-magic_mists::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.avatar-deco.deco-magic_mists::before {
+  background:
+    radial-gradient(ellipse at 22% 18%, rgba(220, 148, 255, 0.75), transparent 36%),
+    radial-gradient(ellipse at 82% 22%, rgba(94, 228, 255, 0.72), transparent 38%),
+    radial-gradient(ellipse at 20% 82%, rgba(54, 236, 210, 0.52), transparent 36%),
+    radial-gradient(ellipse at 78% 80%, rgba(178, 84, 255, 0.56), transparent 42%),
+    conic-gradient(from 130deg, transparent 0 18deg, rgba(120, 232, 255, 0.75) 34deg, transparent 64deg, transparent 132deg, rgba(190, 86, 255, 0.72) 164deg, transparent 204deg, transparent 266deg, rgba(80, 245, 218, 0.62) 294deg, transparent 332deg);
+  -webkit-mask: radial-gradient(circle, transparent 55%, #000 62%, #000 82%, transparent 91%);
+          mask: radial-gradient(circle, transparent 55%, #000 62%, #000 82%, transparent 91%);
+  filter: blur(0.8px) saturate(1.24);
+  animation: magic-mists-orbit 7s linear infinite;
+}
+.avatar-deco.deco-magic_mists::after {
+  inset: -10px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(200, 116, 255, 0.62), transparent 32%),
+    radial-gradient(ellipse at 92% 54%, rgba(74, 224, 255, 0.5), transparent 34%),
+    radial-gradient(ellipse at 8% 56%, rgba(78, 255, 216, 0.38), transparent 34%),
+    radial-gradient(ellipse at 50% 100%, rgba(142, 74, 255, 0.52), transparent 36%);
+  -webkit-mask: radial-gradient(circle, transparent 48%, #000 58%, #000 74%, transparent 86%);
+          mask: radial-gradient(circle, transparent 48%, #000 58%, #000 74%, transparent 86%);
+  filter: blur(2.2px) drop-shadow(0 0 10px rgba(132, 226, 255, 0.5));
+  animation: magic-mists-wisp 5.8s ease-in-out infinite;
+}
 
 @keyframes pack-warm-pulse {
   0%,100% { transform: scale(1); filter: brightness(1); }
@@ -4258,6 +4305,19 @@ html, body {
 @keyframes pack-wings {
   0%,100% { transform: scaleX(0.92); opacity: 0.64; }
   50% { transform: scaleX(1.08); opacity: 0.94; }
+}
+@keyframes magic-mists-breathe {
+  0%,100% { transform: scale(1); filter: brightness(1) saturate(1.08); }
+  50% { transform: scale(1.045); filter: brightness(1.22) saturate(1.25); }
+}
+@keyframes magic-mists-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes magic-mists-wisp {
+  0%,100% { transform: rotate(0deg) scale(0.98); opacity: 0.68; }
+  45% { transform: rotate(-18deg) scale(1.08); opacity: 0.98; }
+  72% { transform: rotate(12deg) scale(1.02); opacity: 0.8; }
 }
 
 /* ===== MESSAGE TEXT COLORS ===== */

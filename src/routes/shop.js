@@ -190,6 +190,7 @@ const DECORATIONS = [
   { id: 'apex_storm', nexalPrice: null, name: 'Apex Storm', description: 'A premium storm ring surges with blue-white strikes.', rarity: 'mythical', preview: 'apex_storm', packOnly: true },
   { id: 'prism_overdrive', nexalPrice: null, name: 'Prism Overdrive', description: 'Prismatic light races around in overdrive.', rarity: 'mythical', preview: 'prism_overdrive', packOnly: true },
   { id: 'eternal_flame', nexalPrice: null, name: 'Eternal Flame', description: 'An everlasting flame crown rolls over the border.', rarity: 'mythical', preview: 'eternal_flame', packOnly: true },
+  { id: 'magic_mists', nexalPrice: null, name: 'Magic Mists', description: 'Iridescent violet and cyan mist wraps your avatar in a glossy arcane sphere.', rarity: 'mythical', preview: 'magic_mists', packOnly: true },
   {
     id: 'stormveil',
     nexalPrice: null,
@@ -222,11 +223,11 @@ const DECORATION_PACKS = [
     rarity: 'mixed',
     description: 'Open for one starter decoration. Mostly common, with a rare chase.',
     items: [
-      { decorationId: 'ember_trace', chance: 34 },
-      { decorationId: 'mint_signal', chance: 28 },
+      { decorationId: 'ember_trace', chance: 40 },
+      { decorationId: 'mint_signal', chance: 30 },
       { decorationId: 'pixel_pop', chance: 20 },
-      { decorationId: 'soft_static', chance: 13 },
-      { decorationId: 'neon_grid', chance: 5 }
+      { decorationId: 'soft_static', chance: 8 },
+      { decorationId: 'neon_grid', chance: 2 }
     ]
   },
   {
@@ -236,11 +237,11 @@ const DECORATION_PACKS = [
     rarity: 'mixed',
     description: 'Open for one neon decoration. Rare-heavy with an epic spark.',
     items: [
-      { decorationId: 'lime_loop', chance: 25 },
-      { decorationId: 'violet_comet', chance: 24 },
-      { decorationId: 'signal_wave', chance: 21 },
-      { decorationId: 'chrome_edge', chance: 18 },
-      { decorationId: 'plasma_arc', chance: 12 }
+      { decorationId: 'lime_loop', chance: 34 },
+      { decorationId: 'violet_comet', chance: 25 },
+      { decorationId: 'signal_wave', chance: 20 },
+      { decorationId: 'chrome_edge', chance: 14 },
+      { decorationId: 'plasma_arc', chance: 7 }
     ]
   },
   {
@@ -250,11 +251,11 @@ const DECORATION_PACKS = [
     rarity: 'mixed',
     description: 'Open for one unstable rift decoration. Epics with a legendary hit.',
     items: [
-      { decorationId: 'solar_flare', chance: 22 },
-      { decorationId: 'void_pulse', chance: 24 },
-      { decorationId: 'crystal_bloom', chance: 21 },
-      { decorationId: 'toxic_slime', chance: 18 },
-      { decorationId: 'ion_crown', chance: 15 }
+      { decorationId: 'solar_flare', chance: 35 },
+      { decorationId: 'void_pulse', chance: 25 },
+      { decorationId: 'crystal_bloom', chance: 18 },
+      { decorationId: 'toxic_slime', chance: 14 },
+      { decorationId: 'ion_crown', chance: 8 }
     ]
   },
   {
@@ -264,11 +265,11 @@ const DECORATION_PACKS = [
     rarity: 'mixed',
     description: 'Open for one forged decoration. Legendary odds with a mythical ember.',
     items: [
-      { decorationId: 'nebula_dust', chance: 24 },
-      { decorationId: 'ruby_circuit', chance: 23 },
-      { decorationId: 'starforge', chance: 20 },
-      { decorationId: 'quantum_ring', chance: 18 },
-      { decorationId: 'dragon_core', chance: 15 }
+      { decorationId: 'nebula_dust', chance: 36 },
+      { decorationId: 'ruby_circuit', chance: 24 },
+      { decorationId: 'starforge', chance: 18 },
+      { decorationId: 'quantum_ring', chance: 14 },
+      { decorationId: 'dragon_core', chance: 8 }
     ]
   },
   {
@@ -278,11 +279,11 @@ const DECORATION_PACKS = [
     rarity: 'mixed',
     description: 'Open for one high-power decoration. Mythical pulls are common here.',
     items: [
-      { decorationId: 'midnight_sun', chance: 25 },
-      { decorationId: 'cosmic_crown', chance: 22 },
-      { decorationId: 'phantom_blade', chance: 20 },
-      { decorationId: 'time_rift', chance: 18 },
-      { decorationId: 'singularity', chance: 15 }
+      { decorationId: 'midnight_sun', chance: 45 },
+      { decorationId: 'cosmic_crown', chance: 20 },
+      { decorationId: 'phantom_blade', chance: 16 },
+      { decorationId: 'time_rift', chance: 12 },
+      { decorationId: 'singularity', chance: 7 }
     ]
   },
   {
@@ -292,11 +293,12 @@ const DECORATION_PACKS = [
     rarity: 'mythical',
     description: 'Open for one apex decoration. Premium mythical odds, one item per opening.',
     items: [
-      { decorationId: 'zero_gravity', chance: 24 },
+      { decorationId: 'zero_gravity', chance: 35 },
       { decorationId: 'celestial_wings', chance: 22 },
-      { decorationId: 'apex_storm', chance: 20 },
-      { decorationId: 'prism_overdrive', chance: 18 },
-      { decorationId: 'eternal_flame', chance: 16 }
+      { decorationId: 'apex_storm', chance: 18 },
+      { decorationId: 'prism_overdrive', chance: 12 },
+      { decorationId: 'eternal_flame', chance: 8 },
+      { decorationId: 'magic_mists', chance: 5 }
     ]
   }
 ];
