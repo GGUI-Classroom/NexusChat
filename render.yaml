@@ -3,8 +3,10 @@ services:
     name: nexus-chat
     env: node
     plan: free
+    autoDeploy: true
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -13,10 +15,14 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: DATABASE_SSL
-        value: true
+        value: "true"
       - key: DATABASE_SSL_REJECT_UNAUTHORIZED
-        value: false
+        value: "false"
       - key: DB_POOL_MAX
-        value: 5
-      - key: REDIS_URL
-        sync: false
+        value: "5"
+      - key: REQUIRE_REDIS
+        value: "false"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "1"
