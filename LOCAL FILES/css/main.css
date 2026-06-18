@@ -5305,6 +5305,35 @@ html, body {
   70% { opacity: 0.78; transform: rotate(8deg) scale(1.02); }
 }
 
+/* Center-heavy mythical layers should surge briefly, then reveal the avatar again. */
+.premium-blade .premium-shell,
+.premium-storm .premium-shell,
+.premium-cosmic .premium-shell,
+.premium-wings .premium-shell,
+.premium-dragon .premium-shell,
+.premium-flame .premium-shell,
+.premium-gravity .premium-shell,
+.premium-singularity .premium-shell,
+.premium-prism .premium-shell,
+.premium-magic-mists .premium-shell {
+  animation: mythical-cover-window 6s ease-in-out infinite !important;
+}
+
+.premium-blade .premium-strike,
+.premium-storm .premium-strike,
+.premium-prism .premium-intrusion,
+.premium-gravity .premium-intrusion,
+.premium-singularity .premium-intrusion,
+.premium-magic-mists .premium-intrusion {
+  animation-duration: 6s;
+}
+
+@keyframes mythical-cover-window {
+  0%, 4% { opacity: 0.16; }
+  10%, 25% { opacity: 0.92; }
+  32%, 100% { opacity: 0.14; }
+}
+
 /* Pack thumbnails are much smaller than real avatars, so keep premium FX contained. */
 .shop-pack-mini .premium-deco {
   inset: -4px;
