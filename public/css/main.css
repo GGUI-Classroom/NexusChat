@@ -4853,6 +4853,305 @@ html, body {
   animation-name: mythical-mist-intrude;
 }
 
+/* Mythical shape variants: break the shared orb silhouette for premium drops. */
+.premium-blade .premium-shell,
+.premium-blade .premium-rim-a,
+.premium-blade .premium-rim-b,
+.premium-blade .premium-wisp,
+.premium-blade .premium-motif,
+.premium-storm .premium-shell,
+.premium-storm .premium-rim-a,
+.premium-storm .premium-rim-b,
+.premium-storm .premium-wisp,
+.premium-storm .premium-motif,
+.premium-prism .premium-shell,
+.premium-prism .premium-rim-a,
+.premium-prism .premium-rim-b,
+.premium-prism .premium-wisp,
+.premium-prism .premium-motif {
+  border-radius: 18%;
+}
+
+.premium-blade .premium-shell {
+  inset: -7px;
+  background:
+    linear-gradient(126deg, transparent 0 26%, color-mix(in srgb, var(--fx-b) 46%, transparent) 34%, transparent 42%),
+    linear-gradient(126deg, transparent 0 42%, rgba(255,255,255,0.92) 47%, var(--fx-a) 50%, transparent 56%),
+    linear-gradient(126deg, transparent 0 61%, color-mix(in srgb, var(--fx-c) 62%, transparent) 66%, transparent 72%);
+  -webkit-mask: linear-gradient(126deg, transparent 0 18%, #000 28% 72%, transparent 84%);
+          mask: linear-gradient(126deg, transparent 0 18%, #000 28% 72%, transparent 84%);
+  filter: drop-shadow(0 0 9px var(--fx-a));
+  animation: blade-sheath 3.6s ease-in-out infinite;
+}
+
+.premium-blade .premium-glass,
+.premium-blade .premium-rim-b,
+.premium-blade .premium-wisp-b {
+  opacity: 0.18;
+}
+
+.premium-blade .premium-rim-a {
+  background:
+    linear-gradient(46deg, transparent 0 41%, color-mix(in srgb, var(--fx-c) 72%, transparent) 45%, rgba(255,255,255,0.88) 48%, transparent 54%),
+    linear-gradient(132deg, transparent 0 35%, var(--fx-b) 39%, transparent 44%);
+  -webkit-mask: linear-gradient(46deg, transparent 0 23%, #000 30% 69%, transparent 78%);
+          mask: linear-gradient(46deg, transparent 0 23%, #000 30% 69%, transparent 78%);
+  animation: blade-sheath 2.7s ease-in-out infinite reverse;
+}
+
+.premium-blade .premium-strike {
+  background:
+    linear-gradient(124deg, transparent 0 38%, color-mix(in srgb, var(--fx-b) 56%, transparent) 42%, rgba(255,255,255,0.98) 47%, var(--fx-a) 50%, transparent 56%),
+    linear-gradient(62deg, transparent 0 48%, rgba(255,255,255,0.78) 51%, color-mix(in srgb, var(--fx-c) 62%, transparent) 54%, transparent 60%),
+    radial-gradient(ellipse at 52% 50%, rgba(255,255,255,0.5), transparent 18%);
+  -webkit-mask: linear-gradient(124deg, transparent 0 14%, #000 25% 76%, transparent 88%);
+          mask: linear-gradient(124deg, transparent 0 14%, #000 25% 76%, transparent 88%);
+}
+
+.premium-storm .premium-shell {
+  inset: -10px;
+  background:
+    linear-gradient(114deg, transparent 0 20%, color-mix(in srgb, var(--fx-a) 72%, transparent) 24%, transparent 32%),
+    linear-gradient(72deg, transparent 0 44%, rgba(255,255,255,0.92) 47%, var(--fx-c) 50%, transparent 56%),
+    linear-gradient(146deg, transparent 0 58%, color-mix(in srgb, var(--fx-b) 56%, transparent) 62%, transparent 72%),
+    radial-gradient(ellipse at 18% 78%, var(--fx-b), transparent 22%);
+  -webkit-mask:
+    linear-gradient(114deg, transparent 0 16%, #000 22% 34%, transparent 43%),
+    linear-gradient(72deg, transparent 0 39%, #000 45% 57%, transparent 65%),
+    linear-gradient(146deg, transparent 0 52%, #000 60% 76%, transparent 86%);
+          mask:
+    linear-gradient(114deg, transparent 0 16%, #000 22% 34%, transparent 43%),
+    linear-gradient(72deg, transparent 0 39%, #000 45% 57%, transparent 65%),
+    linear-gradient(146deg, transparent 0 52%, #000 60% 76%, transparent 86%);
+  filter: drop-shadow(0 0 10px var(--fx-a));
+  animation: storm-charge 2.2s ease-in-out infinite;
+}
+
+.premium-storm .premium-glass,
+.premium-storm .premium-rim-b {
+  opacity: 0;
+}
+
+.premium-storm .premium-rim-a,
+.premium-storm .premium-motif-storm {
+  background:
+    repeating-linear-gradient(96deg, transparent 0 9px, color-mix(in srgb, var(--fx-a) 58%, transparent) 10px 12px, transparent 13px 24px),
+    radial-gradient(circle at 48% 40%, rgba(255,255,255,0.7), transparent 10%);
+  -webkit-mask: radial-gradient(ellipse at 50% 50%, transparent 0 12%, #000 20% 72%, transparent 82%);
+          mask: radial-gradient(ellipse at 50% 50%, transparent 0 12%, #000 20% 72%, transparent 82%);
+  animation: storm-static 1.25s steps(4) infinite;
+}
+
+.premium-storm .premium-intrusion {
+  background:
+    radial-gradient(circle at 48% 42%, rgba(255,255,255,0.72), transparent 9%),
+    repeating-conic-gradient(from 8deg, transparent 0 18deg, color-mix(in srgb, var(--fx-a) 52%, transparent) 20deg 23deg, transparent 25deg 48deg),
+    radial-gradient(ellipse at 50% 52%, transparent 0 30%, color-mix(in srgb, var(--fx-b) 32%, transparent) 36%, transparent 54%);
+}
+
+.premium-storm .premium-strike {
+  background:
+    linear-gradient(112deg, transparent 0 35%, rgba(255,255,255,0.98) 38%, var(--fx-a) 41%, transparent 46%),
+    linear-gradient(68deg, transparent 0 47%, color-mix(in srgb, var(--fx-c) 82%, transparent) 50%, transparent 54%),
+    linear-gradient(142deg, transparent 0 53%, rgba(255,255,255,0.86) 56%, transparent 61%),
+    linear-gradient(24deg, transparent 0 57%, color-mix(in srgb, var(--fx-b) 66%, transparent) 60%, transparent 64%);
+  -webkit-mask: radial-gradient(ellipse at 50% 50%, transparent 0 5%, #000 12% 83%, transparent 91%);
+          mask: radial-gradient(ellipse at 50% 50%, transparent 0 5%, #000 12% 83%, transparent 91%);
+}
+
+.premium-cosmic .premium-shell,
+.premium-wings .premium-shell {
+  inset: -11px -15px -6px;
+  background:
+    radial-gradient(ellipse at 22% 46%, var(--fx-c), transparent 30%),
+    radial-gradient(ellipse at 78% 46%, var(--fx-b), transparent 30%),
+    radial-gradient(ellipse at 50% 6%, rgba(255,255,255,0.92), transparent 18%),
+    linear-gradient(90deg, transparent 0 20%, color-mix(in srgb, var(--fx-a) 36%, transparent) 34%, transparent 48%, transparent 52%, color-mix(in srgb, var(--fx-b) 36%, transparent) 66%, transparent 80%);
+  -webkit-mask:
+    radial-gradient(ellipse at 21% 50%, transparent 0 28%, #000 36% 57%, transparent 69%),
+    radial-gradient(ellipse at 79% 50%, transparent 0 28%, #000 36% 57%, transparent 69%),
+    radial-gradient(ellipse at 50% 12%, #000 0 14%, transparent 23%);
+          mask:
+    radial-gradient(ellipse at 21% 50%, transparent 0 28%, #000 36% 57%, transparent 69%),
+    radial-gradient(ellipse at 79% 50%, transparent 0 28%, #000 36% 57%, transparent 69%),
+    radial-gradient(ellipse at 50% 12%, #000 0 14%, transparent 23%);
+  animation: wing-pulse 4.6s ease-in-out infinite;
+}
+
+.premium-cosmic .premium-rim-a,
+.premium-wings .premium-rim-a {
+  background:
+    radial-gradient(ellipse at 16% 42%, rgba(255,255,255,0.78), transparent 17%),
+    radial-gradient(ellipse at 84% 42%, rgba(255,255,255,0.78), transparent 17%),
+    repeating-linear-gradient(90deg, transparent 0 10px, color-mix(in srgb, var(--fx-c) 36%, transparent) 11px 12px, transparent 13px 26px);
+  -webkit-mask:
+    radial-gradient(ellipse at 20% 50%, transparent 0 25%, #000 34% 60%, transparent 72%),
+    radial-gradient(ellipse at 80% 50%, transparent 0 25%, #000 34% 60%, transparent 72%);
+          mask:
+    radial-gradient(ellipse at 20% 50%, transparent 0 25%, #000 34% 60%, transparent 72%),
+    radial-gradient(ellipse at 80% 50%, transparent 0 25%, #000 34% 60%, transparent 72%);
+}
+
+.premium-dragon .premium-shell,
+.premium-flame .premium-shell {
+  inset: -7px -9px -13px;
+  background:
+    radial-gradient(ellipse at 50% 96%, var(--fx-b), transparent 34%),
+    radial-gradient(ellipse at 28% 86%, var(--fx-a), transparent 24%),
+    radial-gradient(ellipse at 72% 78%, var(--fx-c), transparent 25%),
+    conic-gradient(from 180deg, transparent 0 92deg, var(--fx-a) 112deg, transparent 132deg, transparent 212deg, var(--fx-b) 232deg, transparent 252deg, transparent 360deg);
+  -webkit-mask:
+    radial-gradient(ellipse at 50% 93%, transparent 0 19%, #000 30% 62%, transparent 74%),
+    radial-gradient(ellipse at 30% 82%, transparent 0 14%, #000 24% 48%, transparent 62%),
+    radial-gradient(ellipse at 70% 74%, transparent 0 14%, #000 24% 48%, transparent 62%);
+          mask:
+    radial-gradient(ellipse at 50% 93%, transparent 0 19%, #000 30% 62%, transparent 74%),
+    radial-gradient(ellipse at 30% 82%, transparent 0 14%, #000 24% 48%, transparent 62%),
+    radial-gradient(ellipse at 70% 74%, transparent 0 14%, #000 24% 48%, transparent 62%);
+  animation: flame-tongues 2.8s ease-in-out infinite;
+}
+
+.premium-dragon .premium-glass,
+.premium-flame .premium-glass {
+  opacity: 0.28;
+}
+
+.premium-dragon .premium-intrusion,
+.premium-flame .premium-intrusion {
+  background:
+    radial-gradient(ellipse at 50% 96%, var(--fx-b), transparent 28%),
+    radial-gradient(ellipse at 34% 78%, color-mix(in srgb, var(--fx-a) 78%, transparent), transparent 20%),
+    radial-gradient(ellipse at 62% 66%, color-mix(in srgb, var(--fx-c) 72%, transparent), transparent 18%),
+    linear-gradient(0deg, color-mix(in srgb, var(--fx-b) 22%, transparent), transparent 58%);
+}
+
+.premium-gravity .premium-shell {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.86) 0 2px, transparent 5px),
+    radial-gradient(circle at 18% 54%, var(--fx-a) 0 2px, transparent 5px),
+    radial-gradient(circle at 80% 42%, var(--fx-b) 0 2px, transparent 5px),
+    radial-gradient(circle at 52% 84%, var(--fx-c) 0 2px, transparent 5px);
+  -webkit-mask: none;
+          mask: none;
+  animation: gravity-orbit 4.4s linear infinite;
+}
+
+.premium-gravity .premium-rim-a,
+.premium-gravity .premium-rim-b,
+.premium-gravity .premium-wisp {
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(ellipse at 50% 50%, transparent 0 47%, #000 50% 52%, transparent 55%);
+          mask: radial-gradient(ellipse at 50% 50%, transparent 0 47%, #000 50% 52%, transparent 55%);
+  transform: rotate(-20deg) scaleX(1.18);
+}
+
+.premium-gravity .premium-intrusion {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.78) 0 5%, transparent 11%),
+    radial-gradient(circle at 31% 38%, var(--fx-a) 0 5%, transparent 10%),
+    radial-gradient(circle at 72% 62%, var(--fx-b) 0 4%, transparent 10%),
+    radial-gradient(circle at 48% 74%, var(--fx-c) 0 3%, transparent 9%),
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 8px, color-mix(in srgb, var(--fx-a) 28%, transparent) 9px 10px, transparent 11px 17px);
+}
+
+.premium-singularity .premium-shell {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.96) 0 20%, var(--fx-b) 27%, transparent 39%),
+    conic-gradient(from 20deg, transparent 0 44deg, var(--fx-a) 58deg, transparent 76deg, transparent 142deg, var(--fx-b) 156deg, transparent 178deg, transparent 250deg, var(--fx-c) 270deg, transparent 292deg);
+  -webkit-mask: radial-gradient(circle, #000 0 49%, transparent 69%);
+          mask: radial-gradient(circle, #000 0 49%, transparent 69%);
+  filter: contrast(1.4) drop-shadow(0 0 12px var(--fx-b));
+  animation: singularity-vortex 3.2s linear infinite;
+}
+
+.premium-singularity .premium-rim-a,
+.premium-singularity .premium-rim-b,
+.premium-singularity .premium-wisp {
+  -webkit-mask: radial-gradient(circle, transparent 0 38%, #000 44% 54%, transparent 65%);
+          mask: radial-gradient(circle, transparent 0 38%, #000 44% 54%, transparent 65%);
+}
+
+.premium-singularity .premium-intrusion {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.98) 0 16%, rgba(255,255,255,0.62) 18%, var(--fx-b) 23%, transparent 34%),
+    conic-gradient(from 70deg, transparent 0 34deg, var(--fx-a) 48deg, transparent 64deg, transparent 138deg, var(--fx-c) 154deg, transparent 174deg, transparent 245deg, var(--fx-b) 264deg, transparent 286deg);
+}
+
+.premium-time .premium-shell {
+  background:
+    repeating-conic-gradient(from 0deg, rgba(255,255,255,0.78) 0 2deg, transparent 3deg 15deg),
+    radial-gradient(circle, transparent 0 47%, color-mix(in srgb, var(--fx-a) 74%, transparent) 49% 51%, transparent 53% 61%, var(--fx-b) 63% 65%, transparent 67%);
+  -webkit-mask: radial-gradient(circle, transparent 0 39%, #000 43% 68%, transparent 76%);
+          mask: radial-gradient(circle, transparent 0 39%, #000 43% 68%, transparent 76%);
+}
+
+.premium-time .premium-intrusion {
+  background:
+    repeating-conic-gradient(from 0deg, transparent 0 14deg, color-mix(in srgb, var(--fx-a) 54%, transparent) 15deg 17deg, transparent 18deg 30deg),
+    linear-gradient(90deg, transparent 0 48%, rgba(255,255,255,0.86) 49% 52%, transparent 53%),
+    linear-gradient(18deg, transparent 0 48%, var(--fx-b) 49% 52%, transparent 53%),
+    radial-gradient(circle, transparent 0 14%, color-mix(in srgb, var(--fx-c) 48%, transparent) 16% 18%, transparent 20% 58%, var(--fx-a) 60% 62%, transparent 64%);
+}
+
+.premium-prism .premium-shell {
+  inset: -8px -14px;
+  background:
+    linear-gradient(104deg, transparent 0 18%, rgba(255,84,216,0.75) 30%, rgba(255,226,82,0.7) 43%, rgba(82,230,255,0.76) 56%, transparent 70%),
+    linear-gradient(74deg, transparent 0 46%, rgba(255,255,255,0.84) 50%, transparent 55%);
+  -webkit-mask: linear-gradient(104deg, transparent 0 15%, #000 28% 68%, transparent 82%);
+          mask: linear-gradient(104deg, transparent 0 15%, #000 28% 68%, transparent 82%);
+  filter: saturate(1.5) drop-shadow(0 0 11px #52e6ff);
+  animation: prism-sweep 3.1s ease-in-out infinite;
+}
+
+.premium-prism .premium-rim-a,
+.premium-prism .premium-rim-b,
+.premium-prism .premium-wisp {
+  -webkit-mask: linear-gradient(104deg, transparent 0 20%, #000 32% 62%, transparent 76%);
+          mask: linear-gradient(104deg, transparent 0 20%, #000 32% 62%, transparent 76%);
+}
+
+.premium-magic-mists .premium-shell {
+  inset: -13px;
+  background:
+    radial-gradient(ellipse at 18% 62%, color-mix(in srgb, var(--fx-c) 68%, transparent), transparent 27%),
+    radial-gradient(ellipse at 84% 32%, color-mix(in srgb, var(--fx-a) 72%, transparent), transparent 29%),
+    radial-gradient(ellipse at 50% 5%, rgba(255,255,255,0.72), transparent 17%),
+    conic-gradient(from 226deg, transparent 0 18deg, var(--fx-b) 36deg, transparent 82deg, transparent 142deg, var(--fx-a) 170deg, transparent 216deg, transparent 270deg, var(--fx-c) 300deg, transparent 342deg);
+  -webkit-mask:
+    radial-gradient(ellipse at 50% 50%, transparent 0 48%, #000 56% 73%, transparent 84%),
+    radial-gradient(ellipse at 18% 62%, #000 0 28%, transparent 45%),
+    radial-gradient(ellipse at 84% 32%, #000 0 24%, transparent 42%);
+          mask:
+    radial-gradient(ellipse at 50% 50%, transparent 0 48%, #000 56% 73%, transparent 84%),
+    radial-gradient(ellipse at 18% 62%, #000 0 28%, transparent 45%),
+    radial-gradient(ellipse at 84% 32%, #000 0 24%, transparent 42%);
+  filter: blur(0.5px) saturate(1.26) drop-shadow(0 0 12px var(--fx-b));
+  animation: mist-bloom 6.4s ease-in-out infinite;
+}
+
+.premium-magic-mists .premium-rim-a,
+.premium-magic-mists .premium-rim-b,
+.premium-magic-mists .premium-wisp,
+.premium-magic-mists .premium-motif-mist {
+  -webkit-mask:
+    radial-gradient(ellipse at 50% 50%, transparent 0 47%, #000 54% 72%, transparent 86%),
+    radial-gradient(ellipse at 17% 66%, #000 0 26%, transparent 43%),
+    radial-gradient(ellipse at 82% 30%, #000 0 26%, transparent 43%);
+          mask:
+    radial-gradient(ellipse at 50% 50%, transparent 0 47%, #000 54% 72%, transparent 86%),
+    radial-gradient(ellipse at 17% 66%, #000 0 26%, transparent 43%),
+    radial-gradient(ellipse at 82% 30%, #000 0 26%, transparent 43%);
+}
+
+.premium-magic-mists .premium-intrusion {
+  background:
+    radial-gradient(ellipse at 25% 48%, color-mix(in srgb, var(--fx-b) 58%, transparent), transparent 24%),
+    radial-gradient(ellipse at 73% 45%, color-mix(in srgb, var(--fx-a) 56%, transparent), transparent 26%),
+    radial-gradient(ellipse at 48% 68%, color-mix(in srgb, var(--fx-c) 44%, transparent), transparent 25%),
+    conic-gradient(from 38deg, transparent 0 50deg, color-mix(in srgb, var(--fx-c) 34%, transparent) 82deg, transparent 126deg, transparent 184deg, color-mix(in srgb, var(--fx-b) 34%, transparent) 216deg, transparent 260deg);
+}
+
 @keyframes pristine-spin { to { transform: rotate(360deg); } }
 @keyframes pristine-breathe {
   0%,100% { opacity: 0.82; filter: brightness(1) saturate(1.12); }
@@ -4963,6 +5262,47 @@ html, body {
 @keyframes mythical-mist-intrude {
   0%, 58%, 100% { opacity: 0; transform: rotate(0deg) scale(0.92); }
   66%, 82% { opacity: 0.46; transform: rotate(-18deg) scale(1.1); }
+}
+@keyframes blade-sheath {
+  0%,100% { opacity: 0.62; transform: translate(-1px, 1px) rotate(0deg) scale(0.98); }
+  48% { opacity: 1; transform: translate(2px, -2px) rotate(3deg) scale(1.05); }
+}
+@keyframes storm-charge {
+  0%,100% { opacity: 0.48; transform: scale(0.96) rotate(-2deg); filter: drop-shadow(0 0 6px var(--fx-a)); }
+  45% { opacity: 0.72; transform: scale(1.02) rotate(1deg); filter: drop-shadow(0 0 10px var(--fx-a)); }
+  64% { opacity: 1; transform: scale(1.08) rotate(-1deg); filter: drop-shadow(0 0 18px rgba(255,255,255,0.78)); }
+}
+@keyframes storm-static {
+  0%,100% { opacity: 0.32; transform: translate(0, 0); }
+  35% { opacity: 0.82; transform: translate(1px, -1px); }
+  66% { opacity: 0.48; transform: translate(-1px, 1px); }
+}
+@keyframes wing-pulse {
+  0%,100% { opacity: 0.62; transform: translateY(0) scaleX(0.98); }
+  50% { opacity: 1; transform: translateY(-2px) scaleX(1.08); }
+}
+@keyframes flame-tongues {
+  0%,100% { opacity: 0.68; transform: translateY(2px) scaleY(0.94); filter: drop-shadow(0 0 8px var(--fx-b)); }
+  45% { opacity: 1; transform: translateY(-3px) scaleY(1.08); filter: drop-shadow(0 0 14px var(--fx-a)); }
+}
+@keyframes gravity-orbit {
+  0% { opacity: 0.8; transform: rotate(0deg) scaleX(1.08); }
+  50% { opacity: 1; transform: rotate(180deg) scaleX(1.16); }
+  100% { opacity: 0.8; transform: rotate(360deg) scaleX(1.08); }
+}
+@keyframes singularity-vortex {
+  0% { opacity: 0.82; transform: rotate(0deg) scale(0.98); }
+  50% { opacity: 1; transform: rotate(180deg) scale(1.05); }
+  100% { opacity: 0.82; transform: rotate(360deg) scale(0.98); }
+}
+@keyframes prism-sweep {
+  0%,100% { opacity: 0.62; transform: translateX(-3px) rotate(-4deg); }
+  48% { opacity: 1; transform: translateX(4px) rotate(3deg); }
+}
+@keyframes mist-bloom {
+  0%,100% { opacity: 0.62; transform: rotate(0deg) scale(0.96); }
+  38% { opacity: 0.92; transform: rotate(-10deg) scale(1.05); }
+  70% { opacity: 0.78; transform: rotate(8deg) scale(1.02); }
 }
 
 /* ===== MESSAGE TEXT COLORS ===== */
