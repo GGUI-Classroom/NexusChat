@@ -180,6 +180,9 @@ async function initDb() {
     unlocked_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
     UNIQUE(user_id, decoration_id)
   )`, 'user_decorations');
+  // Pack drops are inventory entries, so a user may hold duplicate decorations.
+  await runSql(`ALTER TABLE user_decorations DROP CONSTRAINT IF EXISTS user_decorations_user_id_decoration_id_key`, 'drop_deco_unique');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_user_decorations_user_deco ON user_decorations(user_id, decoration_id)`, 'idx_user_decorations_user_deco');
 
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_decoration TEXT DEFAULT NULL`, 'alter_users_decoration');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_color TEXT DEFAULT NULL`, 'alter_users_color');

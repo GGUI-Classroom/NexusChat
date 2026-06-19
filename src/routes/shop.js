@@ -10,6 +10,13 @@ const SECRET_CATEGORY = '???SECRET???';
 const SECRET_PASSPHRASE = (process.env.SECRET_DECO_PASSPHRASE || 'void').trim().toLowerCase();
 const HEHESHUIS_SECRET_ID = 'heheshuis_aura';
 const HEHESHUIS_PASSPHRASE = 'lol';
+const DECORATION_SELL_PRICES = {
+  common: 300,
+  rare: 650,
+  epic: 1200,
+  legendary: 1800,
+  mythical: 2500
+};
 
 async function syncAchievementFields(userId, fields) {
   try {
@@ -307,7 +314,10 @@ const SECRET_DECORATION_IDS = new Set(
   DECORATIONS.filter(d => d.hidden && d.category === SECRET_CATEGORY).map(d => d.id)
 );
 
-function toClientDecoration(d, owned) {
+function toClientDecoration(d, quantityOrOwned = 0) {
+  const quantity = typeof quantityOrOwned === 'boolean'
+    ? (quantityOrOwned ? 1 : 0)
+    : Math.max(0, Number(quantityOrOwned) || 0);
   return {
     id: d.id,
     nexalPrice: d.nexalPrice,
@@ -318,18 +328,20 @@ function toClientDecoration(d, owned) {
     preview: d.preview,
     category: d.category || null,
     packOnly: !!d.packOnly,
-    owned: !!owned
+    owned: quantity > 0,
+    quantity,
+    sellPrice: d.packOnly ? (DECORATION_SELL_PRICES[d.rarity] || 0) : null
   };
 }
 
-function toClientPack(pack, ownedIds) {
+function toClientPack(pack, ownedQuantities) {
   const totalChance = pack.items.reduce((sum, item) => sum + item.chance, 0);
   const decorations = pack.items
     .map(item => {
       const d = DECORATIONS.find(deco => deco.id === item.decorationId);
       if (!d) return null;
       return {
-        ...toClientDecoration(d, ownedIds.has(d.id)),
+        ...toClientDecoration(d, ownedQuantities.get(d.id) || 0),
         chance: Math.round((item.chance / totalChance) * 1000) / 10
       };
     })
@@ -345,7 +357,7 @@ function toClientPack(pack, ownedIds) {
     description: pack.description,
     ownedCount,
     totalCount: decorations.length,
-    owned: ownedCount === decorations.length,
+    owned: false,
     decorations
   };
 }
@@ -358,13 +370,13 @@ function getPackDecorationIds(pack) {
     .map(d => d.id);
 }
 
-function rollPackItem(pack, ownedIds) {
+function rollPackItem(pack) {
   const candidates = pack.items
     .map(item => ({
       ...item,
       decoration: DECORATIONS.find(d => d.id === item.decorationId)
     }))
-    .filter(item => item.decoration && !ownedIds.has(item.decorationId));
+    .filter(item => item.decoration);
   const total = candidates.reduce((sum, item) => sum + item.chance, 0);
   if (!total) return null;
 
@@ -407,20 +419,20 @@ function getCodeMap() {
 // Get all decorations + which ones the user owns
 router.get('/', async (req, res) => {
   const owned = await pool.query(
-    'SELECT decoration_id FROM user_decorations WHERE user_id=$1',
+    'SELECT decoration_id, COUNT(*)::int AS quantity FROM user_decorations WHERE user_id=$1 GROUP BY decoration_id',
     [req.session.userId]
   );
   const user = await pool.query(
     'SELECT active_decoration FROM users WHERE id=$1',
     [req.session.userId]
   );
-  const ownedIds = new Set(owned.rows.map(r => r.decoration_id));
+  const ownedQuantities = new Map(owned.rows.map(r => [r.decoration_id, r.quantity]));
   const nexalsRes = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
   res.json({
     decorations: DECORATIONS
-      .filter(d => !d.hidden || (d.hidden && ownedIds.has(d.id)))
-      .map(d => toClientDecoration(d, ownedIds.has(d.id))),
-    packs: DECORATION_PACKS.map(pack => toClientPack(pack, ownedIds)),
+      .filter(d => !d.hidden || (d.hidden && ownedQuantities.has(d.id)))
+      .map(d => toClientDecoration(d, ownedQuantities.get(d.id) || 0)),
+    packs: DECORATION_PACKS.map(pack => toClientPack(pack, ownedQuantities)),
     active: user.rows[0]?.active_decoration || null,
     nexals: nexalsRes.rows[0]?.nexals || 0
   });
@@ -578,26 +590,19 @@ router.post('/packs/buy', async (req, res) => {
   const pack = DECORATION_PACKS.find(p => p.id === packId);
   if (!pack) return res.status(404).json({ error: 'Pack not found' });
 
-  const user = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
-  const balance = user.rows[0]?.nexals || 0;
-  if (balance < pack.price) {
-    return res.status(400).json({ error: `Not enough Nexals (need ${pack.price.toLocaleString()}, have ${balance.toLocaleString()})` });
-  }
-
-  const owned = await pool.query(
-    'SELECT decoration_id FROM user_decorations WHERE user_id=$1 AND decoration_id = ANY($2)',
-    [req.session.userId, getPackDecorationIds(pack)]
-  );
-  const ownedIds = new Set(owned.rows.map(r => r.decoration_id));
-  const rolledDeco = rollPackItem(pack, ownedIds);
-  if (!rolledDeco) return res.status(409).json({ error: 'You already own every decoration in this pack' });
-
+  const rolledDeco = rollPackItem(pack);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const user = await client.query('SELECT nexals FROM users WHERE id=$1 FOR UPDATE', [req.session.userId]);
+    const balance = user.rows[0]?.nexals || 0;
+    if (balance < pack.price) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Not enough Nexals (need ${pack.price.toLocaleString()}, have ${balance.toLocaleString()})` });
+    }
     await client.query('UPDATE users SET nexals = nexals - $1 WHERE id=$2', [pack.price, req.session.userId]);
     await client.query(
-      'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+      'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3)',
       [uuidv4(), req.session.userId, rolledDeco.id]
     );
     await client.query('COMMIT');
@@ -610,14 +615,58 @@ router.post('/packs/buy', async (req, res) => {
   }
 
   const updated = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
-  const refreshedOwned = new Set([...ownedIds, rolledDeco.id]);
   await syncAchievementFields(req.session.userId, ['decos_owned']);
   res.json({
     success: true,
     nexals: updated.rows[0].nexals,
-    pack: toClientPack(pack, refreshedOwned),
     granted: [toClientDecoration(rolledDeco, true)]
   });
+});
+
+router.post('/sell', async (req, res) => {
+  const decorationId = String(req.body.decorationId || '').trim();
+  const deco = DECORATIONS.find(d => d.id === decorationId);
+  if (!deco || !deco.packOnly) return res.status(400).json({ error: 'Only pack decorations can be sold' });
+  const sellPrice = DECORATION_SELL_PRICES[deco.rarity];
+  if (!sellPrice) return res.status(400).json({ error: 'This decoration cannot be sold' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const removed = await client.query(`
+      WITH one_copy AS (
+        SELECT id FROM user_decorations
+        WHERE user_id=$1 AND decoration_id=$2
+        ORDER BY unlocked_at DESC, id DESC
+        LIMIT 1
+      )
+      DELETE FROM user_decorations WHERE id IN (SELECT id FROM one_copy)
+      RETURNING id
+    `, [req.session.userId, decorationId]);
+    if (!removed.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'You do not own this decoration' });
+    }
+    const remaining = await client.query(
+      'SELECT COUNT(*)::int AS quantity FROM user_decorations WHERE user_id=$1 AND decoration_id=$2',
+      [req.session.userId, decorationId]
+    );
+    if (!remaining.rows[0].quantity) {
+      await client.query('UPDATE users SET active_decoration=NULL WHERE id=$1 AND active_decoration=$2', [req.session.userId, decorationId]);
+    }
+    const updated = await client.query(
+      'UPDATE users SET nexals=nexals+$1 WHERE id=$2 RETURNING nexals',
+      [sellPrice, req.session.userId]
+    );
+    await client.query('COMMIT');
+    res.json({ success: true, nexals: updated.rows[0].nexals, sellPrice, quantity: remaining.rows[0].quantity });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Decoration sale failed:', err.message);
+    res.status(500).json({ error: 'Decoration sale failed' });
+  } finally {
+    client.release();
+  }
 });
 
 // Remove (unclaim) a decoration

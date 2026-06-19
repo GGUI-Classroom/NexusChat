@@ -5316,7 +5316,7 @@ html, body {
 .premium-singularity .premium-shell,
 .premium-prism .premium-shell,
 .premium-magic-mists .premium-shell {
-  animation: mythical-cover-window 6s ease-in-out infinite !important;
+  animation: mythical-cover-window 5s ease-in-out infinite !important;
 }
 
 .premium-blade .premium-strike,
@@ -5325,13 +5325,13 @@ html, body {
 .premium-gravity .premium-intrusion,
 .premium-singularity .premium-intrusion,
 .premium-magic-mists .premium-intrusion {
-  animation-duration: 6s;
+  animation-duration: 5s;
 }
 
 @keyframes mythical-cover-window {
-  0%, 4% { opacity: 0.16; }
-  10%, 25% { opacity: 0.92; }
-  32%, 100% { opacity: 0.14; }
+  0%, 2% { opacity: 0.14; }
+  8%, 40% { opacity: 0.88; }
+  46%, 100% { opacity: 0.14; }
 }
 
 /* Pack thumbnails are much smaller than real avatars, so keep premium FX contained. */

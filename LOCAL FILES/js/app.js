@@ -4650,11 +4650,13 @@
           <span class="shop-rarity ${rarityClass}">${d.rarity}</span>
           <div class="shop-card-name">${esc(d.name)}</div>
           <div class="shop-card-desc">${esc(d.description)}</div>
+          ${isOwned && d.packOnly ? `<div class="shop-card-desc">Owned: ${d.quantity || 1} | Sell: ${(d.sellPrice || 0).toLocaleString()} Nexals</div>` : ''}
           ${(!isOwned && priceLabel) ? `<div class="shop-card-price">${priceLabel}</div>` : ''}
           <button class="shop-card-btn ${btnClass}" onclick="shopAction('${d.id}','${isEquipped ? 'unequip' : isOwned ? 'equip' : canBuy ? 'buy' : 'locked'}')">
             ${btnText}
           </button>
-          ${isOwned ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="unclaimDeco('${d.id}','${esc(d.name)}')">Remove</button>` : ''}
+          ${isOwned && d.packOnly ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="sellDecoration('${d.id}','${esc(d.name)}',${d.sellPrice || 0})">Sell One</button>` : ''}
+          ${isOwned && !d.packOnly ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="unclaimDeco('${d.id}','${esc(d.name)}')">Remove</button>` : ''}
         </div>`;
     }).join('');
 
@@ -4707,10 +4709,10 @@
       </div>
       <div class="shop-pack-grid">
         ${(packs || []).map(pack => {
-          const canBuy = !pack.owned && myNexals >= pack.price;
+          const canBuy = myNexals >= pack.price;
           const rarityClass = 'rarity-' + String(pack.rarity || 'common').toLowerCase().replace(/[^a-z0-9_-]/g, '');
-          const btnClass = pack.owned ? 'locked' : canBuy ? 'buy' : 'locked';
-          const btnText = pack.owned ? 'Complete' : canBuy ? 'Open Pack' : 'Need ' + pack.price.toLocaleString() + ' Nexals';
+          const btnClass = canBuy ? 'buy' : 'locked';
+          const btnText = canBuy ? 'Open Pack' : 'Need ' + pack.price.toLocaleString() + ' Nexals';
           return `
             <div class="shop-card shop-pack-card ${pack.owned ? 'owned' : ''}" id="packcard-${pack.id}">
               <div class="shop-pack-topline">
@@ -4722,13 +4724,13 @@
               <div class="shop-card-desc">${esc(pack.description)}</div>
               <div class="shop-pack-previews">
                 ${(pack.decorations || []).map(d => `
-                  <div class="avatar-wrap shop-pack-mini ${d.owned ? 'owned' : ''}" data-deco-id="${d.id}" title="${esc(d.name)} - ${d.chance}%">
+                  <div class="avatar-wrap shop-pack-mini ${d.owned ? 'owned' : ''}" data-deco-id="${d.id}" title="${esc(d.name)} - ${d.chance}%${d.quantity ? ' - Owned: ' + d.quantity : ''}">
                     <div class="avatar">N</div>
                     <span class="shop-pack-odds">${d.chance}%</span>
                   </div>
                 `).join('')}
               </div>
-              <div class="shop-pack-owned">${pack.ownedCount}/${pack.totalCount} owned</div>
+              <div class="shop-pack-owned">${pack.ownedCount}/${pack.totalCount} discovered | duplicates can drop</div>
               <button class="shop-card-btn ${btnClass}" onclick="buyDecorationPack('${pack.id}','${canBuy ? 'buy' : 'locked'}')">${btnText}</button>
             </div>`;
         }).join('')}
@@ -4742,8 +4744,7 @@
   window.buyDecorationPack = async function(packId, action) {
     const pack = shopData && (shopData.packs || []).find(p => p.id === packId);
     if (action === 'locked') {
-      if (pack && pack.owned) toast('You already own every decoration in this pack.', 'info');
-      else if (pack) toast('Not enough Nexals! Need ' + pack.price.toLocaleString(), 'error');
+      if (pack) toast('Not enough Nexals! Need ' + pack.price.toLocaleString(), 'error');
       return;
     }
     if (!pack) return;
@@ -4792,6 +4793,20 @@
       renderShop(shopData.decorations, equipId);
     }
     toast(action === 'equip' ? 'Decoration equipped! ✨' : 'Decoration removed', 'success');
+  };
+
+  window.sellDecoration = async function(decoId, name, sellPrice) {
+    if (!confirm('Sell one "' + name + '" for ' + sellPrice.toLocaleString() + ' Nexals?')) return;
+    const r = await api('POST', '/api/shop/sell', { decorationId: decoId });
+    if (r.error) return toast(r.error, 'error');
+    shopData.nexals = r.nexals;
+    updateNexalDisplay(r.nexals);
+    if (currentUser.activeDecoration === decoId && r.quantity === 0) {
+      currentUser.activeDecoration = null;
+      updateSelfCard();
+    }
+    toast('Sold one ' + name + ' for ' + r.sellPrice.toLocaleString() + ' Nexals', 'success');
+    await loadShop();
   };
 
   async function loadRingtones() {
