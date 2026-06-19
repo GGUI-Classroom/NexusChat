@@ -3299,6 +3299,12 @@ html, body {
   margin-bottom: 4px; text-align: center;
 }
 
+.user-card.pro-aurora { background: linear-gradient(110deg, rgba(62,210,255,0.2), rgba(124,84,255,0.2), rgba(48,234,170,0.16)); border-color: rgba(96,224,255,0.5); }
+.user-card.pro-ember { background: linear-gradient(110deg, rgba(255,120,54,0.24), rgba(255,62,62,0.18), rgba(255,212,86,0.14)); border-color: rgba(255,160,72,0.5); }
+.user-card.pro-glacier { background: linear-gradient(110deg, rgba(222,249,255,0.22), rgba(94,178,255,0.17), rgba(168,132,255,0.15)); border-color: rgba(190,238,255,0.52); }
+.role-gradient-text { background: linear-gradient(90deg, var(--role-gradient-start), var(--role-gradient-end), var(--role-gradient-start)); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: role-gradient-shift 3s linear infinite; }
+@keyframes role-gradient-shift { to { background-position: 200% 0; } }
+
 .shop-pack-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));

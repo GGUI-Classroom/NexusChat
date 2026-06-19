@@ -41,7 +41,28 @@ function fmtServer(s) {
   return {
     id: s.id, name: s.name, ownerId: s.owner_id,
     iconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
-    inviteCode: s.invite_code, createdAt: s.created_at
+    inviteCode: s.invite_code, createdAt: s.created_at,
+    tag: s.server_tag || null
+  };
+}
+
+async function activeBoostCount(serverId) {
+  const now = Math.floor(Date.now() / 1000);
+  const result = await pool.query('SELECT COUNT(*)::int AS count FROM server_boosts WHERE server_id=$1 AND expires_at>$2', [serverId, now]);
+  return result.rows[0]?.count || 0;
+}
+
+function roleForClient(role, gradientsEnabled) {
+  return {
+    id: role.id,
+    name: role.name,
+    color: role.color,
+    isAdmin: role.is_admin,
+    position: role.position,
+    canDeleteMessages: !!role.can_delete_messages,
+    gradientStart: gradientsEnabled ? role.gradient_start : null,
+    gradientEnd: gradientsEnabled ? role.gradient_end : null,
+    gradientAnimated: gradientsEnabled && !!role.gradient_animated
   };
 }
 
@@ -169,7 +190,7 @@ router.get('/:id', async (req, res) => {
   const { id } = req.params;
   const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
-  const [sRes, chRes, memRes, roleRes] = await Promise.all([
+  const [sRes, chRes, memRes, roleRes, boostRes] = await Promise.all([
     pool.query('SELECT * FROM servers WHERE id=$1', [id]),
     pool.query(`
       SELECT c.*,
@@ -198,12 +219,13 @@ router.get('/:id', async (req, res) => {
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
        WHERE sm.server_id=$1 ORDER BY u.display_name ASC`, [id]
     ),
-    pool.query('SELECT * FROM server_roles WHERE server_id=$1 ORDER BY position ASC', [id])
+    pool.query('SELECT * FROM server_roles WHERE server_id=$1 ORDER BY position ASC', [id]),
+    pool.query('SELECT COUNT(*)::int AS count FROM server_boosts WHERE server_id=$1 AND expires_at>$2', [id, Math.floor(Date.now() / 1000)])
   ]);
   if (!sRes.rows.length) return res.status(404).json({ error: 'Not found' });
   const blockedWordsRes = await pool.query('SELECT word FROM server_blocked_words WHERE server_id=$1 ORDER BY word ASC', [id]);
   res.json({
-    server: fmtServer(sRes.rows[0]),
+    server: { ...fmtServer(sRes.rows[0]), boostCount: boostRes.rows[0].count, tag: boostRes.rows[0].count >= 2 ? sRes.rows[0].server_tag : null },
     botConfig: {
       name: 'NexusGuard',
       prefix: sRes.rows[0].bot_prefix || '/',
@@ -235,7 +257,7 @@ router.get('/:id', async (req, res) => {
       activeColor: m.active_color || null,
       activeFont: m.active_font || null
     })),
-    roles: roleRes.rows.map(r => ({ id: r.id, name: r.name, color: r.color, isAdmin: r.is_admin, position: r.position, canDeleteMessages: !!r.can_delete_messages }))
+    roles: roleRes.rows.map(r => roleForClient(r, boostRes.rows[0].count >= 2))
   });
 });
 
@@ -369,8 +391,11 @@ router.get('/:id/roles', async (req, res) => {
   const { id } = req.params;
   const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
-  const r = await pool.query('SELECT * FROM server_roles WHERE server_id=$1 ORDER BY position ASC', [id]);
-  res.json({ roles: r.rows.map(r => ({ id: r.id, name: r.name, color: r.color, isAdmin: r.is_admin, position: r.position, canDeleteMessages: !!r.can_delete_messages })) });
+  const [r, boosts] = await Promise.all([
+    pool.query('SELECT * FROM server_roles WHERE server_id=$1 ORDER BY position ASC', [id]),
+    activeBoostCount(id)
+  ]);
+  res.json({ roles: r.rows.map(role => roleForClient(role, boosts >= 2)) });
 });
 
 // Create role
@@ -393,22 +418,34 @@ router.post('/:id/roles', async (req, res) => {
 router.patch('/:id/roles/:roleId', async (req, res) => {
   const { id, roleId } = req.params;
   if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
-  const { name, color, isAdmin: roleIsAdmin } = req.body;
+  const { name, color, isAdmin: roleIsAdmin, gradientStart, gradientEnd, gradientAnimated } = req.body;
   const { canDeleteMessages } = req.body;
+  const wantsGradient = gradientStart || gradientEnd || gradientAnimated != null;
+  if (wantsGradient) {
+    if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+    if (await activeBoostCount(id) < 2) return res.status(403).json({ error: 'Two active boosts are required for gradient roles' });
+    if (!/^#[0-9a-f]{6}$/i.test(String(gradientStart || '')) || !/^#[0-9a-f]{6}$/i.test(String(gradientEnd || ''))) {
+      return res.status(400).json({ error: 'Choose two valid gradient colors' });
+    }
+  }
   await pool.query(
     `UPDATE server_roles SET
       name=COALESCE($1,name),
       color=COALESCE($2,color),
       is_admin=COALESCE($3,is_admin),
-      can_delete_messages=COALESCE($4,can_delete_messages)
-     WHERE id=$5 AND server_id=$6`,
+      can_delete_messages=COALESCE($4,can_delete_messages),
+      gradient_start=CASE WHEN $5 THEN $6 ELSE gradient_start END,
+      gradient_end=CASE WHEN $5 THEN $7 ELSE gradient_end END,
+      gradient_animated=CASE WHEN $5 THEN $8 ELSE gradient_animated END
+     WHERE id=$9 AND server_id=$10`,
     [name || null, color || null,
      roleIsAdmin != null ? !!roleIsAdmin : null,
      canDeleteMessages != null ? !!canDeleteMessages : null,
+     wantsGradient, gradientStart || null, gradientEnd || null, !!gradientAnimated,
      roleId, id]
   );
   const r = await pool.query('SELECT * FROM server_roles WHERE id=$1', [roleId]);
-  res.json({ role: { id: r.rows[0].id, name: r.rows[0].name, color: r.rows[0].color, isAdmin: r.rows[0].is_admin, canDeleteMessages: !!r.rows[0].can_delete_messages } });
+  res.json({ role: roleForClient(r.rows[0], await activeBoostCount(id) >= 2) });
 });
 
 // Delete role

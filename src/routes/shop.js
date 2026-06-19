@@ -673,6 +673,49 @@ router.post('/sell', async (req, res) => {
   }
 });
 
+router.get('/stats', async (req, res) => {
+  const owned = await pool.query(
+    'SELECT decoration_id, COUNT(*)::int AS quantity FROM user_decorations WHERE user_id=$1 GROUP BY decoration_id',
+    [req.session.userId]
+  );
+  const items = owned.rows.map(row => {
+    const decoration = DECORATIONS.find(d => d.id === row.decoration_id);
+    const sellPrice = decoration?.packOnly ? (DECORATION_SELL_PRICES[decoration.rarity] || 0) : 0;
+    return decoration ? { ...toClientDecoration(decoration, row.quantity), totalValue: sellPrice * row.quantity } : null;
+  }).filter(Boolean);
+  const sellableValue = items.reduce((total, item) => total + item.totalValue, 0);
+  const user = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
+  res.json({ nexals: user.rows[0]?.nexals || 0, items, sellableValue, decorationCount: items.reduce((total, item) => total + item.quantity, 0) });
+});
+
+router.post('/sell-all', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const owned = await client.query(
+      'SELECT decoration_id, COUNT(*)::int AS quantity FROM user_decorations WHERE user_id=$1 GROUP BY decoration_id',
+      [req.session.userId]
+    );
+    let value = 0;
+    const sellIds = [];
+    for (const row of owned.rows) {
+      const decoration = DECORATIONS.find(d => d.id === row.decoration_id);
+      if (!decoration?.packOnly) continue;
+      value += (DECORATION_SELL_PRICES[decoration.rarity] || 0) * row.quantity;
+      sellIds.push(decoration.id);
+    }
+    if (!sellIds.length) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'No pack decorations to sell' }); }
+    await client.query('UPDATE users SET active_decoration=NULL WHERE id=$1 AND active_decoration = ANY($2)', [req.session.userId, sellIds]);
+    await client.query('DELETE FROM user_decorations WHERE user_id=$1 AND decoration_id = ANY($2)', [req.session.userId, sellIds]);
+    const updated = await client.query('UPDATE users SET nexals=nexals+$1 WHERE id=$2 RETURNING nexals', [value, req.session.userId]);
+    await client.query('COMMIT');
+    res.json({ success: true, soldValue: value, nexals: updated.rows[0].nexals });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Could not sell your collection' });
+  } finally { client.release(); }
+});
+
 // Remove (unclaim) a decoration
 router.delete('/unclaim/:decorationId', async (req, res) => {
   const { decorationId } = req.params;

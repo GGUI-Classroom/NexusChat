@@ -191,6 +191,8 @@ async function initDb() {
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_decoration TEXT DEFAULT NULL`, 'alter_users_decoration');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_color TEXT DEFAULT NULL`, 'alter_users_color');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_font TEXT DEFAULT NULL`, 'alter_users_font');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at BIGINT DEFAULT 0`, 'alter_users_pro_expires');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_card_style TEXT DEFAULT NULL`, 'alter_users_profile_card_style');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_ringtone TEXT DEFAULT NULL`, 'alter_users_ringtone');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS mod_log_channel_id TEXT DEFAULT NULL`, 'alter_servers_mod_log_channel');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_name TEXT DEFAULT 'NexusBot'`, 'alter_servers_bot_name');
@@ -199,6 +201,19 @@ async function initDb() {
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_auto_mod BOOLEAN DEFAULT TRUE`, 'alter_servers_bot_automod');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_block_links BOOLEAN DEFAULT FALSE`, 'alter_servers_bot_block_links');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_caps_threshold INTEGER DEFAULT 90`, 'alter_servers_bot_caps_threshold');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS server_tag TEXT DEFAULT NULL`, 'alter_servers_server_tag');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS gradient_start TEXT DEFAULT NULL`, 'alter_roles_gradient_start');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS gradient_end TEXT DEFAULT NULL`, 'alter_roles_gradient_end');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS gradient_animated BOOLEAN DEFAULT FALSE`, 'alter_roles_gradient_animated');
+  await runSql(`CREATE TABLE IF NOT EXISTS server_boosts (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at BIGINT NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'server_boosts');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_boosts_active ON server_boosts(server_id, expires_at)`, 'idx_server_boosts_active');
+  await runSql(`UPDATE users SET active_color=NULL, active_font=NULL WHERE active_color IS NOT NULL OR active_font IS NOT NULL`, 'clear_retired_color_font');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_spam_window INTEGER DEFAULT 6`, 'alter_servers_bot_spam_window');
   await runSql(`CREATE TABLE IF NOT EXISTS user_fonts (
     id TEXT PRIMARY KEY,

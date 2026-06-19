@@ -1644,7 +1644,7 @@
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name" style="${roleStyle}">${esc(m.displayName)}</span>
+          <span class="member-name" style="${roleStyle}">${esc(m.displayName)}${server && server.tag ? ` <span class="member-role" style="color:var(--text-secondary)">[${esc(server.tag)}]</span>` : ''}</span>
           ${isOwner ? '<span class="member-role" style="color:var(--yellow)">Owner</span>' : (m.roleName ? `<span class="member-role" style="color:${m.roleColor||'var(--accent)'}">${esc(m.roleName)}</span>` : '')}
           ${canManage ? `<div class="member-actions">
             <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
@@ -2349,7 +2349,7 @@
       ? roles.map(r => `
           <div class="role-row" id="role-row-${r.id}">
             <div class="role-dot" style="background:${r.color}"></div>
-            <span class="role-name" style="color:${r.color}">${esc(r.name)}</span>
+            <span class="role-name${r.gradientStart ? ' role-gradient-text' : ''}" style="${r.gradientStart ? `--role-gradient-start:${r.gradientStart};--role-gradient-end:${r.gradientEnd}` : `color:${r.color}`}">${esc(r.name)}</span>
             <span class="role-badge">${r.isAdmin ? 'Admin' : 'Member'}</span>
             ${r.canDeleteMessages ? '<span class="role-badge" style="background:rgba(240,84,84,0.15);color:var(--red)">Can Delete</span>' : ''}
             <div class="role-actions">
@@ -2366,9 +2366,15 @@
     const color = prompt('Color (hex, e.g. #ff5555):', currentColor);
     const isAdminChoice = confirm('Should this role have admin permissions?');
     const canDeleteChoice = confirm('Should this role be able to delete messages?');
-    const r = await api('PATCH', `/api/servers/${activeServerId}/roles/${roleId}`, {
+    const payload = {
       name: name.trim(), color: color || currentColor, isAdmin: isAdminChoice, canDeleteMessages: canDeleteChoice
-    });
+    };
+    if (confirm('Use an animated gradient for this role? This needs two active server boosts.')) {
+      payload.gradientStart = prompt('Gradient start color (hex):', '#62e6ff');
+      payload.gradientEnd = prompt('Gradient end color (hex):', '#b06cff');
+      payload.gradientAnimated = true;
+    }
+    const r = await api('PATCH', `/api/servers/${activeServerId}/roles/${roleId}`, payload);
     if (r.error) return toast(r.error, 'error');
     const s = await api('GET', `/api/servers/${activeServerId}`);
     activeServerData = s;
@@ -2534,7 +2540,8 @@
     if (el) el.classList.add('active');
     if (view === 'shop') loadShop();
     if (view === 'achievements') loadAchievements();
-    if (view === 'colors') loadColors();
+    if (view === 'stats') loadCollectionStats();
+    if (view === 'pro') loadPro();
   }
 
   // Rail selection: 'dms' or a server id
@@ -4985,6 +4992,35 @@
   };
 
   // ---- Colors Shop ----
+  async function loadCollectionStats() {
+    const data = await api('GET', '/api/shop/stats');
+    if (data.error) return toast(data.error, 'error');
+    const count = $('stats-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
+    $('stats-content').innerHTML = `<div class="shop-card" style="max-width:560px"><div class="shop-card-name">${data.decorationCount.toLocaleString()} decorations</div><div class="shop-card-desc">Pack collection resale value</div><div class="shop-card-price">${data.sellableValue.toLocaleString()} Nexals</div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All Pack Decorations</button></div>`;
+  }
+
+  window.sellAllDecorations = async function() {
+    if (!confirm('Sell every pack decoration in your collection? This cannot be undone.')) return;
+    const result = await api('POST', '/api/shop/sell-all');
+    if (result.error) return toast(result.error, 'error');
+    updateNexalDisplay(result.nexals);
+    toast('Sold collection for ' + result.soldValue.toLocaleString() + ' Nexals', 'success');
+    await loadCollectionStats();
+  };
+
+  async function loadPro() {
+    const data = await api('GET', '/api/perks');
+    if (data.error) return toast(data.error, 'error');
+    const count = $('pro-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
+    const status = data.pro.active ? 'Active until ' + new Date(data.pro.expiresAt * 1000).toLocaleDateString() : 'Inactive';
+    $('pro-content').innerHTML = `<div class="shop-card" style="max-width:620px"><div class="shop-card-name">Nexus Pro</div><div class="shop-card-desc">${status}. Pro unlocks profile card themes and premium profile styling.</div><div class="shop-card-price">${data.pro.price.toLocaleString()} Nexals / 30 days</div><button class="shop-card-btn buy" onclick="subscribePro()">${data.pro.active ? 'Extend Pro' : 'Get Pro'}</button>${data.pro.active ? `<div style="display:flex;gap:8px;margin-top:10px"><button class="shop-card-btn" onclick="setProStyle('aurora')">Aurora</button><button class="shop-card-btn" onclick="setProStyle('ember')">Ember</button><button class="shop-card-btn" onclick="setProStyle('glacier')">Glacier</button></div>` : ''}</div><div class="shop-subsection"><h2>Server Boosts</h2><p>One boost is 10,000 Nexals for 30 days. Two active boosts unlock a server tag and animated gradient role colors.</p></div><div class="shop-grid">${data.servers.map(s => `<div class="shop-card"><div class="shop-card-name">${esc(s.name)}</div><div class="shop-card-desc">${s.boostCount} active boosts${s.tag ? ' | Tag: ' + esc(s.tag) : ''}</div>${s.tagUnlocked ? `<div style="display:flex;gap:6px;margin:8px 0"><input id="tag-${s.id}" maxlength="4" value="${esc(s.tag || '')}" style="width:68px;text-transform:uppercase"><button class="shop-card-btn" onclick="setServerTag('${s.id}')">Set Tag</button></div>` : ''}<button class="shop-card-btn buy" onclick="boostServer('${s.id}')">Boost for ${data.boostPrice.toLocaleString()}</button></div>`).join('')}</div>`;
+  }
+
+  window.subscribePro = async function() { const r = await api('POST', '/api/perks/pro/subscribe'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); toast('Pro activated', 'success'); await loadPro(); };
+  window.setProStyle = async function(style) { const r = await api('POST', '/api/perks/profile-style', { style }); if (r.error) return toast(r.error, 'error'); const card = document.querySelector('.user-card'); if (card) { card.classList.remove('pro-aurora','pro-ember','pro-glacier'); card.classList.add('pro-' + style); } toast('Profile style updated', 'success'); };
+  window.boostServer = async function(serverId) { const r = await api('POST', '/api/perks/servers/' + serverId + '/boost'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); toast('Server boosted', 'success'); await loadPro(); };
+  window.setServerTag = async function(serverId) { const input = $('tag-' + serverId); const r = await api('PATCH', '/api/perks/servers/' + serverId + '/tag', { tag: input ? input.value : '' }); if (r.error) return toast(r.error, 'error'); toast('Server tag updated', 'success'); await loadPro(); };
+
   let colorsData = null;
   let fontsData = null;
 

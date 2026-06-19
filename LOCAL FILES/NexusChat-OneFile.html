@@ -3310,6 +3310,12 @@ html, body {
   margin-bottom: 4px; text-align: center;
 }
 
+.user-card.pro-aurora { background: linear-gradient(110deg, rgba(62,210,255,0.2), rgba(124,84,255,0.2), rgba(48,234,170,0.16)); border-color: rgba(96,224,255,0.5); }
+.user-card.pro-ember { background: linear-gradient(110deg, rgba(255,120,54,0.24), rgba(255,62,62,0.18), rgba(255,212,86,0.14)); border-color: rgba(255,160,72,0.5); }
+.user-card.pro-glacier { background: linear-gradient(110deg, rgba(222,249,255,0.22), rgba(94,178,255,0.17), rgba(168,132,255,0.15)); border-color: rgba(190,238,255,0.52); }
+.role-gradient-text { background: linear-gradient(90deg, var(--role-gradient-start), var(--role-gradient-end), var(--role-gradient-start)); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: role-gradient-shift 3s linear infinite; }
+@keyframes role-gradient-shift { to { background-position: 200% 0; } }
+
 .shop-pack-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
@@ -5741,13 +5747,17 @@ html, body {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
               <span>Shop</span>
             </button>
-            <button class="nav-btn" data-view="colors">
+            <button class="nav-btn" data-view="pro">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.3"/></svg>
-              <span>Colors</span>
+              <span>Pro</span>
             </button>
             <button class="nav-btn" data-view="achievements">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
               <span>Achievements</span>
+            </button>
+            <button class="nav-btn" data-view="stats">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+              <span>Stats</span>
             </button>
           </nav>
           <div class="sidebar-label" id="invites-section-label" style="display:none">SERVER INVITES <span id="invite-badge-count" style="background:var(--red);color:#fff;font-size:10px;padding:1px 5px;border-radius:99px;margin-left:4px"></span></div>
@@ -5941,7 +5951,17 @@ html, body {
           <div id="achievements-grid" style="padding:16px 20px 40px;overflow-y:auto;flex:1;align-content:start"></div>
         </div>
 
-        <!-- Colors View -->
+        <div class="view" id="view-stats" style="overflow-y:auto">
+          <div class="view-header" style="padding:20px 20px 0;justify-content:space-between"><h1>Collection Stats</h1><div class="nexal-balance"><span id="stats-nexal-count">0</span> Nexals</div></div>
+          <div id="stats-content" style="padding:20px"></div>
+        </div>
+
+        <div class="view" id="view-pro" style="overflow-y:auto">
+          <div class="view-header" style="padding:20px 20px 0;justify-content:space-between"><h1>Nexus Pro</h1><div class="nexal-balance"><span id="pro-nexal-count">0</span> Nexals</div></div>
+          <div id="pro-content" style="padding:20px"></div>
+        </div>
+
+        <!-- Retired Colors View -->
         <div class="view" id="view-colors" style="overflow-y:auto">
           <div class="view-header" style="padding:20px 20px 0;justify-content:space-between;flex-shrink:0">
             <h1>🎨 Text Colors</h1>
@@ -8114,7 +8134,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name" style="${roleStyle}">${esc(m.displayName)}</span>
+          <span class="member-name" style="${roleStyle}">${esc(m.displayName)}${server && server.tag ? ` <span class="member-role" style="color:var(--text-secondary)">[${esc(server.tag)}]</span>` : ''}</span>
           ${isOwner ? '<span class="member-role" style="color:var(--yellow)">Owner</span>' : (m.roleName ? `<span class="member-role" style="color:${m.roleColor||'var(--accent)'}">${esc(m.roleName)}</span>` : '')}
           ${canManage ? `<div class="member-actions">
             <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
@@ -8819,7 +8839,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       ? roles.map(r => `
           <div class="role-row" id="role-row-${r.id}">
             <div class="role-dot" style="background:${r.color}"></div>
-            <span class="role-name" style="color:${r.color}">${esc(r.name)}</span>
+            <span class="role-name${r.gradientStart ? ' role-gradient-text' : ''}" style="${r.gradientStart ? `--role-gradient-start:${r.gradientStart};--role-gradient-end:${r.gradientEnd}` : `color:${r.color}`}">${esc(r.name)}</span>
             <span class="role-badge">${r.isAdmin ? 'Admin' : 'Member'}</span>
             ${r.canDeleteMessages ? '<span class="role-badge" style="background:rgba(240,84,84,0.15);color:var(--red)">Can Delete</span>' : ''}
             <div class="role-actions">
@@ -8836,9 +8856,15 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     const color = prompt('Color (hex, e.g. #ff5555):', currentColor);
     const isAdminChoice = confirm('Should this role have admin permissions?');
     const canDeleteChoice = confirm('Should this role be able to delete messages?');
-    const r = await api('PATCH', `/api/servers/${activeServerId}/roles/${roleId}`, {
+    const payload = {
       name: name.trim(), color: color || currentColor, isAdmin: isAdminChoice, canDeleteMessages: canDeleteChoice
-    });
+    };
+    if (confirm('Use an animated gradient for this role? This needs two active server boosts.')) {
+      payload.gradientStart = prompt('Gradient start color (hex):', '#62e6ff');
+      payload.gradientEnd = prompt('Gradient end color (hex):', '#b06cff');
+      payload.gradientAnimated = true;
+    }
+    const r = await api('PATCH', `/api/servers/${activeServerId}/roles/${roleId}`, payload);
     if (r.error) return toast(r.error, 'error');
     const s = await api('GET', `/api/servers/${activeServerId}`);
     activeServerData = s;
@@ -9004,7 +9030,8 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     if (el) el.classList.add('active');
     if (view === 'shop') loadShop();
     if (view === 'achievements') loadAchievements();
-    if (view === 'colors') loadColors();
+    if (view === 'stats') loadCollectionStats();
+    if (view === 'pro') loadPro();
   }
 
   // Rail selection: 'dms' or a server id
@@ -11455,6 +11482,35 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   };
 
   // ---- Colors Shop ----
+  async function loadCollectionStats() {
+    const data = await api('GET', '/api/shop/stats');
+    if (data.error) return toast(data.error, 'error');
+    const count = $('stats-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
+    $('stats-content').innerHTML = `<div class="shop-card" style="max-width:560px"><div class="shop-card-name">${data.decorationCount.toLocaleString()} decorations</div><div class="shop-card-desc">Pack collection resale value</div><div class="shop-card-price">${data.sellableValue.toLocaleString()} Nexals</div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All Pack Decorations</button></div>`;
+  }
+
+  window.sellAllDecorations = async function() {
+    if (!confirm('Sell every pack decoration in your collection? This cannot be undone.')) return;
+    const result = await api('POST', '/api/shop/sell-all');
+    if (result.error) return toast(result.error, 'error');
+    updateNexalDisplay(result.nexals);
+    toast('Sold collection for ' + result.soldValue.toLocaleString() + ' Nexals', 'success');
+    await loadCollectionStats();
+  };
+
+  async function loadPro() {
+    const data = await api('GET', '/api/perks');
+    if (data.error) return toast(data.error, 'error');
+    const count = $('pro-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
+    const status = data.pro.active ? 'Active until ' + new Date(data.pro.expiresAt * 1000).toLocaleDateString() : 'Inactive';
+    $('pro-content').innerHTML = `<div class="shop-card" style="max-width:620px"><div class="shop-card-name">Nexus Pro</div><div class="shop-card-desc">${status}. Pro unlocks profile card themes and premium profile styling.</div><div class="shop-card-price">${data.pro.price.toLocaleString()} Nexals / 30 days</div><button class="shop-card-btn buy" onclick="subscribePro()">${data.pro.active ? 'Extend Pro' : 'Get Pro'}</button>${data.pro.active ? `<div style="display:flex;gap:8px;margin-top:10px"><button class="shop-card-btn" onclick="setProStyle('aurora')">Aurora</button><button class="shop-card-btn" onclick="setProStyle('ember')">Ember</button><button class="shop-card-btn" onclick="setProStyle('glacier')">Glacier</button></div>` : ''}</div><div class="shop-subsection"><h2>Server Boosts</h2><p>One boost is 10,000 Nexals for 30 days. Two active boosts unlock a server tag and animated gradient role colors.</p></div><div class="shop-grid">${data.servers.map(s => `<div class="shop-card"><div class="shop-card-name">${esc(s.name)}</div><div class="shop-card-desc">${s.boostCount} active boosts${s.tag ? ' | Tag: ' + esc(s.tag) : ''}</div>${s.tagUnlocked ? `<div style="display:flex;gap:6px;margin:8px 0"><input id="tag-${s.id}" maxlength="4" value="${esc(s.tag || '')}" style="width:68px;text-transform:uppercase"><button class="shop-card-btn" onclick="setServerTag('${s.id}')">Set Tag</button></div>` : ''}<button class="shop-card-btn buy" onclick="boostServer('${s.id}')">Boost for ${data.boostPrice.toLocaleString()}</button></div>`).join('')}</div>`;
+  }
+
+  window.subscribePro = async function() { const r = await api('POST', '/api/perks/pro/subscribe'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); toast('Pro activated', 'success'); await loadPro(); };
+  window.setProStyle = async function(style) { const r = await api('POST', '/api/perks/profile-style', { style }); if (r.error) return toast(r.error, 'error'); const card = document.querySelector('.user-card'); if (card) { card.classList.remove('pro-aurora','pro-ember','pro-glacier'); card.classList.add('pro-' + style); } toast('Profile style updated', 'success'); };
+  window.boostServer = async function(serverId) { const r = await api('POST', '/api/perks/servers/' + serverId + '/boost'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); toast('Server boosted', 'success'); await loadPro(); };
+  window.setServerTag = async function(serverId) { const input = $('tag-' + serverId); const r = await api('PATCH', '/api/perks/servers/' + serverId + '/tag', { tag: input ? input.value : '' }); if (r.error) return toast(r.error, 'error'); toast('Server tag updated', 'success'); await loadPro(); };
+
   let colorsData = null;
   let fontsData = null;
 

@@ -94,6 +94,7 @@ app.use('/api/shop', require('./routes/shop'));
 app.use('/api/achievements', require('./routes/achievements'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/colors', require('./routes/colors'));
+app.use('/api/perks', require('./routes/perks'));
 app.use('/api/ringtones', require('./routes/ringtones'));
 
 app.get('/health', (req, res) => {
