@@ -1,14 +1,18 @@
 NexusChat local file client
 
-Open index.html directly in a browser to use NexusChat without running a local server.
+Open NexusChat-OneFile.html directly in a browser to use NexusChat without running a local server and without needing the css/js folders.
+
+You can also open index.html if you want the split-file version.
 
 This folder is only the frontend. It connects to the Render backend set in:
 
   js/local-config.js
 
-If your Render URL is different, edit that file and replace:
+For NexusChat-OneFile.html, the Render URL is embedded inside that HTML file.
 
-  https://nexus-chat.onrender.com
+If your Render URL is different, edit js/local-config.js for the split-file version, or search for the same URL inside NexusChat-OneFile.html for the one-file version. Replace:
+
+  https://nexus-chat-kzvx.onrender.com
 
 with your real Render web service URL.
 
