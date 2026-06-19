@@ -5412,6 +5412,25 @@ html, body {
           mask: linear-gradient(132deg, transparent 0 36%, #000 46% 54%, transparent 64%);
 }
 
+/* Hard safety boundary: premium effects may extend slightly beyond an avatar, never into the layout. */
+.avatar-wrap .premium-deco {
+  overflow: hidden;
+  clip-path: circle(60% at 50% 50%);
+}
+
+.premium-magic-mists .premium-shell,
+.premium-magic-mists .premium-rim-a,
+.premium-magic-mists .premium-rim-b,
+.premium-magic-mists .premium-wisp,
+.premium-magic-mists .premium-motif-mist {
+  inset: -3px;
+}
+
+.premium-magic-mists .premium-intrusion {
+  inset: 7px;
+  filter: blur(1px) saturate(1.1) drop-shadow(0 0 5px var(--fx-b));
+}
+
 /* Pack thumbnails are much smaller than real avatars, so keep premium FX contained. */
 .shop-pack-mini .premium-deco {
   inset: -4px;
