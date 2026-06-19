@@ -5345,6 +5345,84 @@ html, body {
   46%, 100% { opacity: 0.14; }
 }
 
+/* Keep premium pieces centered around the avatar instead of growing into a full tile. */
+.avatar-wrap .premium-deco {
+  inset: -6px;
+  transform-origin: center;
+}
+
+.avatar-wrap .premium-deco .premium-wisp {
+  inset: -8px;
+}
+
+/* Zero Gravity is an orbital field, never a disc over the avatar. */
+.premium-gravity .premium-shell {
+  inset: -5px;
+  background:
+    radial-gradient(circle at 50% 5%, rgba(255,255,255,0.92) 0 1px, transparent 3px),
+    radial-gradient(circle at 88% 50%, var(--fx-a) 0 2px, transparent 4px),
+    radial-gradient(circle at 28% 90%, var(--fx-b) 0 2px, transparent 4px),
+    radial-gradient(circle at 12% 36%, var(--fx-c) 0 1.5px, transparent 4px),
+    conic-gradient(from 18deg, transparent 0 56deg, color-mix(in srgb, var(--fx-a) 74%, transparent) 64deg 70deg, transparent 78deg 186deg, color-mix(in srgb, var(--fx-b) 68%, transparent) 194deg 201deg, transparent 209deg 292deg, color-mix(in srgb, var(--fx-c) 68%, transparent) 300deg 307deg, transparent 315deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 47%, #000 50% 54%, transparent 58%);
+          mask: radial-gradient(circle, transparent 0 47%, #000 50% 54%, transparent 58%);
+  filter: drop-shadow(0 0 7px var(--fx-a));
+}
+
+.premium-gravity .premium-intrusion {
+  -webkit-mask: radial-gradient(circle, transparent 0 36%, #000 43% 51%, transparent 58%);
+          mask: radial-gradient(circle, transparent 0 36%, #000 43% 51%, transparent 58%);
+  animation: mythical-cover-window 5s ease-in-out infinite !important;
+}
+
+/* Prism Overdrive is a tight prismatic sweep, not a square overlay. */
+.premium-prism .premium-shell {
+  inset: -5px;
+  background: conic-gradient(from 18deg, transparent 0 38deg, #ff54d8 48deg, #ffe252 57deg, transparent 70deg 145deg, #52e6ff 156deg, #8a5cff 166deg, transparent 180deg 270deg, #52ff98 280deg, #ff54d8 290deg, transparent 305deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 51%, #000 55% 63%, transparent 68%);
+          mask: radial-gradient(circle, transparent 0 51%, #000 55% 63%, transparent 68%);
+  filter: saturate(1.35) drop-shadow(0 0 7px #52e6ff);
+}
+
+.premium-prism .premium-intrusion {
+  -webkit-mask: radial-gradient(circle, transparent 0 28%, #000 39% 56%, transparent 65%);
+          mask: radial-gradient(circle, transparent 0 28%, #000 39% 56%, transparent 65%);
+  animation: mythical-cover-window 5s ease-in-out infinite !important;
+}
+
+/* Phantom Blade uses a precise spectral slash and guard, with no foggy orb layers. */
+.premium-blade .premium-glass,
+.premium-blade .premium-rim-b,
+.premium-blade .premium-wisp-a,
+.premium-blade .premium-wisp-b {
+  display: none;
+}
+
+.premium-blade .premium-shell {
+  inset: -2px 3px;
+  background:
+    linear-gradient(132deg, transparent 0 41%, color-mix(in srgb, var(--fx-b) 42%, transparent) 44%, rgba(255,255,255,0.98) 47%, var(--fx-a) 50%, color-mix(in srgb, var(--fx-c) 72%, transparent) 53%, transparent 56%),
+    radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.5), transparent 13%);
+  -webkit-mask: linear-gradient(132deg, transparent 0 31%, #000 43% 57%, transparent 69%);
+          mask: linear-gradient(132deg, transparent 0 31%, #000 43% 57%, transparent 69%);
+  filter: drop-shadow(0 0 7px var(--fx-a));
+}
+
+.premium-blade .premium-rim-a,
+.premium-blade .premium-motif-blade {
+  inset: -1px 5px;
+  background: linear-gradient(132deg, transparent 0 44%, rgba(255,255,255,0.9) 48%, var(--fx-c) 50%, transparent 53%);
+  -webkit-mask: linear-gradient(132deg, transparent 0 36%, #000 46% 54%, transparent 64%);
+          mask: linear-gradient(132deg, transparent 0 36%, #000 46% 54%, transparent 64%);
+  filter: drop-shadow(0 0 6px var(--fx-c));
+}
+
+.premium-blade .premium-strike {
+  inset: 5px;
+  -webkit-mask: linear-gradient(132deg, transparent 0 36%, #000 46% 54%, transparent 64%);
+          mask: linear-gradient(132deg, transparent 0 36%, #000 46% 54%, transparent 64%);
+}
+
 /* Pack thumbnails are much smaller than real avatars, so keep premium FX contained. */
 .shop-pack-mini .premium-deco {
   inset: -4px;

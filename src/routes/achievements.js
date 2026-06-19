@@ -47,6 +47,12 @@ const CHAINS = {
     { id: 'deco_equip',  title: 'Looking Fresh',  desc: 'Equip a decoration',          icon: '✨', nexals: 100,  target: 1 },
     { id: 'deco_3',      title: 'Decorator',      desc: 'Own 3 decorations',           icon: '🎨', nexals: 500,  target: 3 },
     { id: 'deco_5',      title: 'Connoisseur',    desc: 'Own 5 decorations',           icon: '💎', nexals: 1500, target: 5 },
+    { id: 'deco_15', title: 'Collection Built', desc: 'Own 15 decorations', icon: '*', nexals: 3000, target: 15 },
+  ],
+  packs: [
+    { id: 'pack_1',  title: 'First Opening', desc: 'Open your first decoration pack', icon: '*', nexals: 100, target: 1 },
+    { id: 'pack_10', title: 'Lucky Streak',   desc: 'Open 10 decoration packs',        icon: '*', nexals: 600, target: 10 },
+    { id: 'pack_50', title: 'Apex Hunter',    desc: 'Open 50 decoration packs',        icon: '*', nexals: 2500, target: 50 },
   ],
   nexals: [
     { id: 'nex_1000', title: 'Thousandaire',    desc: 'Accumulate 1,000 nexals',   icon: '💰', nexals: 200,  target: 1000 },
@@ -65,6 +71,7 @@ const CHAIN_CATEGORIES = {
   create: 'Server Creation',
   roles: 'Roles',
   decos: 'Collector',
+  packs: 'Pack Progress',
   nexals: 'Wealth',
 };
 
@@ -72,7 +79,7 @@ const CHAIN_CATEGORIES = {
 const ALL_ACHIEVEMENTS = Object.values(CHAINS).flat();
 
 async function getUserStats(userId) {
-  const [msgRes, friendRes, serverMemberRes, serverOwnerRes, roleRes, chMsgRes, decoRes, equippedRes, nexalsRes] = await Promise.all([
+  const [msgRes, friendRes, serverMemberRes, serverOwnerRes, roleRes, chMsgRes, decoRes, equippedRes, nexalsRes, packRes] = await Promise.all([
     pool.query('SELECT COUNT(*) FROM messages WHERE from_id=$1', [userId]),
     pool.query('SELECT COUNT(*) FROM friendships WHERE user1_id=$1 OR user2_id=$1', [userId]),
     pool.query('SELECT COUNT(*) FROM server_members WHERE user_id=$1', [userId]),
@@ -82,6 +89,7 @@ async function getUserStats(userId) {
     pool.query('SELECT COUNT(*) FROM user_decorations WHERE user_id=$1', [userId]),
     pool.query('SELECT active_decoration FROM users WHERE id=$1', [userId]),
     pool.query('SELECT nexals FROM users WHERE id=$1', [userId]),
+    pool.query('SELECT openings FROM user_pack_stats WHERE user_id=$1', [userId]),
   ]);
   const decoCount = parseInt(decoRes.rows[0].count);
   return {
@@ -95,6 +103,7 @@ async function getUserStats(userId) {
     decos_owned:  decoCount,
     decos_equip:  equippedRes.rows[0]?.active_decoration ? 1 : 0,
     decos_redeem: decoCount,
+    packs:        packRes.rows[0]?.openings || 0,
     nexals:       nexalsRes.rows[0]?.nexals || 0,
   };
 }
@@ -113,6 +122,7 @@ function getStatForAch(a, stats, chainKey) {
     if (a.id === 'deco_redeem') return stats.decos_redeem;
     return stats.decos_owned;
   }
+  if (chainKey === 'packs')        return stats.packs;
   if (chainKey === 'nexals')       return stats.nexals;
   return 0;
 }

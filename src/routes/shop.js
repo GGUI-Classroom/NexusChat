@@ -605,6 +605,10 @@ router.post('/packs/buy', async (req, res) => {
       'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3)',
       [uuidv4(), req.session.userId, rolledDeco.id]
     );
+    await client.query(`
+      INSERT INTO user_pack_stats (user_id, openings) VALUES ($1, 1)
+      ON CONFLICT (user_id) DO UPDATE SET openings=user_pack_stats.openings+1
+    `, [req.session.userId]);
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
