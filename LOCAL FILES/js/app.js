@@ -24,6 +24,30 @@
     return LOCAL_API_ORIGIN ? LOCAL_API_ORIGIN + path : path;
   }
 
+  function requestText(method, path, body, headers = {}) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(method, apiUrl(path), true);
+      xhr.withCredentials = true;
+      Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+      xhr.onload = () => resolve({ status: xhr.status, text: xhr.responseText || '' });
+      xhr.onerror = () => reject(new Error('Network request failed'));
+      xhr.ontimeout = () => reject(new Error('Network request timed out'));
+      xhr.timeout = 30000;
+      xhr.send(body || null);
+    });
+  }
+
+  async function requestJson(method, path, body, headers) {
+    const res = await requestText(method, path, body, headers);
+    try {
+      return JSON.parse(res.text);
+    } catch (e) {
+      console.error('Non-JSON response:', res.text);
+      return { error: 'Server returned invalid response: ' + res.text.slice(0, 100) };
+    }
+  }
+
   const SECRET_CATEGORY = '???SECRET???';
   const SECRET_DECORATION_ID = 'stormveil';
   const SECRET_UNLOCK_PASSPHRASE = 'void';
@@ -1308,23 +1332,10 @@
 
   // ---- Auth ----
   async function api(method, path, data) {
-    const opts = {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
-    };
-    if (data) opts.body = JSON.stringify(data);
     try {
-      const res = await fetch(apiUrl(path), opts);
-      const text = await res.text();
-      try {
-        return JSON.parse(text);
-      } catch (e) {
-        console.error('Non-JSON response:', text);
-        return { error: 'Server returned invalid response: ' + text.slice(0, 100) };
-      }
+      return await requestJson(method, path, data ? JSON.stringify(data) : null, { 'Content-Type': 'application/json' });
     } catch (e) {
-      console.error('Fetch error:', e);
+      console.error('Network error:', e);
       return { error: 'Network error: ' + e.message };
     }
   }
@@ -2237,8 +2248,8 @@
     if (iconFile) fd.append('icon', iconFile);
     let r;
     try {
-      const res = await fetch(apiUrl('/api/servers'), { method: 'POST', body: fd, credentials: 'include' });
-      const text = await res.text();
+      const res = await requestText('POST', '/api/servers', fd);
+      const text = res.text;
       try { r = JSON.parse(text); } catch(e) {
         return showError('create-server-error', 'Server error: ' + text.slice(0, 120));
       }
@@ -2467,8 +2478,8 @@
     if (iconFile) fd.append('icon', iconFile);
     let r;
     try {
-      const res = await fetch(apiUrl(`/api/servers/${activeServerId}`), { method: 'PATCH', body: fd, credentials: 'include' });
-      const text = await res.text();
+      const res = await requestText('PATCH', `/api/servers/${activeServerId}`, fd);
+      const text = res.text;
       try { r = JSON.parse(text); } catch(e) {
         return showError('settings-server-error', 'Server error: ' + text.slice(0, 120));
       }
@@ -3990,8 +4001,7 @@
     if (!file) return;
     const fd = new FormData();
     fd.append('avatar', file);
-    const res = await fetch(apiUrl('/api/users/avatar'), { method: 'POST', body: fd, credentials: 'include' });
-    const r = await res.json();
+    const r = await requestJson('POST', '/api/users/avatar', fd);
     if (r.error) return toast(r.error, 'error');
     currentUser.avatarDataUrl = r.avatarDataUrl;
     $('profile-avatar-preview').innerHTML = `<img src="${r.avatarDataUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
