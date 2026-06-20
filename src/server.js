@@ -1408,6 +1408,10 @@ io.on('connection', (socket) => {
   socket.on('call_game_start', async ({ roomId }) => {
     const game = callGames.get(roomId);
     if (!game || game.hostId !== userId || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId)) return;
+    if (game.type === 'poker' && game.players.length < 2) {
+      socket.emit('call_game_error', { message: 'Poker needs at least two players.' });
+      return;
+    }
     game.deck = shuffle(gameDeck()); game.phase = 'playing'; game.message = '';
     game.players.forEach(p => { p.hand = [game.deck.pop(), game.deck.pop()]; p.standing = false; p.folded = false; p.bet = 0; });
     if (game.type === 'blackjack') { game.dealer.hand = [game.deck.pop(), game.deck.pop()]; }

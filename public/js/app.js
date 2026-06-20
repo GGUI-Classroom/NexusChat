@@ -1629,6 +1629,28 @@
         deleteChannel(e, btn.dataset.chId);
       });
     });
+    if (isAdmin) {
+      let dragged = null;
+      const items = () => [...$('channel-list').querySelectorAll('.channel-item')];
+      items().forEach(el => {
+        el.addEventListener('dragstart', e => { dragged = el; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+        el.addEventListener('dragend', () => { el.classList.remove('dragging'); dragged = null; });
+        el.addEventListener('dragover', e => {
+          e.preventDefault();
+          if (!dragged || dragged === el) return;
+          const box = el.getBoundingClientRect();
+          if (e.clientY < box.top + box.height / 2) el.before(dragged); else el.after(dragged);
+        });
+        el.addEventListener('drop', async e => {
+          e.preventDefault();
+          const channelIds = items().map(item => item.dataset.channelId);
+          const saved = await api('PUT', `/api/servers/${activeServerId}/channels/order`, { channelIds });
+          if (saved.error) return toast(saved.error, 'error');
+          activeServerData.channels.sort((a, b) => channelIds.indexOf(a.id) - channelIds.indexOf(b.id));
+          toast('Channel order saved', 'success');
+        });
+      });
+    }
   }
 
   function renderMemberList(members) {
@@ -3118,6 +3140,7 @@
       activeCallGame = game;
       if ($('call-games-modal').classList.contains('active')) renderCallGame(game);
     });
+    socket.on('call_game_error', ({ message }) => toast(message || 'Game action unavailable', 'error'));
 
     socket.on('connect', () => console.log('Socket connected'));
     socket.on('disconnect', () => console.log('Socket disconnected'));
