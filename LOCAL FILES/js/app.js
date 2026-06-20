@@ -5788,7 +5788,7 @@
 
     // Render what we have immediately
     renderAvatar($('popup-avatar'), data);
-    $('popup-name').textContent = data.displayName;
+    $('popup-name').textContent = String(data.displayName || '').replace(/\s*(?:\.\.\.|…)\s*$/, '');
     $('popup-username').textContent = '@' + data.username;
     $('popup-status').className = 'status-dot ' + (data.status === 'online' ? 'online' : '');
     $('popup-bio-section').style.display = 'none';

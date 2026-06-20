@@ -1708,6 +1708,9 @@ html, body {
   font-size: 16px; font-weight: 800;
   color: var(--text-primary);
   margin-bottom: 2px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 .profile-popup-username {
   font-size: 12px; color: var(--text-muted);
@@ -12300,7 +12303,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
 
     // Render what we have immediately
     renderAvatar($('popup-avatar'), data);
-    $('popup-name').textContent = data.displayName;
+    $('popup-name').textContent = String(data.displayName || '').replace(/\s*(?:\.\.\.|…)\s*$/, '');
     $('popup-username').textContent = '@' + data.username;
     $('popup-status').className = 'status-dot ' + (data.status === 'online' ? 'online' : '');
     $('popup-bio-section').style.display = 'none';

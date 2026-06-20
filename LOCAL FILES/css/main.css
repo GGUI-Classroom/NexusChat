@@ -1697,6 +1697,9 @@ html, body {
   font-size: 16px; font-weight: 800;
   color: var(--text-primary);
   margin-bottom: 2px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 .profile-popup-username {
   font-size: 12px; color: var(--text-muted);
