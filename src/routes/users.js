@@ -31,16 +31,19 @@ router.post('/avatar', requireAuth, upload.single('avatar'), async (req, res) =>
 // Get any user's public profile
 router.get('/profile/:userId', requireAuth, async (req, res) => {
   const r = await pool.query(
-    'SELECT id, username, display_name, avatar_data, avatar_mime, bio, active_decoration FROM users WHERE id=$1',
+    'SELECT id, username, display_name, avatar_data, avatar_mime, bio, active_decoration, pro_expires_at, profile_gradient_start, profile_gradient_end, profile_name_effect FROM users WHERE id=$1',
     [req.params.userId]
   );
   if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
   const u = r.rows[0];
+  const tag = await pool.query(`SELECT s.name, s.invite_code, s.server_tag, s.tag_background, s.icon_data, s.icon_mime FROM server_members sm JOIN servers s ON s.id=sm.server_id JOIN server_boost_allocations a ON a.server_id=s.id AND a.feature='tag' WHERE sm.user_id=$1 LIMIT 1`, [u.id]);
   res.json({
     id: u.id, username: u.username, displayName: u.display_name,
     avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
     bio: u.bio || null,
-    activeDecoration: u.active_decoration || null
+    activeDecoration: u.active_decoration || null,
+    pro: (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileGradientStart: u.profile_gradient_start, profileGradientEnd: u.profile_gradient_end, profileNameEffect: u.profile_name_effect,
+    serverTag: tag.rows[0] ? { name: tag.rows[0].name, inviteCode: tag.rows[0].invite_code, tag: tag.rows[0].server_tag, background: tag.rows[0].tag_background, iconDataUrl: tag.rows[0].icon_data ? `data:${tag.rows[0].icon_mime};base64,${tag.rows[0].icon_data}` : null } : null
   });
 });
 

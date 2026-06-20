@@ -1740,6 +1740,11 @@ html, body {
   word-break: break-word;
 }
 .profile-popup-section { margin-bottom: 4px; }
+.profile-popup.pro-profile .profile-popup-banner { background: linear-gradient(110deg,var(--profile-start),var(--profile-end)); }
+.profile-popup.pro-profile .profile-popup-name { background: linear-gradient(90deg,var(--profile-start),var(--profile-end),var(--profile-start)); background-size:200% 100%; -webkit-background-clip:text; color:transparent; }
+.profile-popup.pro-profile.effect-shimmer .profile-popup-name,.profile-popup.pro-profile.effect-prism .profile-popup-name { animation: role-gradient-shift 2.6s linear infinite; }
+.profile-popup-tag { display:flex;align-items:center;gap:7px;border:0;border-radius:6px;padding:6px 8px;margin:4px 0 10px;color:#fff;background:var(--tag-background,#5865f2);cursor:pointer;font:inherit;font-size:11px;font-weight:800; }
+.profile-popup-tag img { width:18px;height:18px;border-radius:50%;object-fit:cover; }
 
 /* ===== CHANNEL PERMISSIONS ===== */
 .lock-toggle {
@@ -6452,6 +6457,7 @@ html, body {
       <div class="profile-popup-name" id="popup-name">–</div>
       <div class="profile-popup-username" id="popup-username">–</div>
       <div class="profile-popup-role" id="popup-role" style="display:none"></div>
+      <button class="profile-popup-tag" id="popup-server-tag" style="display:none"></button>
       <div class="profile-popup-divider"></div>
       <div class="profile-popup-section" id="popup-bio-section" style="display:none">
         <div class="profile-popup-label">ABOUT ME</div>
@@ -12295,6 +12301,17 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
         $('popup-bio').textContent = r.bio;
         $('popup-bio-section').style.display = 'block';
       }
+      popup.classList.toggle('pro-profile', !!r.pro);
+      popup.classList.toggle('effect-shimmer', r.profileNameEffect === 'shimmer');
+      popup.classList.toggle('effect-prism', r.profileNameEffect === 'prism');
+      popup.style.setProperty('--profile-start', r.profileGradientStart || '#5865f2');
+      popup.style.setProperty('--profile-end', r.profileGradientEnd || '#a855f7');
+      const tag = $('popup-server-tag');
+      if (r.serverTag && r.serverTag.tag) {
+        tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');
+        tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${r.serverTag.iconDataUrl}" alt="">` : ''}<span>${esc(r.serverTag.tag)} | ${esc(r.serverTag.name)}</span>`;
+        tag.onclick = async () => { if (!confirm('Join ' + r.serverTag.name + '?')) return; const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); };
+      } else { tag.style.display = 'none'; }
     } catch(err) {}
   };
 

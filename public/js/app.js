@@ -5791,6 +5791,17 @@
         $('popup-bio').textContent = r.bio;
         $('popup-bio-section').style.display = 'block';
       }
+      popup.classList.toggle('pro-profile', !!r.pro);
+      popup.classList.toggle('effect-shimmer', r.profileNameEffect === 'shimmer');
+      popup.classList.toggle('effect-prism', r.profileNameEffect === 'prism');
+      popup.style.setProperty('--profile-start', r.profileGradientStart || '#5865f2');
+      popup.style.setProperty('--profile-end', r.profileGradientEnd || '#a855f7');
+      const tag = $('popup-server-tag');
+      if (r.serverTag && r.serverTag.tag) {
+        tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');
+        tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${r.serverTag.iconDataUrl}" alt="">` : ''}<span>${esc(r.serverTag.tag)} | ${esc(r.serverTag.name)}</span>`;
+        tag.onclick = async () => { if (!confirm('Join ' + r.serverTag.name + '?')) return; const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); };
+      } else { tag.style.display = 'none'; }
     } catch(err) {}
   };
 

@@ -128,4 +128,15 @@ router.post('/profile-style', async (req, res) => {
   res.json({ success: true, style: style || null });
 });
 
+router.patch('/profile-customize', async (req, res) => {
+  const start = String(req.body.gradientStart || ''); const end = String(req.body.gradientEnd || '');
+  const effect = String(req.body.nameEffect || 'none');
+  if (!/^#[0-9a-f]{6}$/i.test(start) || !/^#[0-9a-f]{6}$/i.test(end) || !['none','shimmer','prism'].includes(effect)) return res.status(400).json({ error: 'Invalid profile customization' });
+  const now = nowSeconds();
+  const user = await pool.query('SELECT pro_expires_at FROM users WHERE id=$1', [req.session.userId]);
+  if ((user.rows[0]?.pro_expires_at || 0) <= now) return res.status(403).json({ error: 'Active Pro is required' });
+  await pool.query('UPDATE users SET profile_gradient_start=$1, profile_gradient_end=$2, profile_name_effect=$3 WHERE id=$4', [start, end, effect, req.session.userId]);
+  res.json({ success: true });
+});
+
 module.exports = router;

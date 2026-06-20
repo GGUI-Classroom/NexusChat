@@ -193,6 +193,9 @@ async function initDb() {
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_font TEXT DEFAULT NULL`, 'alter_users_font');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at BIGINT DEFAULT 0`, 'alter_users_pro_expires');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_card_style TEXT DEFAULT NULL`, 'alter_users_profile_card_style');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_gradient_start TEXT DEFAULT '#5865f2'`, 'alter_users_profile_gradient_start');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_gradient_end TEXT DEFAULT '#a855f7'`, 'alter_users_profile_gradient_end');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_name_effect TEXT DEFAULT NULL`, 'alter_users_profile_name_effect');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_ringtone TEXT DEFAULT NULL`, 'alter_users_ringtone');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS mod_log_channel_id TEXT DEFAULT NULL`, 'alter_servers_mod_log_channel');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_name TEXT DEFAULT 'NexusBot'`, 'alter_servers_bot_name');
