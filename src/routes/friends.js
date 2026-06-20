@@ -115,7 +115,7 @@ router.delete('/:friendId', async (req, res) => {
 
 router.get('/', async (req, res) => {
   const r = await pool.query(
-    `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status, u.active_decoration
+    `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status, u.active_decoration, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect
      FROM friendships f
      JOIN users u ON u.id = CASE WHEN f.user1_id=$1 THEN f.user2_id ELSE f.user1_id END
      WHERE (f.user1_id=$1 OR f.user2_id=$1) AND u.id != $2`,
@@ -136,7 +136,7 @@ router.get('/', async (req, res) => {
 
   const combined = [...r.rows, ...botDm.rows];
   res.json({ friends: combined.map(u => ({
-    id: u.id, username: u.username, displayName: u.display_name, status: u.status,
+    id: u.id, username: u.username, displayName: u.display_name, status: u.status, proActive: (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: u.profile_gradient_start, proGradientEnd: u.profile_gradient_end, proNameEffect: u.profile_name_effect,
     avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
     activeDecoration: u.active_decoration || null
   }))});

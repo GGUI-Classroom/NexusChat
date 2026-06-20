@@ -17,7 +17,7 @@ router.get('/:userId', async (req, res) => {
   if (!isFriend.rows.length && !isNexusGuardThread) return res.status(403).json({ error: 'Not friends' });
 
   let query = `SELECT m.id, m.from_id, m.to_id, m.content, m.created_at,
-    u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font
+    u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect
     FROM messages m JOIN users u ON u.id=m.from_id
     WHERE ((m.from_id=$1 AND m.to_id=$2) OR (m.from_id=$2 AND m.to_id=$1))`;
   const params = [req.session.userId, userId];
@@ -39,7 +39,7 @@ router.get('/:userId', async (req, res) => {
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
       activeDecoration: m.active_decoration || null,
       activeColor: m.active_color || null,
-      activeFont: m.active_font || null
+      activeFont: m.active_font || null, proActive: (m.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: m.profile_gradient_start, proGradientEnd: m.profile_gradient_end, proNameEffect: m.profile_name_effect
     }
   }))});
 });
