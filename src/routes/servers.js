@@ -219,10 +219,11 @@ router.get('/:id', async (req, res) => {
     `, [id, req.session.userId]),
     pool.query(
       `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start, sr.gradient_end, sr.gradient_animated, sr.is_admin,
-       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color
+       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
+       LEFT JOIN servers ats ON ats.id=u.active_server_tag_id
         WHERE sm.server_id=$1 ORDER BY u.display_name ASC`, [id, req.session.userId]
     ),
     pool.query('SELECT * FROM server_roles WHERE server_id=$1 ORDER BY position ASC', [id]),
@@ -261,7 +262,8 @@ router.get('/:id', async (req, res) => {
       activeDecoration: m.active_decoration || null,
       activeColor: m.active_color || null,
       activeColor: m.active_color || null,
-      activeFont: m.active_font || null
+      activeFont: m.active_font || null,
+      activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_server_name || null, activeServerTagInviteCode: m.tag_invite_code || null
     })),
     roles: roleRes.rows.map(r => roleForClient(r, boostRes.has('gradients')))
   });
@@ -700,7 +702,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   if (!channelMeta.rows.length) return res.status(404).json({ error: 'Channel not found' });
   if ((channelMeta.rows[0].channel_type || 'text') === 'voice') return res.json({ messages: [] });
   let q = `SELECT cm.id, cm.channel_id, cm.from_id, cm.content, cm.created_at, cm.reply_to_id,
-    u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
+    u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
     sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
     rm.content as reply_content,
     rm.from_id as reply_from_id,
@@ -714,6 +716,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
     FROM channel_messages cm
     JOIN channels chv ON chv.id=cm.channel_id AND chv.server_id=$1
     JOIN users u ON u.id=cm.from_id
+    LEFT JOIN servers ats ON ats.id=u.active_server_tag_id
     LEFT JOIN server_members sm ON sm.server_id=$1 AND sm.user_id=cm.from_id
     LEFT JOIN server_roles sr ON sr.id=sm.role_id
     LEFT JOIN channel_messages rm ON rm.id=cm.reply_to_id
@@ -757,7 +760,8 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
       activeDecoration: m.active_decoration || null,
       activeColor: m.active_color || null,
       activeColor: m.active_color || null,
-      activeFont: m.active_font || null
+      activeFont: m.active_font || null, proActive: (m.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: m.profile_gradient_start, proGradientEnd: m.profile_gradient_end, proNameEffect: m.profile_name_effect,
+      activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_server_name || null, activeServerTagInviteCode: m.tag_invite_code || null
     }
   }))});
 });

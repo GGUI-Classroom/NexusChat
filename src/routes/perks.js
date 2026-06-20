@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
   const [userRes, serversRes] = await Promise.all([
     pool.query('SELECT nexals, pro_expires_at, profile_card_style FROM users WHERE id=$1', [req.session.userId]),
     pool.query(`
-      SELECT s.id, s.name, s.server_tag, COUNT(sb.id)::int AS boost_count
+      SELECT s.id, s.name, s.server_tag, s.tag_background, COUNT(sb.id)::int AS boost_count
       FROM servers s
       JOIN server_members sm ON sm.server_id=s.id AND sm.user_id=$1
       LEFT JOIN server_boosts sb ON sb.server_id=s.id AND sb.expires_at>$2
@@ -41,7 +41,7 @@ router.get('/', async (req, res) => {
   res.json({
     nexals: user.nexals || 0,
     pro: { active: (user.pro_expires_at || 0) > now, expiresAt: user.pro_expires_at || 0, price: PRO_PRICE, styles: ['aurora', 'ember', 'glacier'] },
-    servers: serversRes.rows.map(s => ({ id: s.id, name: s.name, boostCount: s.boost_count, tag: s.boost_count >= 2 ? s.server_tag : null, tagUnlocked: s.boost_count >= 2 })),
+    servers: serversRes.rows.map(s => ({ id: s.id, name: s.name, boostCount: s.boost_count, tag: s.boost_count >= 2 ? s.server_tag : null, tagBackground: s.tag_background || '#5865f2', tagUnlocked: s.boost_count >= 2 })),
     boostPrice: BOOST_PRICE,
     boostDurationSeconds: MONTH_SECONDS
   });
@@ -130,6 +130,10 @@ router.post('/profile-style', async (req, res) => {
 
 router.post('/adopt-tag', async (req, res) => {
   const serverId = String(req.body.serverId || '');
+  if (!serverId) {
+    await pool.query('UPDATE users SET active_server_tag_id=NULL WHERE id=$1', [req.session.userId]);
+    return res.json({ success: true, serverId: null });
+  }
   const membership = await pool.query(`SELECT s.id, s.server_tag FROM server_members sm JOIN servers s ON s.id=sm.server_id JOIN server_boost_allocations a ON a.server_id=s.id AND a.feature='tag' WHERE sm.user_id=$1 AND s.id=$2`, [req.session.userId, serverId]);
   if (!membership.rows.length || !membership.rows[0].server_tag) return res.status(400).json({ error: 'That server tag is not available to adopt' });
   await pool.query('UPDATE users SET active_server_tag_id=$1 WHERE id=$2', [serverId, req.session.userId]);

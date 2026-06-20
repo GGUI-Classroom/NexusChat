@@ -1466,7 +1466,7 @@
     $('self-display-name').style.setProperty('--pro-name-start', currentUser.proGradientStart || '#5865f2');
     $('self-display-name').style.setProperty('--pro-name-end', currentUser.proGradientEnd || '#a855f7');
     const tag = $('self-server-tag');
-    if (tag) { tag.style.display = currentUser.activeServerTag ? 'inline-block' : 'none'; tag.textContent = currentUser.activeServerTag ? '[' + currentUser.activeServerTag + ']' : ''; tag.style.setProperty('--tag-bg', currentUser.activeServerTagBackground || '#5865f2'); }
+    if (tag) { tag.style.display = currentUser.activeServerTag ? 'inline-block' : 'none'; tag.textContent = currentUser.activeServerTag ? '[' + currentUser.activeServerTag + ']' : ''; tag.style.setProperty('--tag-bg', currentUser.activeServerTagBackground || '#5865f2'); tag.onclick = e => showIdentityTagInvite(e, currentUser); $('self-display-name').after(tag); }
     $('self-username').textContent = '@' + currentUser.username;
     const el = $('self-avatar-display');
     renderAvatar(el, currentUser);
@@ -1667,8 +1667,8 @@
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${server && server.tag ? ` <button class="identity-tag" style="--tag-bg:${esc(server.tagBackground || '#5865f2')}" onclick="event.stopPropagation();showServerTagInvite(event,'${server.id}')">[${esc(server.tag)}]</button>` : ''}</span>
-          ${isOwner ? '<span class="member-role" style="color:var(--yellow)">Owner</span>' : (m.roleName ? `<span class="member-role" style="color:${m.roleColor||'var(--accent)'}">${esc(m.roleName)}</span>` : '')}
+          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
+          ${m.roleName ? `<span class="member-role" style="color:${m.roleColor||'var(--accent)'}">${esc(m.roleName)}</span>` : ''}
           ${canManage ? `<div class="member-actions">
             <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
             <button class="member-action-btn kick" onclick="kickMember('${m.id}','${esc(m.displayName)}')">Kick</button>
@@ -2315,6 +2315,12 @@
     const features = new Set(server.boostFeatures || []);
     $('boosts-settings-content').innerHTML = `<div class="shop-card"><div class="shop-card-name">${server.boostCount || 0} active boosts</div><div class="shop-card-desc">Allocate two boosts per server feature. Expired boosts automatically disable the feature they funded.</div></div><div class="shop-grid" style="margin-top:12px"><div class="shop-card"><div class="shop-card-name">Server Tag</div><div class="shop-card-desc">A clickable tag card shown beside members across DMs and servers.</div><button class="shop-card-btn ${features.has('tag') ? 'equip' : 'buy'}" onclick="spendBoosts('tag')">${features.has('tag') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Role Gradients</div><div class="shop-card-desc">Unlock animated gradient colors in the role editor.</div><button class="shop-card-btn ${features.has('gradients') ? 'equip' : 'buy'}" onclick="spendBoosts('gradients')">${features.has('gradients') ? 'Allocated' : 'Spend 2 Boosts'}</button></div></div>`;
   }
+
+  function identityTagHtml(user) {
+    if (!user || !user.activeServerTag || !user.activeServerTagServerId) return '';
+    const payload = encodeURIComponent(JSON.stringify({ tag: user.activeServerTag, background: user.activeServerTagBackground, serverId: user.activeServerTagServerId, serverName: user.activeServerTagServerName, inviteCode: user.activeServerTagInviteCode })).replace(/'/g, '%27');
+    return ` <button class="identity-tag" style="--tag-bg:${esc(user.activeServerTagBackground || '#5865f2')}" onclick="event.stopPropagation();showIdentityTagInvite(event,decodeURIComponent('${payload}'))">[${esc(user.activeServerTag)}]</button>`;
+  }
   window.spendBoosts = async function(feature) { const r = await api('POST', '/api/perks/servers/' + activeServerId + '/spend', { feature }); if (r.error) return toast(r.error, 'error'); toast('Boosts allocated', 'success'); await loadServerSidebar(activeServerId); $('server-settings-btn').click(); };
 
   $('server-boost-btn').addEventListener('click', async () => {
@@ -2686,7 +2692,7 @@
           <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="fdot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}</div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
           <div class="username">@${esc(f.username)}</div>
           <div class="status ${f.status === 'online' ? 'online' : ''}" id="fstatus-${f.id}">${f.status === 'online' ? '● Online' : '○ Offline'}</div>
         </div>
@@ -2800,7 +2806,7 @@
           <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="ddot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}</div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
           <div class="last-msg" id="dlm-${f.id}"></div>
         </div>
       </div>
@@ -2954,7 +2960,7 @@
     const isMe = msg.fromId === currentUser.id;
     const currentRoleForMessage = activeServerData && activeServerData.roles && activeServerData.roles.find(r => { const me = activeServerData.members && activeServerData.members.find(m => m.id === currentUser.id); return me && r.id === me.roleId; });
     const author = isMe
-      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null) }
+      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null), activeServerTag: currentUser.activeServerTag, activeServerTagBackground: currentUser.activeServerTagBackground, activeServerTagServerId: currentUser.activeServerTagServerId, activeServerTagServerName: currentUser.activeServerTagServerName, activeServerTagInviteCode: currentUser.activeServerTagInviteCode }
       : msg.author;
 
     const roleColor = author.roleColor || null;
@@ -2994,7 +3000,7 @@
       <div class="avatar-wrap" style="flex-shrink:0;align-self:flex-start;margin-top:2px"><div class="avatar" id="mav-${msg.id}"></div></div>
       <div class="msg-body">
         <div class="msg-header">
-          <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>
+          <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>${identityTagHtml(author)}
           <span class="msg-time">${formatTime(msg.createdAt)}</span>
           ${pinBadge}
         </div>
@@ -4016,10 +4022,20 @@
   }
 
   // ---- Profile ----
+  async function loadProfileTagChoices() {
+    const choices = $('profile-tag-choices');
+    if (!choices) return;
+    const data = await api('GET', '/api/perks');
+    if (data.error) return;
+    const serversWithTags = (data.servers || []).filter(s => s.tag);
+    choices.innerHTML = `<button type="button" class="tag-choice${!currentUser.activeServerTag ? ' selected' : ''}" onclick="adoptServerTag('')">No tag</button>${serversWithTags.map(s => `<button type="button" class="tag-choice${currentUser.activeServerTagServerId === s.id ? ' selected' : ''}" style="--tag-bg:${esc(s.tagBackground || '#5865f2')}" onclick="adoptServerTag('${s.id}')">[${esc(s.tag)}] ${esc(s.name)}</button>`).join('')}`;
+  }
+
   $('profile-btn').addEventListener('click', () => {
     $('profile-display-name').value = currentUser.displayName;
     $('profile-bio').value = currentUser.bio || '';
     renderAvatar($('profile-avatar-preview'), currentUser);
+    loadProfileTagChoices();
     $('profile-modal').classList.add('active');
   });
   $('profile-modal-close').addEventListener('click', () => $('profile-modal').classList.remove('active'));
@@ -5054,8 +5070,6 @@
     const count = $('pro-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
     const status = data.pro.active ? 'Active until ' + new Date(data.pro.expiresAt * 1000).toLocaleDateString() : 'Inactive';
     $('pro-content').innerHTML = `<div class="pro-hero"><div><div class="pro-kicker">NEXUS PRO</div><h2>Make your profile unmistakable.</h2><p>${status}. Pro is ${data.pro.price.toLocaleString()} Nexals for 30 days.</p></div><button class="shop-card-btn buy" onclick="subscribePro()">${data.pro.active ? 'Extend Pro' : 'Get Pro'}</button></div><div class="pro-benefits"><div><b>Custom banner</b><span>Choose the exact two-color gradient for your profile popup.</span></div><div><b>Name effects</b><span>Add a shimmer or prismatic sweep to your display name.</span></div><div><b>Premium popup</b><span>Your custom look appears wherever your profile is opened.</span></div></div>${data.pro.active ? `<div class="pro-customizer"><div class="pro-customizer-preview" id="pro-preview"><div class="pro-preview-avatar">N</div><b>${esc(currentUser.displayName || 'You')}</b><span>@${esc(currentUser.username || '')}</span></div><div class="pro-customizer-controls"><label>Banner start <input type="color" id="pro-gradient-start" value="#5865f2"></label><label>Banner end <input type="color" id="pro-gradient-end" value="#a855f7"></label><label>Name effect <select id="pro-name-effect"><option value="none">Clean gradient</option><option value="shimmer">Shimmer</option><option value="prism">Prism sweep</option></select></label><button class="shop-card-btn buy" onclick="saveProCustomization()">Save Popup Look</button></div></div>` : ''}`;
-    const tagChoices = (data.servers || []).filter(s => s.tag);
-    if (tagChoices.length) { const chooser = document.createElement('div'); chooser.className = 'pro-theme-row'; chooser.innerHTML = tagChoices.map(s => `<button onclick="adoptServerTag('${s.id}')">Use [${esc(s.tag)}] from ${esc(s.name)}</button>`).join(''); $('pro-content').appendChild(chooser); }
     return;
     $('pro-content').innerHTML = `<div class="shop-card" style="max-width:620px"><div class="shop-card-name">Nexus Pro</div><div class="shop-card-desc">${status}. Pro unlocks profile card themes and premium profile styling.</div><div class="shop-card-price">${data.pro.price.toLocaleString()} Nexals / 30 days</div><button class="shop-card-btn buy" onclick="subscribePro()">${data.pro.active ? 'Extend Pro' : 'Get Pro'}</button>${data.pro.active ? `<div style="display:flex;gap:8px;margin-top:10px"><button class="shop-card-btn" onclick="setProStyle('aurora')">Aurora</button><button class="shop-card-btn" onclick="setProStyle('ember')">Ember</button><button class="shop-card-btn" onclick="setProStyle('glacier')">Glacier</button></div>` : ''}</div><div class="shop-subsection"><h2>Server Boosts</h2><p>One boost is 10,000 Nexals for 30 days. Two active boosts unlock a server tag and animated gradient role colors.</p></div><div class="shop-grid">${data.servers.map(s => `<div class="shop-card"><div class="shop-card-name">${esc(s.name)}</div><div class="shop-card-desc">${s.boostCount} active boosts${s.tag ? ' | Tag: ' + esc(s.tag) : ''}</div>${s.tagUnlocked ? `<div style="display:flex;gap:6px;margin:8px 0"><input id="tag-${s.id}" maxlength="4" value="${esc(s.tag || '')}" style="width:68px;text-transform:uppercase"><button class="shop-card-btn" onclick="setServerTag('${s.id}')">Set Tag</button></div>` : ''}<button class="shop-card-btn buy" onclick="boostServer('${s.id}')">Boost for ${data.boostPrice.toLocaleString()}</button></div>`).join('')}</div>`;
   }
@@ -5820,17 +5834,18 @@
     } catch(err) {}
   };
 
-  window.showServerTagInvite = async function(e, serverId) {
-    const server = activeServerData && activeServerData.server;
-    if (!server || server.id !== serverId) return;
+  window.showIdentityTagInvite = function(e, tagData) {
+    e.stopPropagation();
+    const tag = typeof tagData === 'string' ? JSON.parse(tagData) : tagData;
+    if (!tag || !tag.serverId) return;
     const popup = $('profile-popup');
-    $('popup-name').textContent = server.name;
+    $('popup-name').textContent = tag.serverName || 'Server';
     $('popup-username').textContent = 'Server invite';
     $('popup-role').style.display = 'none'; $('popup-bio-section').style.display = 'none';
     $('popup-server-tag').style.display = 'none';
     $('popup-tag-invite').style.display = 'block';
-    $('popup-tag-invite').innerHTML = `<strong>${esc(server.name)}</strong><span>${server.tag ? '[' + esc(server.tag) + '] ' : ''}Invite code: ${esc(server.inviteCode)}</span><button type="button">Copy Invite Code</button>`;
-    $('popup-tag-invite').querySelector('button').onclick = () => { navigator.clipboard.writeText(server.inviteCode); toast('Invite code copied', 'success'); };
+    $('popup-tag-invite').innerHTML = `<strong>${esc(tag.serverName || 'Server')}</strong><span>[${esc(tag.tag)}] Server invite</span><button type="button">Join Server</button>`;
+    $('popup-tag-invite').querySelector('button').onclick = async () => { if (!tag.inviteCode) return; const joined = await api('POST', '/api/servers/join/' + tag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); };
     popup.style.display = 'block'; popup.style.left = Math.min(e.clientX + 10, window.innerWidth - 290) + 'px'; popup.style.top = Math.min(e.clientY, window.innerHeight - 220) + 'px';
   };
 

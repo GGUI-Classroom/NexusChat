@@ -840,9 +840,9 @@ io.on('connection', (socket) => {
     if (!trimmed) return;
     // Single query: check friendship AND get sender info at once
     const check = await pool.query(
-      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
+      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
         (SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1) as friend_id
-       FROM users u WHERE u.id=$1`,
+       FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
       [userId, toId]
     );
     if (!check.rows.length || !check.rows[0].friend_id) return;
@@ -857,7 +857,8 @@ io.on('connection', (socket) => {
         avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null,
         activeDecoration: s.active_decoration || null,
         activeColor: s.active_color || null,
-        activeFont: s.active_font || null
+        activeFont: s.active_font || null, proActive: (s.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: s.profile_gradient_start, proGradientEnd: s.profile_gradient_end, proNameEffect: s.profile_name_effect,
+        activeServerTag: s.server_tag || null, activeServerTagBackground: s.tag_background || '#5865f2', activeServerTagServerId: s.tag_server_id || null, activeServerTagServerName: s.tag_server_name || null, activeServerTagInviteCode: s.tag_invite_code || null
       }
     };
     // Emit to sender immediately (no await before this)
@@ -920,7 +921,7 @@ io.on('connection', (socket) => {
     const check = await pool.query(
       `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
         sr.is_admin, sr.can_delete_messages,
-        u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect,
+        u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
         ch.id as ch_id, ch.locked, ch.private as ch_private, ch.slowmode_seconds, ch.channel_type,
         (SELECT allow_send FROM channel_permissions cp
          WHERE cp.channel_id=$2 AND (cp.role_id=sm.role_id OR cp.role_id IS NULL)
@@ -929,6 +930,7 @@ io.on('connection', (socket) => {
        JOIN users u ON u.id=sm.user_id
        JOIN channels ch ON ch.id=$2 AND ch.server_id=$1
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
+       LEFT JOIN servers ats ON ats.id=u.active_server_tag_id
        WHERE sm.server_id=$1 AND sm.user_id=$3`,
       [serverId, channelId, userId]
     );
@@ -1060,7 +1062,8 @@ io.on('connection', (socket) => {
         roleColor: row.role_color || null, roleName: row.role_name || null, roleGradientStart: row.role_gradient_start || null, roleGradientEnd: row.role_gradient_end || null,
         activeDecoration: row.active_decoration || null,
         activeColor: row.active_color || null,
-        activeFont: row.active_font || null, proActive: (row.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: row.profile_gradient_start, proGradientEnd: row.profile_gradient_end, proNameEffect: row.profile_name_effect
+        activeFont: row.active_font || null, proActive: (row.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: row.profile_gradient_start, proGradientEnd: row.profile_gradient_end, proNameEffect: row.profile_name_effect,
+        activeServerTag: row.server_tag || null, activeServerTagBackground: row.tag_background || '#5865f2', activeServerTagServerId: row.tag_server_id || null, activeServerTagServerName: row.tag_server_name || null, activeServerTagInviteCode: row.tag_invite_code || null
       }
     };
     // Resolve mentions for notification
