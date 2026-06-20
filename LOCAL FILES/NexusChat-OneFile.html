@@ -1745,6 +1745,7 @@ html, body {
 .profile-popup.pro-profile.effect-shimmer .profile-popup-name,.profile-popup.pro-profile.effect-prism .profile-popup-name { animation: role-gradient-shift 2.6s linear infinite; }
 .profile-popup-tag { display:flex;align-items:center;gap:7px;border:0;border-radius:6px;padding:6px 8px;margin:4px 0 10px;color:#fff;background:var(--tag-background,#5865f2);cursor:pointer;font:inherit;font-size:11px;font-weight:800; }
 .profile-popup-tag img { width:18px;height:18px;border-radius:50%;object-fit:cover; }
+.profile-popup-tag-invite { margin:2px 0 10px;padding:10px;border:1px solid var(--border-bright);background:var(--bg-surface);font-size:12px;color:var(--text-secondary); }.profile-popup-tag-invite strong { display:block;color:var(--text-primary);margin-bottom:3px; }.profile-popup-tag-invite button { margin-top:8px;width:100%;padding:7px;border:0;background:var(--accent);color:#fff;font-weight:800;cursor:pointer; }
 
 /* ===== CHANNEL PERMISSIONS ===== */
 .lock-toggle {
@@ -6458,6 +6459,7 @@ html, body {
       <div class="profile-popup-username" id="popup-username">–</div>
       <div class="profile-popup-role" id="popup-role" style="display:none"></div>
       <button class="profile-popup-tag" id="popup-server-tag" style="display:none"></button>
+      <div class="profile-popup-tag-invite" id="popup-tag-invite" style="display:none"></div>
       <div class="profile-popup-divider"></div>
       <div class="profile-popup-section" id="popup-bio-section" style="display:none">
         <div class="profile-popup-label">ABOUT ME</div>
@@ -12310,8 +12312,9 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');
         tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${r.serverTag.iconDataUrl}" alt="">` : ''}<span>${esc(r.serverTag.tag)} | ${esc(r.serverTag.name)}</span>`;
-        tag.onclick = async () => { if (!confirm('Join ' + r.serverTag.name + '?')) return; const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); };
-      } else { tag.style.display = 'none'; }
+        const invite = $('popup-tag-invite');
+        tag.onclick = () => { invite.style.display = invite.style.display === 'none' ? 'block' : 'none'; invite.innerHTML = `<strong>${esc(r.serverTag.name)}</strong><span>Server invite from ${esc(data.displayName)}</span><button type="button">Join Server</button>`; invite.querySelector('button').onclick = async () => { const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); }; };
+      } else { tag.style.display = 'none'; $('popup-tag-invite').style.display = 'none'; }
     } catch(err) {}
   };
 

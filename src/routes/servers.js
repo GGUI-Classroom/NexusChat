@@ -219,7 +219,7 @@ router.get('/:id', async (req, res) => {
     `, [id, req.session.userId]),
     pool.query(
       `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.is_admin,
-       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status, u.active_decoration, u.active_color
+       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
        LEFT JOIN server_roles sr ON sr.id=sm.role_id

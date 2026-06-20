@@ -5800,8 +5800,9 @@
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');
         tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${r.serverTag.iconDataUrl}" alt="">` : ''}<span>${esc(r.serverTag.tag)} | ${esc(r.serverTag.name)}</span>`;
-        tag.onclick = async () => { if (!confirm('Join ' + r.serverTag.name + '?')) return; const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); };
-      } else { tag.style.display = 'none'; }
+        const invite = $('popup-tag-invite');
+        tag.onclick = () => { invite.style.display = invite.style.display === 'none' ? 'block' : 'none'; invite.innerHTML = `<strong>${esc(r.serverTag.name)}</strong><span>Server invite from ${esc(data.displayName)}</span><button type="button">Join Server</button>`; invite.querySelector('button').onclick = async () => { const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); }; };
+      } else { tag.style.display = 'none'; $('popup-tag-invite').style.display = 'none'; }
     } catch(err) {}
   };
 
