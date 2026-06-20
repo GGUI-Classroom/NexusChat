@@ -435,22 +435,14 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
       return res.status(400).json({ error: 'Choose two valid gradient colors' });
     }
   }
-  await pool.query(
-    `UPDATE server_roles SET
-      name=COALESCE($1,name),
-      color=COALESCE($2,color),
-      is_admin=COALESCE($3,is_admin),
-      can_delete_messages=COALESCE($4,can_delete_messages),
-      gradient_start=CASE WHEN $5 THEN $6 WHEN $9 THEN NULL ELSE gradient_start END,
-      gradient_end=CASE WHEN $5 THEN $7 WHEN $9 THEN NULL ELSE gradient_end END,
-      gradient_animated=CASE WHEN $5 THEN $8 WHEN $9 THEN FALSE ELSE gradient_animated END
-     WHERE id=$10 AND server_id=$11`,
-    [name || null, color || null,
-     roleIsAdmin != null ? !!roleIsAdmin : null,
-     canDeleteMessages != null ? !!canDeleteMessages : null,
-     wantsGradient, gradientStart || null, gradientEnd || null, !!gradientAnimated, clearingGradient,
-     roleId, id]
-  );
+  const base = [name || null, color || null, roleIsAdmin != null ? !!roleIsAdmin : null, canDeleteMessages != null ? !!canDeleteMessages : null, roleId, id];
+  if (wantsGradient) {
+    await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages), gradient_start=$5, gradient_end=$6, gradient_animated=TRUE WHERE id=$7 AND server_id=$8`, [...base.slice(0, 4), gradientStart, gradientEnd, roleId, id]);
+  } else if (clearingGradient) {
+    await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages), gradient_start=NULL, gradient_end=NULL, gradient_animated=FALSE WHERE id=$5 AND server_id=$6`, base);
+  } else {
+    await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages) WHERE id=$5 AND server_id=$6`, base);
+  }
   const r = await pool.query('SELECT * FROM server_roles WHERE id=$1', [roleId]);
   res.json({ role: roleForClient(r.rows[0], (await activeBoostFeatures(id)).has('gradients')) });
 });
