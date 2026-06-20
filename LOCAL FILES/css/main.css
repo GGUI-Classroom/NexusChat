@@ -823,6 +823,7 @@ html, body {
   color: var(--text-secondary);
 }
 .avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-preview.decoration-host { position: relative; overflow: visible; }
 .avatar-upload-info { display: flex; flex-direction: column; gap: 4px; }
 
 /* ===== CALL MODAL ===== */

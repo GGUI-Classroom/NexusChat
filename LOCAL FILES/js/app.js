@@ -356,8 +356,7 @@
 
     if (!deco) {
       // Clean up any old deco on this element's wrap
-      const oldWrap = el.parentElement;
-      if (oldWrap) {
+      [el, el.parentElement].filter(Boolean).forEach(oldWrap => {
         clearDecorationDom(oldWrap);
         delete oldWrap.dataset.deco;
         stopStormCanvas(oldWrap);
@@ -365,13 +364,15 @@
         stopYinYangCanvas(oldWrap);
         stopHydroCanvas(oldWrap);
         stopShatterCanvas(oldWrap);
-      }
+      });
       return;
     }
 
-    // Find or create a proper wrap for the avatar
-    let wrap = el.parentElement;
-    if (!wrap) return;
+    // Decorations belong to a compact avatar host, never a modal/form layout row.
+    const parent = el.parentElement;
+    const wrap = parent && parent.classList.contains('avatar-wrap') ? parent : el;
+    if (parent && parent !== wrap) clearDecorationDom(parent);
+    wrap.classList.add('decoration-host');
 
     // Ensure the wrap has position:relative and overflow:visible for canvas decos
     const canvasDecoSet = new Set(['storm','inferno','yinyang','hydro','shatter']);
@@ -384,6 +385,7 @@
       }
     } else if (getComputedStyle(wrap).position === 'static') {
       wrap.style.position = 'relative';
+      wrap.style.overflow = 'visible';
     }
 
     // Remove stale deco elements and canvases
