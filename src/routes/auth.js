@@ -94,7 +94,7 @@ router.get('/me', async (req, res) => {
     }
 
     const r = await pool.query(
-      'SELECT id, username, display_name, avatar_data, avatar_mime, bio, active_decoration, active_color, active_font, active_ringtone, pro_expires_at, profile_gradient_start, profile_gradient_end, profile_name_effect FROM users WHERE id=$1',
+      'SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.bio, u.active_decoration, u.active_color, u.active_font, u.active_ringtone, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, s.server_tag, s.tag_background FROM users u LEFT JOIN servers s ON s.id=u.active_server_tag_id WHERE u.id=$1',
       [req.session.userId]
     );
     const user = r.rows[0];
@@ -108,7 +108,7 @@ router.get('/me', async (req, res) => {
       activeColor: user.active_color || null,
         activeFont: user.active_font || null,
       activeRingtone: user.active_ringtone || null,
-      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none'
+      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2'
     }});
   } catch (e) {
     return res.status(500).json({ error: 'Server error' });

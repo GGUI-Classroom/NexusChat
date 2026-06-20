@@ -128,6 +128,14 @@ router.post('/profile-style', async (req, res) => {
   res.json({ success: true, style: style || null });
 });
 
+router.post('/adopt-tag', async (req, res) => {
+  const serverId = String(req.body.serverId || '');
+  const membership = await pool.query(`SELECT s.id, s.server_tag FROM server_members sm JOIN servers s ON s.id=sm.server_id JOIN server_boost_allocations a ON a.server_id=s.id AND a.feature='tag' WHERE sm.user_id=$1 AND s.id=$2`, [req.session.userId, serverId]);
+  if (!membership.rows.length || !membership.rows[0].server_tag) return res.status(400).json({ error: 'That server tag is not available to adopt' });
+  await pool.query('UPDATE users SET active_server_tag_id=$1 WHERE id=$2', [serverId, req.session.userId]);
+  res.json({ success: true, serverId });
+});
+
 router.patch('/profile-customize', async (req, res) => {
   const start = String(req.body.gradientStart || ''); const end = String(req.body.gradientEnd || '');
   const effect = String(req.body.nameEffect || 'none');

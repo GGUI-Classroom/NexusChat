@@ -1465,6 +1465,8 @@
     $('self-display-name').className = currentUser.proActive && currentUser.proNameEffect !== 'none' ? 'display-name pro-name-effect' : 'display-name';
     $('self-display-name').style.setProperty('--pro-name-start', currentUser.proGradientStart || '#5865f2');
     $('self-display-name').style.setProperty('--pro-name-end', currentUser.proGradientEnd || '#a855f7');
+    const tag = $('self-server-tag');
+    if (tag) { tag.style.display = currentUser.activeServerTag ? 'inline-block' : 'none'; tag.textContent = currentUser.activeServerTag ? '[' + currentUser.activeServerTag + ']' : ''; tag.style.setProperty('--tag-bg', currentUser.activeServerTagBackground || '#5865f2'); }
     $('self-username').textContent = '@' + currentUser.username;
     const el = $('self-avatar-display');
     renderAvatar(el, currentUser);
