@@ -223,7 +223,7 @@ router.get('/:id', async (req, res) => {
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
-       WHERE sm.server_id=$1 ORDER BY u.display_name ASC`, [id]
+        WHERE sm.server_id=$1 ORDER BY u.display_name ASC`, [id, req.session.userId]
     ),
     pool.query('SELECT * FROM server_roles WHERE server_id=$1 ORDER BY position ASC', [id]),
     activeBoostFeatures(id)
