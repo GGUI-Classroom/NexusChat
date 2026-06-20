@@ -3309,6 +3309,7 @@ html, body {
 .user-card.pro-ember { background: linear-gradient(110deg, rgba(255,120,54,0.24), rgba(255,62,62,0.18), rgba(255,212,86,0.14)); border-color: rgba(255,160,72,0.5); }
 .user-card.pro-glacier { background: linear-gradient(110deg, rgba(222,249,255,0.22), rgba(94,178,255,0.17), rgba(168,132,255,0.15)); border-color: rgba(190,238,255,0.52); }
 .role-gradient-text { background: linear-gradient(90deg, var(--role-gradient-start), var(--role-gradient-end), var(--role-gradient-start)); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: role-gradient-shift 3s linear infinite; }
+.pro-name-effect { background:linear-gradient(90deg,var(--pro-name-start),var(--pro-name-end),var(--pro-name-start));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:role-gradient-shift 2.6s linear infinite; }
 @keyframes role-gradient-shift { to { background-position: 200% 0; } }
 .pro-hero,.stats-hero { display:flex;justify-content:space-between;gap:18px;align-items:center;padding:22px;border:1px solid rgba(96,224,255,0.36);background:linear-gradient(120deg,rgba(72,210,255,0.16),rgba(158,88,255,0.16),rgba(255,192,78,0.1)); }
 .pro-hero h2 { margin:4px 0 8px;font-size:22px; }.pro-hero p,.stats-hero p { margin:0;color:var(--text-secondary);font-size:13px; }.pro-kicker,.stats-hero span { color:#79e9ff;font-size:11px;font-weight:800;letter-spacing:1px; }

@@ -62,7 +62,8 @@ router.post('/login', async (req, res) => {
       activeDecoration: user.active_decoration || null,
       activeColor: user.active_color || null,
         activeFont: user.active_font || null,
-      activeRingtone: user.active_ringtone || null
+      activeRingtone: user.active_ringtone || null,
+      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none'
     }});
   } catch (e) {
     console.error(e);
@@ -93,7 +94,7 @@ router.get('/me', async (req, res) => {
     }
 
     const r = await pool.query(
-      'SELECT id, username, display_name, avatar_data, avatar_mime, bio, active_decoration, active_color, active_font, active_ringtone FROM users WHERE id=$1',
+      'SELECT id, username, display_name, avatar_data, avatar_mime, bio, active_decoration, active_color, active_font, active_ringtone, pro_expires_at, profile_gradient_start, profile_gradient_end, profile_name_effect FROM users WHERE id=$1',
       [req.session.userId]
     );
     const user = r.rows[0];
@@ -106,7 +107,8 @@ router.get('/me', async (req, res) => {
       activeColor: user.active_color || null,
       activeColor: user.active_color || null,
         activeFont: user.active_font || null,
-      activeRingtone: user.active_ringtone || null
+      activeRingtone: user.active_ringtone || null,
+      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none'
     }});
   } catch (e) {
     return res.status(500).json({ error: 'Server error' });
