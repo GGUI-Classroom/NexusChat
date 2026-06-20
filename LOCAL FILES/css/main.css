@@ -1436,7 +1436,7 @@ html, body {
   transition: var(--transition);
 }
 .server-member-item:hover { background: var(--bg-hover); }
-.server-member-item .member-name { font-size: 13px; font-weight: 600; color: var(--text-secondary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.server-member-item .member-name { font-size: 13px; font-weight: 600; color: var(--text-secondary); flex: 1; min-width: 0; overflow: visible; text-overflow: clip; white-space: nowrap; }
 .server-member-item .member-role { font-size: 10px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 
 .sidebar-label {
