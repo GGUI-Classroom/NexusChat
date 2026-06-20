@@ -31,6 +31,8 @@ const STATIC_CLIENT_ORIGINS = new Set(
 
 function isAllowedClientOrigin(origin) {
   if (!origin) return true;
+  // With no explicit allow-list, the hosted app and local file client must both be able to connect.
+  if (!STATIC_CLIENT_ORIGINS.size) return true;
   if (origin === 'null') return ALLOW_FILE_CLIENTS;
   return STATIC_CLIENT_ORIGINS.has(origin);
 }
