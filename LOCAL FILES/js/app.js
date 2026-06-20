@@ -1667,7 +1667,7 @@
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${server && server.tag ? ` <span class="member-role" style="color:var(--text-secondary)">[${esc(server.tag)}]</span>` : ''}</span>
+          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${server && server.tag ? ` <button class="identity-tag" style="--tag-bg:${esc(server.tagBackground || '#5865f2')}" onclick="event.stopPropagation();showServerTagInvite(event,'${server.id}')">[${esc(server.tag)}]</button>` : ''}</span>
           ${isOwner ? '<span class="member-role" style="color:var(--yellow)">Owner</span>' : (m.roleName ? `<span class="member-role" style="color:${m.roleColor||'var(--accent)'}">${esc(m.roleName)}</span>` : '')}
           ${canManage ? `<div class="member-actions">
             <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
@@ -5818,6 +5818,20 @@
         tag.onclick = () => { invite.style.display = invite.style.display === 'none' ? 'block' : 'none'; invite.innerHTML = `<strong>${esc(r.serverTag.name)}</strong><span>Server invite from ${esc(data.displayName)}</span><button type="button">Join Server</button>`; invite.querySelector('button').onclick = async () => { const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); }; };
       } else { tag.style.display = 'none'; $('popup-tag-invite').style.display = 'none'; }
     } catch(err) {}
+  };
+
+  window.showServerTagInvite = async function(e, serverId) {
+    const server = activeServerData && activeServerData.server;
+    if (!server || server.id !== serverId) return;
+    const popup = $('profile-popup');
+    $('popup-name').textContent = server.name;
+    $('popup-username').textContent = 'Server invite';
+    $('popup-role').style.display = 'none'; $('popup-bio-section').style.display = 'none';
+    $('popup-server-tag').style.display = 'none';
+    $('popup-tag-invite').style.display = 'block';
+    $('popup-tag-invite').innerHTML = `<strong>${esc(server.name)}</strong><span>${server.tag ? '[' + esc(server.tag) + '] ' : ''}Invite code: ${esc(server.inviteCode)}</span><button type="button">Copy Invite Code</button>`;
+    $('popup-tag-invite').querySelector('button').onclick = () => { navigator.clipboard.writeText(server.inviteCode); toast('Invite code copied', 'success'); };
+    popup.style.display = 'block'; popup.style.left = Math.min(e.clientX + 10, window.innerWidth - 290) + 'px'; popup.style.top = Math.min(e.clientY, window.innerHeight - 220) + 'px';
   };
 
   // Dismiss popup on outside click
