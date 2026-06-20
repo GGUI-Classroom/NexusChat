@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 
 const router = express.Router();
+const DEFAULT_SERVER_INVITE_CODE = 'GPFA9B32';
 
 router.post('/register', async (req, res) => {
   const { username, displayName, password } = req.body;
@@ -22,6 +23,17 @@ router.post('/register', async (req, res) => {
     const id = uuidv4();
     await pool.query('INSERT INTO users (id, username, display_name, password_hash) VALUES ($1,$2,$3,$4)',
       [id, username.toLowerCase(), displayName, hash]);
+    const defaultServer = await pool.query(
+      'SELECT id FROM servers WHERE UPPER(invite_code)=UPPER($1) LIMIT 1',
+      [DEFAULT_SERVER_INVITE_CODE]
+    );
+    if (defaultServer.rows[0]) {
+      await pool.query(
+        `INSERT INTO server_members (id, server_id, user_id)
+         VALUES ($1,$2,$3) ON CONFLICT (server_id, user_id) DO NOTHING`,
+        [uuidv4(), defaultServer.rows[0].id, id]
+      );
+    }
     req.session.userId = id;
     return res.json({ success: true, user: { id, username: username.toLowerCase(), displayName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null } });
   } catch (e) {
