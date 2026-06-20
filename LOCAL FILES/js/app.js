@@ -2300,9 +2300,16 @@
     switchSettingsTab('overview');
     await loadNexusGuardSettings();
     renderRolesList(activeServerData.roles || []);
+    renderBoostSettings(s);
     loadBansList();
     $('server-settings-modal').classList.add('active');
   });
+
+  function renderBoostSettings(server) {
+    const features = new Set(server.boostFeatures || []);
+    $('boosts-settings-content').innerHTML = `<div class="shop-card"><div class="shop-card-name">${server.boostCount || 0} active boosts</div><div class="shop-card-desc">Allocate two boosts per server feature. Expired boosts automatically disable the feature they funded.</div></div><div class="shop-grid" style="margin-top:12px"><div class="shop-card"><div class="shop-card-name">Server Tag</div><div class="shop-card-desc">A clickable tag card shown beside members across DMs and servers.</div><button class="shop-card-btn ${features.has('tag') ? 'equip' : 'buy'}" onclick="spendBoosts('tag')">${features.has('tag') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Role Gradients</div><div class="shop-card-desc">Unlock animated gradient colors in the role editor.</div><button class="shop-card-btn ${features.has('gradients') ? 'equip' : 'buy'}" onclick="spendBoosts('gradients')">${features.has('gradients') ? 'Allocated' : 'Spend 2 Boosts'}</button></div></div>`;
+  }
+  window.spendBoosts = async function(feature) { const r = await api('POST', '/api/perks/servers/' + activeServerId + '/spend', { feature }); if (r.error) return toast(r.error, 'error'); toast('Boosts allocated', 'success'); await loadServerSidebar(activeServerId); $('server-settings-btn').click(); };
 
   $('server-boost-btn').addEventListener('click', async () => {
     if (!activeServerId || !activeServerData) return;

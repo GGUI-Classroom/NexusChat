@@ -52,6 +52,12 @@ async function activeBoostCount(serverId) {
   return result.rows[0]?.count || 0;
 }
 
+async function activeBoostFeatures(serverId) {
+  const count = await activeBoostCount(serverId);
+  const allocations = await pool.query('SELECT feature FROM server_boost_allocations WHERE server_id=$1 ORDER BY created_at ASC', [serverId]);
+  return new Set(allocations.rows.slice(0, Math.floor(count / 2)).map(row => row.feature));
+}
+
 function roleForClient(role, gradientsEnabled) {
   return {
     id: role.id,
@@ -220,12 +226,12 @@ router.get('/:id', async (req, res) => {
        WHERE sm.server_id=$1 ORDER BY u.display_name ASC`, [id]
     ),
     pool.query('SELECT * FROM server_roles WHERE server_id=$1 ORDER BY position ASC', [id]),
-    pool.query('SELECT COUNT(*)::int AS count FROM server_boosts WHERE server_id=$1 AND expires_at>$2', [id, Math.floor(Date.now() / 1000)])
+    activeBoostFeatures(id)
   ]);
   if (!sRes.rows.length) return res.status(404).json({ error: 'Not found' });
   const blockedWordsRes = await pool.query('SELECT word FROM server_blocked_words WHERE server_id=$1 ORDER BY word ASC', [id]);
   res.json({
-    server: { ...fmtServer(sRes.rows[0]), boostCount: boostRes.rows[0].count, tag: boostRes.rows[0].count >= 2 ? sRes.rows[0].server_tag : null },
+    server: { ...fmtServer(sRes.rows[0]), boostCount: await activeBoostCount(id), tag: boostRes.has('tag') ? sRes.rows[0].server_tag : null, tagBackground: sRes.rows[0].tag_background || '#5865f2', boostFeatures: [...boostRes] },
     botConfig: {
       name: 'NexusGuard',
       prefix: sRes.rows[0].bot_prefix || '/',
@@ -257,7 +263,7 @@ router.get('/:id', async (req, res) => {
       activeColor: m.active_color || null,
       activeFont: m.active_font || null
     })),
-    roles: roleRes.rows.map(r => roleForClient(r, boostRes.rows[0].count >= 2))
+    roles: roleRes.rows.map(r => roleForClient(r, boostRes.has('gradients')))
   });
 });
 
@@ -423,7 +429,7 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
   const wantsGradient = gradientStart || gradientEnd || gradientAnimated != null;
   if (wantsGradient) {
     if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
-    if (await activeBoostCount(id) < 2) return res.status(403).json({ error: 'Two active boosts are required for gradient roles' });
+    if (!(await activeBoostFeatures(id)).has('gradients')) return res.status(403).json({ error: 'Allocate two boosts to gradients first' });
     if (!/^#[0-9a-f]{6}$/i.test(String(gradientStart || '')) || !/^#[0-9a-f]{6}$/i.test(String(gradientEnd || ''))) {
       return res.status(400).json({ error: 'Choose two valid gradient colors' });
     }
@@ -445,7 +451,7 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
      roleId, id]
   );
   const r = await pool.query('SELECT * FROM server_roles WHERE id=$1', [roleId]);
-  res.json({ role: roleForClient(r.rows[0], await activeBoostCount(id) >= 2) });
+  res.json({ role: roleForClient(r.rows[0], (await activeBoostFeatures(id)).has('gradients')) });
 });
 
 // Delete role

@@ -95,10 +95,27 @@ router.patch('/servers/:serverId/tag', async (req, res) => {
   const tag = String(req.body.tag || '').trim().toUpperCase();
   if (!/^[A-Z0-9]{1,4}$/.test(tag)) return res.status(400).json({ error: 'Server tag must be 1 to 4 letters or numbers' });
   if (!await isServerAdmin(serverId, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
-  const boosts = await pool.query('SELECT COUNT(*)::int AS count FROM server_boosts WHERE server_id=$1 AND expires_at>$2', [serverId, nowSeconds()]);
-  if (boosts.rows[0].count < 2) return res.status(403).json({ error: 'Two active boosts are required for a server tag' });
-  await pool.query('UPDATE servers SET server_tag=$1 WHERE id=$2', [tag, serverId]);
+  const allocation = await pool.query(`SELECT id FROM server_boost_allocations WHERE server_id=$1 AND feature='tag'`, [serverId]);
+  if (!allocation.rows.length) return res.status(403).json({ error: 'Spend two boosts on the server tag first' });
+  const background = /^#[0-9a-f]{6}$/i.test(String(req.body.background || '')) ? req.body.background : '#5865f2';
+  await pool.query('UPDATE servers SET server_tag=$1, tag_background=$2 WHERE id=$3', [tag, background, serverId]);
   res.json({ success: true, tag });
+});
+
+router.post('/servers/:serverId/spend', async (req, res) => {
+  const { serverId } = req.params;
+  const feature = String(req.body.feature || '');
+  if (!['tag', 'gradients'].includes(feature)) return res.status(400).json({ error: 'Invalid boost feature' });
+  if (!await isServerAdmin(serverId, req.session.userId)) return res.status(403).json({ error: 'Owners and admins only' });
+  const now = nowSeconds();
+  const [boosts, allocations] = await Promise.all([
+    pool.query('SELECT COUNT(*)::int AS count FROM server_boosts WHERE server_id=$1 AND expires_at>$2', [serverId, now]),
+    pool.query('SELECT feature FROM server_boost_allocations WHERE server_id=$1', [serverId])
+  ]);
+  if (allocations.rows.some(row => row.feature === feature)) return res.status(409).json({ error: 'This feature already has boosts allocated' });
+  if (boosts.rows[0].count < (allocations.rows.length + 1) * 2) return res.status(400).json({ error: 'Two unallocated active boosts are required' });
+  await pool.query('INSERT INTO server_boost_allocations (id, server_id, feature) VALUES ($1,$2,$3)', [uuidv4(), serverId, feature]);
+  res.json({ success: true, feature });
 });
 
 router.post('/profile-style', async (req, res) => {

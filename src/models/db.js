@@ -213,6 +213,14 @@ async function initDb() {
     created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
   )`, 'server_boosts');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_server_boosts_active ON server_boosts(server_id, expires_at)`, 'idx_server_boosts_active');
+  await runSql(`CREATE TABLE IF NOT EXISTS server_boost_allocations (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    feature TEXT NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(server_id, feature)
+  )`, 'server_boost_allocations');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS tag_background TEXT DEFAULT '#5865f2'`, 'alter_servers_tag_background');
   await runSql(`UPDATE users SET active_color=NULL, active_font=NULL WHERE active_color IS NOT NULL OR active_font IS NOT NULL`, 'clear_retired_color_font');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_spam_window INTEGER DEFAULT 6`, 'alter_servers_bot_spam_window');
   await runSql(`CREATE TABLE IF NOT EXISTS user_fonts (

@@ -431,6 +431,7 @@
         <button class="settings-tab active" data-stab="overview" onclick="switchSettingsTab('overview')">Overview</button>
         <button class="settings-tab" data-stab="nexusguard" onclick="switchSettingsTab('nexusguard')">NexusGuard</button>
         <button class="settings-tab" data-stab="roles" onclick="switchSettingsTab('roles')">Roles</button>
+        <button class="settings-tab" data-stab="boosts" onclick="switchSettingsTab('boosts')">Boosts</button>
         <button class="settings-tab" data-stab="bans" onclick="switchSettingsTab('bans')">Bans</button>
       </div>
       <div class="modal-body">
@@ -515,6 +516,9 @@
             </div>
             <button class="btn-primary" id="create-role-btn" style="width:100%">Create Role</button>
           </div>
+        </div>
+        <div class="settings-tab-panel" id="settings-tab-boosts" style="display:none">
+          <div id="boosts-settings-content"></div>
         </div>
         <div class="settings-tab-panel" id="settings-tab-bans" style="display:none">
           <div id="bans-list"></div>
