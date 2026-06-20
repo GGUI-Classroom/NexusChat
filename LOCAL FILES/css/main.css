@@ -3304,6 +3304,11 @@ html, body {
 .user-card.pro-glacier { background: linear-gradient(110deg, rgba(222,249,255,0.22), rgba(94,178,255,0.17), rgba(168,132,255,0.15)); border-color: rgba(190,238,255,0.52); }
 .role-gradient-text { background: linear-gradient(90deg, var(--role-gradient-start), var(--role-gradient-end), var(--role-gradient-start)); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: role-gradient-shift 3s linear infinite; }
 @keyframes role-gradient-shift { to { background-position: 200% 0; } }
+.pro-hero,.stats-hero { display:flex;justify-content:space-between;gap:18px;align-items:center;padding:22px;border:1px solid rgba(96,224,255,0.36);background:linear-gradient(120deg,rgba(72,210,255,0.16),rgba(158,88,255,0.16),rgba(255,192,78,0.1)); }
+.pro-hero h2 { margin:4px 0 8px;font-size:22px; }.pro-hero p,.stats-hero p { margin:0;color:var(--text-secondary);font-size:13px; }.pro-kicker,.stats-hero span { color:#79e9ff;font-size:11px;font-weight:800;letter-spacing:1px; }
+.pro-benefits,.stats-metrics { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px; }.pro-benefits>div,.stats-metrics>div,.stats-rarities { padding:15px;border:1px solid var(--border);background:var(--bg-surface); }.pro-benefits b,.stats-metrics b { display:block;font-size:15px;margin-bottom:5px; }.pro-benefits span,.stats-metrics span { color:var(--text-secondary);font-size:12px;display:block; }.pro-theme-row { display:flex;gap:8px;margin-top:12px; }.pro-theme-row button { padding:8px 12px;background:var(--bg-hover);border:1px solid var(--border-bright);color:var(--text-primary);cursor:pointer; }
+.stats-hero strong { display:block;font-size:28px;color:#ffe05e;margin:5px 0; }.stats-rarities { display:flex;gap:10px;flex-wrap:wrap;margin-top:12px; }.stat-rarity { min-width:90px;text-transform:capitalize;display:flex;justify-content:space-between;gap:12px;color:var(--text-secondary);font-size:12px; }.stat-rarity b { color:var(--text-primary); }
+@media (max-width:620px){.pro-hero,.stats-hero{align-items:flex-start;flex-direction:column}.pro-benefits,.stats-metrics{grid-template-columns:1fr}}
 
 .shop-pack-grid {
   display: grid;

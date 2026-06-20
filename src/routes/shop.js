@@ -684,8 +684,12 @@ router.get('/stats', async (req, res) => {
     return decoration ? { ...toClientDecoration(decoration, row.quantity), totalValue: sellPrice * row.quantity } : null;
   }).filter(Boolean);
   const sellableValue = items.reduce((total, item) => total + item.totalValue, 0);
+  const rarityBreakdown = items.reduce((all, item) => {
+    all[item.rarity] = (all[item.rarity] || 0) + item.quantity;
+    return all;
+  }, {});
   const user = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
-  res.json({ nexals: user.rows[0]?.nexals || 0, items, sellableValue, decorationCount: items.reduce((total, item) => total + item.quantity, 0) });
+  res.json({ nexals: user.rows[0]?.nexals || 0, items, sellableValue, rarityBreakdown, uniqueDecorations: items.length, decorationCount: items.reduce((total, item) => total + item.quantity, 0) });
 });
 
 router.post('/sell-all', async (req, res) => {

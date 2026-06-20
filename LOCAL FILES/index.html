@@ -152,6 +152,9 @@
           <div class="server-sidebar-header" id="server-sidebar-header">
             <span id="server-sidebar-name">Server</span>
             <div style="display:flex;gap:2px">
+              <button class="icon-btn" id="server-boost-btn" title="Boost this server">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>
+              </button>
               <button class="icon-btn" id="leave-server-btn" title="Leave Server">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
               </button>
@@ -438,6 +441,8 @@
           </div>
           <div class="field-group"><label>Server Name</label><input type="text" id="settings-server-name" /></div>
           <div class="field-group"><label>Invite Code</label><div class="invite-code-row"><input type="text" id="settings-invite-code" readonly /><button class="btn-secondary" id="copy-invite-btn">Copy</button></div></div>
+          <div class="field-group"><label>Boost Status</label><div id="settings-boost-status" style="color:var(--text-secondary);font-size:13px"></div></div>
+          <div class="field-group" id="settings-tag-group"><label>Server Tag (2 boosts required)</label><div class="invite-code-row"><input type="text" id="settings-server-tag" maxlength="4" style="text-transform:uppercase" /><button class="btn-secondary" id="save-server-tag-btn">Save Tag</button></div></div>
           <div class="form-error" id="settings-server-error"></div>
           <div class="settings-actions">
             <button class="btn-primary" id="save-server-btn">Save Changes</button>

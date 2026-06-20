@@ -1574,6 +1574,7 @@
     activeServerData = r;
 
     $('server-sidebar-name').textContent = r.server.name;
+    $('server-boost-btn').title = `Boost ${r.server.name} (${r.server.boostCount || 0} active)`;
 
     // Show settings + add-channel only for admin/owner
     const me = r.members.find(m => m.id === currentUser.id);
@@ -2288,6 +2289,9 @@
     const s = activeServerData.server;
     $('settings-server-name').value = s.name;
     $('settings-invite-code').value = s.inviteCode;
+    $('settings-boost-status').textContent = `${s.boostCount || 0} active boosts. Tags and gradients unlock at 2.`;
+    $('settings-server-tag').value = s.tag || '';
+    $('settings-tag-group').style.display = (s.boostCount || 0) >= 2 ? 'block' : 'none';
     if (s.iconDataUrl) {
       $('settings-icon-preview').innerHTML = `<img src="${s.iconDataUrl}" alt="">`;
     } else {
@@ -2298,6 +2302,24 @@
     renderRolesList(activeServerData.roles || []);
     loadBansList();
     $('server-settings-modal').classList.add('active');
+  });
+
+  $('server-boost-btn').addEventListener('click', async () => {
+    if (!activeServerId || !activeServerData) return;
+    if (!confirm(`Boost ${activeServerData.server.name} for 10,000 Nexals for 30 days?`)) return;
+    const r = await api('POST', '/api/perks/servers/' + activeServerId + '/boost');
+    if (r.error) return toast(r.error, 'error');
+    updateNexalDisplay(r.nexals);
+    toast('Server boosted for 30 days', 'success');
+    await loadServerSidebar(activeServerId);
+  });
+
+  $('save-server-tag-btn').addEventListener('click', async () => {
+    if (!activeServerId) return;
+    const r = await api('PATCH', '/api/perks/servers/' + activeServerId + '/tag', { tag: $('settings-server-tag').value });
+    if (r.error) return toast(r.error, 'error');
+    toast('Server tag saved', 'success');
+    await loadServerSidebar(activeServerId);
   });
 
   // Settings tab switching
@@ -5013,7 +5035,8 @@
     const data = await api('GET', '/api/shop/stats');
     if (data.error) return toast(data.error, 'error');
     const count = $('stats-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
-    $('stats-content').innerHTML = `<div class="shop-card" style="max-width:560px"><div class="shop-card-name">${data.decorationCount.toLocaleString()} decorations</div><div class="shop-card-desc">Pack collection resale value</div><div class="shop-card-price">${data.sellableValue.toLocaleString()} Nexals</div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All Pack Decorations</button></div>`;
+    const rarities = Object.entries(data.rarityBreakdown || {}).map(([rarity, amount]) => `<div class="stat-rarity"><span>${esc(rarity)}</span><b>${amount}</b></div>`).join('');
+    $('stats-content').innerHTML = `<div class="stats-hero"><div><span>COLLECTION VALUE</span><strong>${data.sellableValue.toLocaleString()} Nexals</strong><p>Resale value from your pack-only decorations.</p></div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All</button></div><div class="stats-metrics"><div><b>${data.decorationCount}</b><span>Total copies</span></div><div><b>${data.uniqueDecorations}</b><span>Unique effects</span></div><div><b>${data.nexals.toLocaleString()}</b><span>Current Nexals</span></div></div><div class="stats-rarities">${rarities || '<span>No decorations yet</span>'}</div>`;
   }
 
   window.sellAllDecorations = async function() {
@@ -5030,6 +5053,8 @@
     if (data.error) return toast(data.error, 'error');
     const count = $('pro-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
     const status = data.pro.active ? 'Active until ' + new Date(data.pro.expiresAt * 1000).toLocaleDateString() : 'Inactive';
+    $('pro-content').innerHTML = `<div class="pro-hero"><div><div class="pro-kicker">NEXUS PRO</div><h2>Make your profile unmistakable.</h2><p>${status}. Pro is ${data.pro.price.toLocaleString()} Nexals for 30 days.</p></div><button class="shop-card-btn buy" onclick="subscribePro()">${data.pro.active ? 'Extend Pro' : 'Get Pro'}</button></div><div class="pro-benefits"><div><b>Profile themes</b><span>Aurora, Ember, and Glacier card treatments.</span></div><div><b>Premium presence</b><span>Dedicated visual treatment for your account card.</span></div><div><b>Timed fairly</b><span>Benefits switch off automatically when Pro expires.</span></div></div>${data.pro.active ? `<div class="pro-theme-row"><button onclick="setProStyle('aurora')">Aurora</button><button onclick="setProStyle('ember')">Ember</button><button onclick="setProStyle('glacier')">Glacier</button></div>` : ''}`;
+    return;
     $('pro-content').innerHTML = `<div class="shop-card" style="max-width:620px"><div class="shop-card-name">Nexus Pro</div><div class="shop-card-desc">${status}. Pro unlocks profile card themes and premium profile styling.</div><div class="shop-card-price">${data.pro.price.toLocaleString()} Nexals / 30 days</div><button class="shop-card-btn buy" onclick="subscribePro()">${data.pro.active ? 'Extend Pro' : 'Get Pro'}</button>${data.pro.active ? `<div style="display:flex;gap:8px;margin-top:10px"><button class="shop-card-btn" onclick="setProStyle('aurora')">Aurora</button><button class="shop-card-btn" onclick="setProStyle('ember')">Ember</button><button class="shop-card-btn" onclick="setProStyle('glacier')">Glacier</button></div>` : ''}</div><div class="shop-subsection"><h2>Server Boosts</h2><p>One boost is 10,000 Nexals for 30 days. Two active boosts unlock a server tag and animated gradient role colors.</p></div><div class="shop-grid">${data.servers.map(s => `<div class="shop-card"><div class="shop-card-name">${esc(s.name)}</div><div class="shop-card-desc">${s.boostCount} active boosts${s.tag ? ' | Tag: ' + esc(s.tag) : ''}</div>${s.tagUnlocked ? `<div style="display:flex;gap:6px;margin:8px 0"><input id="tag-${s.id}" maxlength="4" value="${esc(s.tag || '')}" style="width:68px;text-transform:uppercase"><button class="shop-card-btn" onclick="setServerTag('${s.id}')">Set Tag</button></div>` : ''}<button class="shop-card-btn buy" onclick="boostServer('${s.id}')">Boost for ${data.boostPrice.toLocaleString()}</button></div>`).join('')}</div>`;
   }
 
