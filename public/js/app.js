@@ -1632,7 +1632,7 @@
 
     $('server-member-list').innerHTML = members.map(m => {
       const isOwner = m.id === ownerId;
-      const roleStyle = m.roleColor ? `color:${m.roleColor}` : '';
+      const roleStyle = m.roleGradientStart ? `--role-gradient-start:${m.roleGradientStart};--role-gradient-end:${m.roleGradientEnd}` : (m.roleColor ? `color:${m.roleColor}` : '');
       const canManage = iAmAdmin && m.id !== currentUser.id && !isOwner;
       const popupData = encodeURIComponent(JSON.stringify({
         id: m.id, displayName: m.displayName, username: m.username,
@@ -1645,7 +1645,7 @@
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name" style="${roleStyle}">${esc(m.displayName)}${server && server.tag ? ` <span class="member-role" style="color:var(--text-secondary)">[${esc(server.tag)}]</span>` : ''}</span>
+          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${server && server.tag ? ` <span class="member-role" style="color:var(--text-secondary)">[${esc(server.tag)}]</span>` : ''}</span>
           ${isOwner ? '<span class="member-role" style="color:var(--yellow)">Owner</span>' : (m.roleName ? `<span class="member-role" style="color:${m.roleColor||'var(--accent)'}">${esc(m.roleName)}</span>` : '')}
           ${canManage ? `<div class="member-actions">
             <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
@@ -1922,7 +1922,8 @@
     if (activeChannelType === 'voice') return;
     const input = $('channel-message-input');
     const content = input.value.trim();
-    if (!content || !activeChannelId || !activeServerId || !socket) return;
+    if (!content || !activeChannelId || !activeServerId) return;
+    if (!socket || !socket.connected) return toast('Chat connection is reconnecting. Try again in a moment.', 'error');
     socket.emit('send_channel_message', {
       serverId: activeServerId,
       channelId: activeChannelId,
@@ -2929,13 +2930,15 @@
     el.dataset.id = msg.id;
 
     const isMe = msg.fromId === currentUser.id;
+    const currentRoleForMessage = activeServerData && activeServerData.roles && activeServerData.roles.find(r => { const me = activeServerData.members && activeServerData.members.find(m => m.id === currentUser.id); return me && r.id === me.roleId; });
     const author = isMe
-      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null }
+      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || null, roleGradientEnd: currentRoleForMessage?.gradientEnd || null }
       : msg.author;
 
     const roleColor = author.roleColor || null;
-    const roleStyle = roleColor ? `style="color:${roleColor}"` : '';
-    const roleClass = roleColor ? 'msg-author has-role' : 'msg-author';
+    const roleGradient = author.roleGradientStart && author.roleGradientEnd;
+    const roleStyle = roleGradient ? `style="--role-gradient-start:${author.roleGradientStart};--role-gradient-end:${author.roleGradientEnd}"` : (roleColor ? `style="color:${roleColor}"` : '');
+    const roleClass = roleGradient ? 'msg-author has-role role-gradient-text' : roleColor ? 'msg-author has-role' : 'msg-author';
     const roleTip = author.roleName ? `title="${esc(author.roleName)}"` : '';
 
     // Check if current user can delete this message

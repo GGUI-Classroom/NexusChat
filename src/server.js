@@ -916,7 +916,7 @@ io.on('connection', (socket) => {
 
     // Single query: get member info, role info, channel validity, and permission check
     const check = await pool.query(
-      `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color,
+      `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
         sr.is_admin, sr.can_delete_messages,
         u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
         ch.id as ch_id, ch.locked, ch.private as ch_private, ch.slowmode_seconds, ch.channel_type,
@@ -1055,7 +1055,7 @@ io.on('connection', (socket) => {
       author: {
         username: row.username, displayName: row.display_name,
         avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null,
-        roleColor: row.role_color || null, roleName: row.role_name || null,
+        roleColor: row.role_color || null, roleName: row.role_name || null, roleGradientStart: row.role_gradient_start || null, roleGradientEnd: row.role_gradient_end || null,
         activeDecoration: row.active_decoration || null,
         activeColor: row.active_color || null,
         activeFont: row.active_font || null

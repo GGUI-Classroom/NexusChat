@@ -218,7 +218,7 @@ router.get('/:id', async (req, res) => {
       ORDER BY c.position ASC
     `, [id, req.session.userId]),
     pool.query(
-      `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.is_admin,
+      `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start, sr.gradient_end, sr.gradient_animated, sr.is_admin,
        u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
@@ -257,7 +257,7 @@ router.get('/:id', async (req, res) => {
       id: m.id, username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
       status: m.status, role: m.role, roleId: m.role_id,
-      roleName: m.role_name, roleColor: m.role_color, isAdmin: m.is_admin,
+      roleName: m.role_name, roleColor: m.role_color, roleGradientStart: boostRes.has('gradients') ? m.gradient_start : null, roleGradientEnd: boostRes.has('gradients') ? m.gradient_end : null, isAdmin: m.is_admin,
       activeDecoration: m.active_decoration || null,
       activeColor: m.active_color || null,
       activeColor: m.active_color || null,
@@ -701,7 +701,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   if ((channelMeta.rows[0].channel_type || 'text') === 'voice') return res.json({ messages: [] });
   let q = `SELECT cm.id, cm.channel_id, cm.from_id, cm.content, cm.created_at, cm.reply_to_id,
     u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
-    sm.role_id, sr.name as role_name, sr.color as role_color,
+    sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
     rm.content as reply_content,
     rm.from_id as reply_from_id,
     ru.display_name as reply_display_name,
@@ -753,7 +753,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
     author: {
       username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
-      roleColor: m.role_color || null, roleName: m.role_name || null,
+      roleColor: m.role_color || null, roleName: m.role_name || null, roleGradientStart: m.role_gradient_start || null, roleGradientEnd: m.role_gradient_end || null,
       activeDecoration: m.active_decoration || null,
       activeColor: m.active_color || null,
       activeColor: m.active_color || null,
