@@ -426,7 +426,8 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
   if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
   const { name, color, isAdmin: roleIsAdmin, gradientStart, gradientEnd, gradientAnimated } = req.body;
   const { canDeleteMessages } = req.body;
-  const wantsGradient = gradientStart || gradientEnd || gradientAnimated != null;
+  const clearingGradient = gradientAnimated === false;
+  const wantsGradient = !clearingGradient && (gradientStart || gradientEnd || gradientAnimated === true);
   if (wantsGradient) {
     if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
     if (!(await activeBoostFeatures(id)).has('gradients')) return res.status(403).json({ error: 'Allocate two boosts to gradients first' });
@@ -440,14 +441,14 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
       color=COALESCE($2,color),
       is_admin=COALESCE($3,is_admin),
       can_delete_messages=COALESCE($4,can_delete_messages),
-      gradient_start=CASE WHEN $5 THEN $6 ELSE gradient_start END,
-      gradient_end=CASE WHEN $5 THEN $7 ELSE gradient_end END,
-      gradient_animated=CASE WHEN $5 THEN $8 ELSE gradient_animated END
-     WHERE id=$9 AND server_id=$10`,
+      gradient_start=CASE WHEN $5 THEN $6 WHEN $9 THEN NULL ELSE gradient_start END,
+      gradient_end=CASE WHEN $5 THEN $7 WHEN $9 THEN NULL ELSE gradient_end END,
+      gradient_animated=CASE WHEN $5 THEN $8 WHEN $9 THEN FALSE ELSE gradient_animated END
+     WHERE id=$10 AND server_id=$11`,
     [name || null, color || null,
      roleIsAdmin != null ? !!roleIsAdmin : null,
      canDeleteMessages != null ? !!canDeleteMessages : null,
-     wantsGradient, gradientStart || null, gradientEnd || null, !!gradientAnimated,
+     wantsGradient, gradientStart || null, gradientEnd || null, !!gradientAnimated, clearingGradient,
      roleId, id]
   );
   const r = await pool.query('SELECT * FROM server_roles WHERE id=$1', [roleId]);

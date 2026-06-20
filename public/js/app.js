@@ -2382,35 +2382,19 @@
             <span class="role-badge">${r.isAdmin ? 'Admin' : 'Member'}</span>
             ${r.canDeleteMessages ? '<span class="role-badge" style="background:rgba(240,84,84,0.15);color:var(--red)">Can Delete</span>' : ''}
             <div class="role-actions">
-              <button class="role-edit-btn" onclick="editRole('${r.id}','${esc(r.name)}','${r.color}',${r.isAdmin},${!!r.canDeleteMessages})">Edit</button>
+              <button class="role-edit-btn" onclick="editRole('${r.id}')">Edit</button>
               <button class="role-del-btn" onclick="deleteRole('${r.id}','${esc(r.name)}')">Delete</button>
             </div>
+            <label class="toggle-row" style="grid-column:1/-1;margin:4px 0 0"><input type="checkbox" ${r.gradientStart ? 'checked' : ''} onchange="toggleRoleGradient('${r.id}',this.checked)"><span class="toggle-label"><span class="toggle-title">Animated gradient</span></span></label>
           </div>`).join('')
       : '<p style="font-size:13px;color:var(--text-muted);padding:8px 0">No custom roles yet. Create one below.</p>';
   }
 
-  window.editRole = async function(roleId, currentName, currentColor, currentIsAdmin, currentCanDelete) {
-    const name = prompt('Role name:', currentName);
-    if (!name || !name.trim()) return;
-    const color = prompt('Color (hex, e.g. #ff5555):', currentColor);
-    const isAdminChoice = confirm('Should this role have admin permissions?');
-    const canDeleteChoice = confirm('Should this role be able to delete messages?');
-    const payload = {
-      name: name.trim(), color: color || currentColor, isAdmin: isAdminChoice, canDeleteMessages: canDeleteChoice
-    };
-    if (confirm('Use an animated gradient for this role? This needs two active server boosts.')) {
-      payload.gradientStart = prompt('Gradient start color (hex):', '#62e6ff');
-      payload.gradientEnd = prompt('Gradient end color (hex):', '#b06cff');
-      payload.gradientAnimated = true;
-    }
-    const r = await api('PATCH', `/api/servers/${activeServerId}/roles/${roleId}`, payload);
-    if (r.error) return toast(r.error, 'error');
-    const s = await api('GET', `/api/servers/${activeServerId}`);
-    activeServerData = s;
-    renderRolesList(s.roles || []);
-    renderMemberList(s.members);
-    toast('Role updated!', 'success');
-  };
+  window.editRole = function(roleId) { const role = activeServerData.roles.find(r => r.id === roleId); if (!role) return; $('role-editor').style.display='block'; $('edit-role-id').value=role.id; $('edit-role-name').value=role.name; $('edit-role-color').value=role.color; $('edit-role-admin').value=String(!!role.isAdmin); $('edit-role-gradient').checked=!!role.gradientStart; $('edit-role-gradient-colors').style.display=role.gradientStart?'flex':'none'; $('edit-role-gradient-start').value=role.gradientStart||'#62e6ff'; $('edit-role-gradient-end').value=role.gradientEnd||'#b06cff'; };
+  $('edit-role-gradient').addEventListener('change', function(){ $('edit-role-gradient-colors').style.display=this.checked?'flex':'none'; });
+  $('cancel-role-editor-btn').addEventListener('click', ()=> $('role-editor').style.display='none');
+  $('save-role-editor-btn').addEventListener('click', async ()=> { const payload={name:$('edit-role-name').value.trim(),color:$('edit-role-color').value,isAdmin:$('edit-role-admin').value==='true',gradientAnimated:$('edit-role-gradient').checked}; if(payload.gradientAnimated){payload.gradientStart=$('edit-role-gradient-start').value;payload.gradientEnd=$('edit-role-gradient-end').value;} const r=await api('PATCH',`/api/servers/${activeServerId}/roles/${$('edit-role-id').value}`,payload); if(r.error)return toast(r.error,'error'); const s=await api('GET',`/api/servers/${activeServerId}`); activeServerData=s; renderRolesList(s.roles||[]); renderMemberList(s.members); $('role-editor').style.display='none'; toast('Role updated','success'); });
+  window.toggleRoleGradient = function(roleId, enabled) { editRole(roleId); $('edit-role-gradient').checked=enabled; $('edit-role-gradient-colors').style.display=enabled?'flex':'none'; };
 
   window.deleteRole = async function(roleId, name) {
     if (!confirm(`Delete role "${name}"?`)) return;
