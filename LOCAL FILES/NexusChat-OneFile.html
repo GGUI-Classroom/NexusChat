@@ -934,6 +934,11 @@ html, body {
 }
 
 .call-hud-controls { display: flex; gap: 6px; }
+.call-games-modal { max-width: 540px; }
+.game-picker { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+.game-choice { min-height:120px; border:1px solid var(--border); background:var(--bg-surface); color:var(--text-primary); border-radius:6px; cursor:pointer; font:inherit; text-align:left; padding:14px; }
+.game-choice strong { display:block; font-size:18px; margin-bottom:5px; }.game-choice span { color:var(--text-muted); font-size:12px; }
+.game-table { display:flex; flex-direction:column; gap:12px; }.game-cards { display:flex; gap:5px; flex-wrap:wrap; }.game-card { width:34px; height:48px; background:#f7f8fb; color:#192133; border-radius:4px; display:grid; place-items:center; font:700 13px monospace; }.game-card.hidden { background:linear-gradient(135deg,#5366f5,#a855f7); color:transparent; }.game-player { border:1px solid var(--border); padding:9px; border-radius:5px; }.game-player.turn { border-color:var(--accent); }.game-actions { display:flex; gap:8px; flex-wrap:wrap; }.game-actions button { flex:1; min-width:90px; }
 
 .hud-btn {
   width: 34px; height: 34px;
@@ -1420,6 +1425,8 @@ html, body {
   transition: var(--transition);
 }
 .channel-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.channel-item[draggable="true"] { cursor: grab; }
+.channel-item.dragging { opacity: .45; cursor: grabbing; }
 .channel-item.active { background: var(--bg-active); color: var(--text-primary); }
 .channel-item .ch-hash { font-size: 16px; color: var(--text-muted); font-weight: 400; }
 .channel-item .ch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -5907,6 +5914,7 @@ html, body {
                 <button class="icon-btn" id="group-call-btn" title="Join Group Voice Chat">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M3 10v4"/><path d="M7 8v8"/><path d="M11 6v12"/><path d="M15 8v8"/><path d="M19 10v4"/></svg>
                 </button>
+                <button class="icon-btn" id="group-games-btn" title="Play call games" style="display:none">&#9824;</button>
                 <button class="icon-btn" id="group-camera-btn" title="Turn camera on" style="display:none">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><rect x="3" y="6" width="13" height="12" rx="2"/><polygon points="16 10 21 7 21 17 16 14"/></svg>
                 </button>
@@ -6281,8 +6289,16 @@ html, body {
         <button class="hud-btn" id="video-toggle-btn" title="Toggle camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="3" y="6" width="13" height="12" rx="2"/><polygon points="16 10 21 7 21 17 16 14"/></svg></button>
         <button class="hud-btn" id="screenshare-btn" title="Share screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M9 9l3-3 3 3M12 6v7"/></svg></button>
         <button class="hud-btn" id="view-screen-btn" title="View shared screen" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10" r="3"/></svg></button>
+        <button class="hud-btn" id="call-games-btn" title="Play call games">&#9824;</button>
         <button class="hud-btn end" id="end-call-btn" title="End Call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg></button>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="call-games-modal">
+    <div class="modal call-games-modal">
+      <div class="modal-header"><h2>Call Games</h2><button class="modal-close" id="call-games-close">&#215;</button></div>
+      <div class="modal-body" id="call-games-content"></div>
     </div>
   </div>
 
@@ -8119,7 +8135,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
 
   function renderChannelList(channels, isAdmin) {
     $('channel-list').innerHTML = channels.map(c => `
-      <div class="channel-item ${activeChannelId === c.id ? 'active' : ''} ${c.locked ? 'locked' : ''}"
+      <div class="channel-item ${activeChannelId === c.id ? 'active' : ''} ${c.locked ? 'locked' : ''}" ${isAdmin ? 'draggable="true"' : ''}
            data-channel-id="${c.id}"
            data-channel-name="${esc(c.name)}"
          data-channel-type="${esc(c.type || 'text')}"
@@ -8826,6 +8842,10 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     renderBoostSettings(s);
     loadBansList();
     $('server-settings-modal').classList.add('active');
+  });
+  if ($('group-games-btn')) $('group-games-btn').addEventListener('click', () => {
+    if (!activeGameRoomId()) return toast('Join voice first', 'error');
+    $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame);
   });
 
   function renderBoostSettings(server) {
@@ -9624,6 +9644,11 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     }
 
     socket = io(LOCAL_API_ORIGIN || undefined, { transports: ['websocket', 'polling'], withCredentials: true });
+    socket.on('call_game_state', ({ roomId, game }) => {
+      if (roomId !== activeGameRoomId()) return;
+      activeCallGame = game;
+      if ($('call-games-modal').classList.contains('active')) renderCallGame(game);
+    });
 
     socket.on('connect', () => console.log('Socket connected'));
     socket.on('disconnect', () => console.log('Socket disconnected'));
@@ -9815,6 +9840,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       }
       const count = others.length + 1;
       if ($('group-call-btn')) $('group-call-btn').title = `Leave Group Voice Chat (${count} in call)`;
+      if ($('group-games-btn')) $('group-games-btn').style.display = 'inline-flex';
       toast(`Joined group voice (${count} in call)`, 'success');
     });
 
@@ -10548,6 +10574,23 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     choices.innerHTML = `<button type="button" class="tag-choice${!currentUser.activeServerTag ? ' selected' : ''}" onclick="adoptServerTag('')">No tag</button>${serversWithTags.map(s => `<button type="button" class="tag-choice${currentUser.activeServerTagServerId === s.id ? ' selected' : ''}" style="--tag-bg:${esc(s.tagBackground || '#5865f2')}" onclick="adoptServerTag('${s.id}')">[${esc(s.tag)}] ${esc(s.name)}</button>`).join('')}`;
   }
 
+  let activeCallGame = null;
+  function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
+  function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
+  function renderCallGame(game) {
+    activeCallGame = game; const content = $('call-games-content');
+    if (!game) { content.innerHTML = `<div class="game-picker"><button class="game-choice" onclick="openCallGame('blackjack')"><strong>Blackjack</strong><span>Shared dealer table.</span></button><button class="game-choice" onclick="openCallGame('poker')"><strong>Texas Hold'em</strong><span>Private cards and a shared pot.</span></button></div>`; return; }
+    const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
+    content.innerHTML = `<div class="game-table"><div><b>${game.type === 'blackjack' ? 'Blackjack' : "Texas Hold'em"}</b><span style="float:right;color:var(--text-muted)">${esc(game.phase)}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}</b><span style="float:right">${p.chips} chips</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? `<button class="btn-secondary" onclick="joinCallGame()">Join</button>${game.hostId === currentUser.id ? '<button class="btn-primary" onclick="startCallGame()">Start game</button>' : ''}` : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New round</button>'}</div></div>`;
+  }
+  window.openCallGame = type => { const roomId = activeGameRoomId(); if (!roomId || !socket) return toast('Join a call first', 'error'); socket.emit('call_game_open', { roomId, type }); };
+  window.joinCallGame = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_join', { roomId }); };
+  window.startCallGame = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_start', { roomId }); };
+  window.callGameAction = action => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
+  $('call-games-btn').addEventListener('click', () => { if (!activeGameRoomId()) return toast('Join a call first', 'error'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); });
+  $('call-games-close').addEventListener('click', () => $('call-games-modal').classList.remove('active'));
+  $('call-games-modal').addEventListener('click', e => { if (e.target === $('call-games-modal')) $('call-games-modal').classList.remove('active'); });
+
   $('profile-btn').addEventListener('click', () => {
     $('profile-display-name').value = currentUser.displayName;
     $('profile-bio').value = currentUser.bio || '';
@@ -11226,6 +11269,29 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       const wrap = document.querySelector(`#shopcard-${d.id} .avatar-wrap`);
       if (wrap) applyDecorationToWrap(wrap, d.id);
     });
+    if (isAdmin) {
+      let dragged = null;
+      $('channel-list').querySelectorAll('.channel-item').forEach(el => {
+        el.addEventListener('dragstart', e => { dragged = el; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+        el.addEventListener('dragend', () => { el.classList.remove('dragging'); dragged = null; });
+        el.addEventListener('dragover', e => {
+          e.preventDefault();
+          if (!dragged || dragged === el) return;
+          const box = el.getBoundingClientRect();
+          if (e.clientY < box.top + box.height / 2) el.before(dragged); else el.after(dragged);
+        });
+        el.addEventListener('drop', async e => {
+          e.preventDefault();
+          if (!dragged) return;
+          const channelIds = [...$('channel-list').querySelectorAll('.channel-item')].map(item => item.dataset.channelId);
+          const saved = await api('PUT', `/api/servers/${activeServerId}/channels/order`, { channelIds });
+          if (saved.error) return toast(saved.error, 'error');
+          activeServerData.channels.sort((a, b) => channelIds.indexOf(a.id) - channelIds.indexOf(b.id));
+          toast('Channel order saved', 'success');
+        });
+      });
+    }
+    if ($('group-games-btn')) $('group-games-btn').style.display = 'none';
 
     // Start canvas engines for all canvas-based decos (always show preview)
     const canvasDecos = { storm: startStormCanvas, inferno: startInfernoCanvas, yinyang: startYinYangCanvas, hydro: startHydroCanvas, shatter: startShatterCanvas };

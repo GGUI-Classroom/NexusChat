@@ -115,6 +115,7 @@ const callTypes = new Map();
 const userInCall = new Map();
 const groupCallRooms = new Map(); // roomId -> Set<userId>
 const userGroupCallRoom = new Map(); // userId -> roomId
+const callGames = new Map(); // call/group room id -> shared card table
 let redisClient = null;
 const CALL_USER_KEY_PREFIX = 'nexus:call:user:';
 const CALL_ROOM_KEY_PREFIX = 'nexus:call:room:';
@@ -122,6 +123,20 @@ const NEXUS_BOT_ID = '00000000-0000-0000-0000-000000000001';
 const NEXUS_BOT_NAME = 'NexusGuard';
 const NEXUS_BOT_AVATAR_DATA_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmNTllMGIiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmOTczMTYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgY3k9IjQ4IiByPSI0NiIgZmlsbD0idXJsKCNnKSIvPjxwYXRoIGQ9Ik00OCAxNmwyNCA4djIyYzAgMTgtMTAgMzAtMjQgMzYtMTQtNi0yNC0xOC0yNC0zNlYyNHoiIGZpbGw9InVybCgjYSkiLz48cGF0aCBkPSJNNDggMjZsMTQgNXYxNWMwIDExLTYgMTktMTQgMjMtOC00LTE0LTEyLTE0LTIzVjMxeiIgZmlsbD0iIzExMTgyNyIgb3BhY2l0eT0iLjY1Ii8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0NSIgcj0iNyIgZmlsbD0iI2ZkZTY4YSIvPjxwYXRoIGQ9Ik0zNiA1OWgyNHY1SDM2eiIgZmlsbD0iI2ZkZTY4YSIvPjwvc3ZnPg==';
 const spamTracker = new Map();
+
+function gameDeck() {
+  return ['A','2','3','4','5','6','7','8','9','10','J','Q','K'].flatMap(rank => ['S','H','D','C'].map(suit => ({ rank, suit })));
+}
+function shuffle(cards) { for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cards[i], cards[j]] = [cards[j], cards[i]]; } return cards; }
+function blackjackScore(cards) { let total = cards.reduce((sum, c) => sum + (c.rank === 'A' ? 11 : ['J','Q','K'].includes(c.rank) ? 10 : Number(c.rank)), 0); let aces = cards.filter(c => c.rank === 'A').length; while (total > 21 && aces--) total -= 10; return total; }
+function gameStateFor(game, viewerId) {
+  const revealDealer = game.type !== 'blackjack' || game.phase === 'complete';
+  return { type: game.type, phase: game.phase, hostId: game.hostId, turnId: game.turnId || null, community: game.community || [], pot: game.pot || 0,
+    dealer: game.type === 'blackjack' ? { hand: revealDealer ? game.dealer.hand : [game.dealer.hand[0], { hidden: true }], score: revealDealer ? blackjackScore(game.dealer.hand) : null } : null,
+    players: game.players.map(p => ({ id: p.id, displayName: p.displayName, chips: p.chips, bet: p.bet || 0, folded: !!p.folded, standing: !!p.standing, hand: p.id === viewerId || game.phase === 'complete' ? p.hand : p.hand.map(() => ({ hidden: true })), score: game.type === 'blackjack' ? blackjackScore(p.hand) : null })), winnerId: game.winnerId || null, message: game.message || '' };
+}
+function emitGame(roomId) { const game = callGames.get(roomId); if (!game) return; for (const player of game.players) io.to(`user:${player.id}`).emit('call_game_state', { roomId, game: gameStateFor(game, player.id) }); }
+async function isInGameRoom(userId, roomId) { return userGroupCallRoom.get(userId) === roomId || (await getUserCallRoom(userId)) === roomId; }
 const NEXUS_BOT_AUTHOR = {
   username: 'nexusguard',
   displayName: NEXUS_BOT_NAME,
@@ -1366,6 +1381,66 @@ io.on('connection', (socket) => {
     const peerRoom = userGroupCallRoom.get(toId);
     if (!roomId || myRoom !== roomId || peerRoom !== roomId) return;
     io.to(`user:${toId}`).emit('group_webrtc_ice', { roomId, fromId: userId, candidate });
+  });
+
+  socket.on('call_game_open', async ({ roomId, type }) => {
+    if (!roomId || !['blackjack', 'poker'].includes(type) || !await isInGameRoom(userId, roomId)) return;
+    let game = callGames.get(roomId);
+    if (!game || game.phase === 'complete') {
+      const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
+      game = { type, phase: 'lobby', hostId: userId, players: [{ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: 1000, hand: [] }], dealer: { hand: [] }, deck: [], community: [], pot: 0 };
+      callGames.set(roomId, game);
+    }
+    io.to(`call:${roomId}`).emit('call_game_available', { roomId, type: game.type });
+    io.to(`groupcall:${roomId}`).emit('call_game_available', { roomId, type: game.type });
+    socket.emit('call_game_state', { roomId, game: gameStateFor(game, userId) });
+    emitGame(roomId);
+  });
+
+  socket.on('call_game_join', async ({ roomId }) => {
+    const game = callGames.get(roomId);
+    if (!game || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId) || game.players.some(p => p.id === userId) || game.players.length >= 6) return;
+    const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
+    game.players.push({ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: 1000, hand: [] });
+    emitGame(roomId);
+  });
+
+  socket.on('call_game_start', async ({ roomId }) => {
+    const game = callGames.get(roomId);
+    if (!game || game.hostId !== userId || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId)) return;
+    game.deck = shuffle(gameDeck()); game.phase = 'playing'; game.message = '';
+    game.players.forEach(p => { p.hand = [game.deck.pop(), game.deck.pop()]; p.standing = false; p.folded = false; p.bet = 0; });
+    if (game.type === 'blackjack') { game.dealer.hand = [game.deck.pop(), game.deck.pop()]; }
+    else { game.community = [game.deck.pop(), game.deck.pop(), game.deck.pop()]; game.pot = 0; game.turnId = game.players[0].id; }
+    emitGame(roomId);
+  });
+
+  socket.on('call_game_action', async ({ roomId, action }) => {
+    const game = callGames.get(roomId);
+    if (!game || game.phase !== 'playing' || !await isInGameRoom(userId, roomId)) return;
+    const player = game.players.find(p => p.id === userId);
+    if (!player) return;
+    if (game.type === 'blackjack') {
+      if (player.standing) return;
+      if (action === 'hit') { player.hand.push(game.deck.pop()); if (blackjackScore(player.hand) >= 21) player.standing = true; }
+      if (action === 'stand') player.standing = true;
+      if (!['hit','stand'].includes(action)) return;
+      if (game.players.every(p => p.standing || blackjackScore(p.hand) > 21)) {
+        while (blackjackScore(game.dealer.hand) < 17) game.dealer.hand.push(game.deck.pop());
+        const dealerScore = blackjackScore(game.dealer.hand);
+        game.players.forEach(p => { const score = blackjackScore(p.hand); if (score <= 21 && (dealerScore > 21 || score > dealerScore)) p.chips += 100; else if (score > 21 || score < dealerScore) p.chips -= 50; });
+        game.phase = 'complete'; game.message = dealerScore > 21 ? 'Dealer busts' : 'Round complete';
+      }
+    } else {
+      if (game.turnId !== userId || !['check','call','fold'].includes(action)) return;
+      if (action === 'fold') player.folded = true; else { player.bet += 20; player.chips -= 20; game.pot += 20; }
+      const active = game.players.filter(p => !p.folded);
+      const index = active.findIndex(p => p.id === userId);
+      if (active.length === 1) { game.winnerId = active[0].id; active[0].chips += game.pot; game.phase = 'complete'; game.message = 'Everyone else folded'; }
+      else if (index === active.length - 1) { game.community.push(game.deck.pop(), game.deck.pop()); const winner = active[Math.floor(Math.random() * active.length)]; winner.chips += game.pot; game.winnerId = winner.id; game.phase = 'complete'; game.message = 'Showdown complete'; }
+      else game.turnId = active[index + 1].id;
+    }
+    emitGame(roomId);
   });
 
   socket.on('disconnect', async () => {

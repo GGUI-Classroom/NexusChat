@@ -1603,7 +1603,7 @@
 
   function renderChannelList(channels, isAdmin) {
     $('channel-list').innerHTML = channels.map(c => `
-      <div class="channel-item ${activeChannelId === c.id ? 'active' : ''} ${c.locked ? 'locked' : ''}"
+      <div class="channel-item ${activeChannelId === c.id ? 'active' : ''} ${c.locked ? 'locked' : ''}" ${isAdmin ? 'draggable="true"' : ''}
            data-channel-id="${c.id}"
            data-channel-name="${esc(c.name)}"
          data-channel-type="${esc(c.type || 'text')}"
@@ -2310,6 +2310,10 @@
     renderBoostSettings(s);
     loadBansList();
     $('server-settings-modal').classList.add('active');
+  });
+  if ($('group-games-btn')) $('group-games-btn').addEventListener('click', () => {
+    if (!activeGameRoomId()) return toast('Join voice first', 'error');
+    $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame);
   });
 
   function renderBoostSettings(server) {
@@ -3108,6 +3112,11 @@
     }
 
     socket = io(LOCAL_API_ORIGIN || undefined, { transports: ['websocket', 'polling'], withCredentials: true });
+    socket.on('call_game_state', ({ roomId, game }) => {
+      if (roomId !== activeGameRoomId()) return;
+      activeCallGame = game;
+      if ($('call-games-modal').classList.contains('active')) renderCallGame(game);
+    });
 
     socket.on('connect', () => console.log('Socket connected'));
     socket.on('disconnect', () => console.log('Socket disconnected'));
@@ -3299,6 +3308,7 @@
       }
       const count = others.length + 1;
       if ($('group-call-btn')) $('group-call-btn').title = `Leave Group Voice Chat (${count} in call)`;
+      if ($('group-games-btn')) $('group-games-btn').style.display = 'inline-flex';
       toast(`Joined group voice (${count} in call)`, 'success');
     });
 
@@ -4032,6 +4042,23 @@
     choices.innerHTML = `<button type="button" class="tag-choice${!currentUser.activeServerTag ? ' selected' : ''}" onclick="adoptServerTag('')">No tag</button>${serversWithTags.map(s => `<button type="button" class="tag-choice${currentUser.activeServerTagServerId === s.id ? ' selected' : ''}" style="--tag-bg:${esc(s.tagBackground || '#5865f2')}" onclick="adoptServerTag('${s.id}')">[${esc(s.tag)}] ${esc(s.name)}</button>`).join('')}`;
   }
 
+  let activeCallGame = null;
+  function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
+  function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
+  function renderCallGame(game) {
+    activeCallGame = game; const content = $('call-games-content');
+    if (!game) { content.innerHTML = `<div class="game-picker"><button class="game-choice" onclick="openCallGame('blackjack')"><strong>Blackjack</strong><span>Shared dealer table.</span></button><button class="game-choice" onclick="openCallGame('poker')"><strong>Texas Hold'em</strong><span>Private cards and a shared pot.</span></button></div>`; return; }
+    const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
+    content.innerHTML = `<div class="game-table"><div><b>${game.type === 'blackjack' ? 'Blackjack' : "Texas Hold'em"}</b><span style="float:right;color:var(--text-muted)">${esc(game.phase)}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}</b><span style="float:right">${p.chips} chips</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? `<button class="btn-secondary" onclick="joinCallGame()">Join</button>${game.hostId === currentUser.id ? '<button class="btn-primary" onclick="startCallGame()">Start game</button>' : ''}` : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New round</button>'}</div></div>`;
+  }
+  window.openCallGame = type => { const roomId = activeGameRoomId(); if (!roomId || !socket) return toast('Join a call first', 'error'); socket.emit('call_game_open', { roomId, type }); };
+  window.joinCallGame = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_join', { roomId }); };
+  window.startCallGame = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_start', { roomId }); };
+  window.callGameAction = action => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
+  $('call-games-btn').addEventListener('click', () => { if (!activeGameRoomId()) return toast('Join a call first', 'error'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); });
+  $('call-games-close').addEventListener('click', () => $('call-games-modal').classList.remove('active'));
+  $('call-games-modal').addEventListener('click', e => { if (e.target === $('call-games-modal')) $('call-games-modal').classList.remove('active'); });
+
   $('profile-btn').addEventListener('click', () => {
     $('profile-display-name').value = currentUser.displayName;
     $('profile-bio').value = currentUser.bio || '';
@@ -4710,6 +4737,29 @@
       const wrap = document.querySelector(`#shopcard-${d.id} .avatar-wrap`);
       if (wrap) applyDecorationToWrap(wrap, d.id);
     });
+    if (isAdmin) {
+      let dragged = null;
+      $('channel-list').querySelectorAll('.channel-item').forEach(el => {
+        el.addEventListener('dragstart', e => { dragged = el; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+        el.addEventListener('dragend', () => { el.classList.remove('dragging'); dragged = null; });
+        el.addEventListener('dragover', e => {
+          e.preventDefault();
+          if (!dragged || dragged === el) return;
+          const box = el.getBoundingClientRect();
+          if (e.clientY < box.top + box.height / 2) el.before(dragged); else el.after(dragged);
+        });
+        el.addEventListener('drop', async e => {
+          e.preventDefault();
+          if (!dragged) return;
+          const channelIds = [...$('channel-list').querySelectorAll('.channel-item')].map(item => item.dataset.channelId);
+          const saved = await api('PUT', `/api/servers/${activeServerId}/channels/order`, { channelIds });
+          if (saved.error) return toast(saved.error, 'error');
+          activeServerData.channels.sort((a, b) => channelIds.indexOf(a.id) - channelIds.indexOf(b.id));
+          toast('Channel order saved', 'success');
+        });
+      });
+    }
+    if ($('group-games-btn')) $('group-games-btn').style.display = 'none';
 
     // Start canvas engines for all canvas-based decos (always show preview)
     const canvasDecos = { storm: startStormCanvas, inferno: startInfernoCanvas, yinyang: startYinYangCanvas, hydro: startHydroCanvas, shatter: startShatterCanvas };

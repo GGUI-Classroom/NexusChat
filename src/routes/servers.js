@@ -383,6 +383,30 @@ router.post('/:id/channels', async (req, res) => {
   res.json({ channel: { id: chId, name: chName, type: channelType, serverId: id } });
 });
 
+// Persist an admin-controlled channel order.
+router.put('/:id/channels/order', async (req, res) => {
+  const { id } = req.params;
+  const channelIds = Array.isArray(req.body.channelIds) ? req.body.channelIds : [];
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  const existing = await pool.query('SELECT id FROM channels WHERE server_id=$1 ORDER BY position ASC', [id]);
+  const existingIds = existing.rows.map(row => row.id);
+  if (channelIds.length !== existingIds.length || channelIds.some(chId => !existingIds.includes(chId))) {
+    return res.status(400).json({ error: 'Channel order does not match this server' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (let index = 0; index < channelIds.length; index++) {
+      await client.query('UPDATE channels SET position=$1 WHERE id=$2 AND server_id=$3', [index, channelIds[index], id]);
+    }
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Could not save channel order' });
+  } finally { client.release(); }
+});
+
 // Delete channel
 router.delete('/:id/channels/:chId', async (req, res) => {
   const { id, chId } = req.params;

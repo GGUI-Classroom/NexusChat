@@ -923,6 +923,11 @@ html, body {
 }
 
 .call-hud-controls { display: flex; gap: 6px; }
+.call-games-modal { max-width: 540px; }
+.game-picker { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+.game-choice { min-height:120px; border:1px solid var(--border); background:var(--bg-surface); color:var(--text-primary); border-radius:6px; cursor:pointer; font:inherit; text-align:left; padding:14px; }
+.game-choice strong { display:block; font-size:18px; margin-bottom:5px; }.game-choice span { color:var(--text-muted); font-size:12px; }
+.game-table { display:flex; flex-direction:column; gap:12px; }.game-cards { display:flex; gap:5px; flex-wrap:wrap; }.game-card { width:34px; height:48px; background:#f7f8fb; color:#192133; border-radius:4px; display:grid; place-items:center; font:700 13px monospace; }.game-card.hidden { background:linear-gradient(135deg,#5366f5,#a855f7); color:transparent; }.game-player { border:1px solid var(--border); padding:9px; border-radius:5px; }.game-player.turn { border-color:var(--accent); }.game-actions { display:flex; gap:8px; flex-wrap:wrap; }.game-actions button { flex:1; min-width:90px; }
 
 .hud-btn {
   width: 34px; height: 34px;
@@ -1409,6 +1414,8 @@ html, body {
   transition: var(--transition);
 }
 .channel-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.channel-item[draggable="true"] { cursor: grab; }
+.channel-item.dragging { opacity: .45; cursor: grabbing; }
 .channel-item.active { background: var(--bg-active); color: var(--text-primary); }
 .channel-item .ch-hash { font-size: 16px; color: var(--text-muted); font-weight: 400; }
 .channel-item .ch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
