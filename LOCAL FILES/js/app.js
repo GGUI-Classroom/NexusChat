@@ -5155,11 +5155,24 @@
     await loadCollectionStats();
   };
 
-  function blackjackCards(cards) { return `<div class="game-cards">${(cards || []).map(card => `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`).join('')}</div>`; }
+  function blackjackCards(cards) {
+    const suits = { H: { icon: '&hearts;', name: 'Hearts', red: true }, D: { icon: '&diams;', name: 'Diamonds', red: true }, S: { icon: '&spades;', name: 'Spades', red: false }, C: { icon: '&clubs;', name: 'Clubs', red: false } };
+    return `<div class="blackjack-cards">${(cards || []).map(card => { if (card.hidden) return '<span class="playing-card card-back" aria-label="Hidden dealer card"><i></i></span>'; const suit = suits[card.suit] || suits.S; return `<span class="playing-card${suit.red ? ' red' : ''}" aria-label="${esc(card.rank)} of ${suit.name}"><b>${esc(card.rank)}</b><em>${suit.icon}</em><small>${esc(card.rank)} ${suit.icon}</small></span>`; }).join('')}</div>`;
+  }
   function renderStatsBlackjack(table) {
     const target = $('games-blackjack-table');
     if (!target) return;
-    target.innerHTML = `<div class="stats-blackjack"><div class="blackjack-head"><b>Dealer${table.dealerScore !== null ? ' - ' + table.dealerScore : ''}</b><span>${table.chips} table chips</span></div>${blackjackCards(table.dealerHand)}<div class="blackjack-head"><b>You - ${table.playerScore}</b></div>${blackjackCards(table.playerHand)}${table.result ? `<p class="blackjack-result">${esc(table.result)}</p>` : ''}<div class="game-actions">${table.status === 'playing' ? '<button class="btn-secondary" onclick="statsBlackjackAction(\'hit\')">Hit</button><button class="btn-primary" onclick="statsBlackjackAction(\'stand\')">Stand</button>' : '<button class="btn-primary" onclick="openStatsBlackjack()">New Hand</button>'}</div></div>`;
+    target.innerHTML = `<div class="blackjack-window" id="blackjack-window"><div class="blackjack-window-bar" id="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Blackjack Table</b><small>vs Nexus Dealer</small></div><div><button class="blackjack-window-btn" id="blackjack-minimize" title="Minimize">_</button></div></div><div class="blackjack-window-body"><div class="blackjack-table-felt"><div class="blackjack-head"><b>Dealer${table.dealerScore !== null ? ' - ' + table.dealerScore : ''}</b><span>${table.chips} table chips</span></div>${blackjackCards(table.dealerHand)}<div class="blackjack-seat"><span>YOUR HAND</span><b>${table.playerScore}</b></div>${blackjackCards(table.playerHand)}${table.result ? `<p class="blackjack-result">${esc(table.result)}</p>` : ''}<div class="game-actions">${table.status === 'playing' ? '<button class="btn-secondary" onclick="statsBlackjackAction(\'hit\')">Hit</button><button class="btn-primary" onclick="statsBlackjackAction(\'stand\')">Stand</button>' : '<button class="btn-primary" onclick="openStatsBlackjack()">New Hand</button>'}</div></div></div></div>`;
+    enableBlackjackWindow();
+  }
+  function enableBlackjackWindow() {
+    const win = $('blackjack-window'), bar = $('blackjack-window-bar'), minimize = $('blackjack-minimize');
+    if (!win || !bar || !minimize) return;
+    minimize.addEventListener('click', () => { win.classList.toggle('minimized'); minimize.textContent = win.classList.contains('minimized') ? '+' : '_'; });
+    let drag = null;
+    bar.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; const box = win.getBoundingClientRect(); drag = { x: e.clientX, y: e.clientY, left: box.left, top: box.top }; bar.setPointerCapture(e.pointerId); });
+    bar.addEventListener('pointermove', e => { if (!drag) return; const width = win.offsetWidth, height = win.offsetHeight; win.style.left = Math.max(8, Math.min(window.innerWidth - width - 8, drag.left + e.clientX - drag.x)) + 'px'; win.style.top = Math.max(8, Math.min(window.innerHeight - height - 8, drag.top + e.clientY - drag.y)) + 'px'; });
+    bar.addEventListener('pointerup', () => { drag = null; });
   }
   async function loadGamesHub() {
     $('games-content').innerHTML = `<div class="games-grid"><button class="game-hub-card blackjack" onclick="openStatsBlackjack()"><span class="game-hub-icon">21</span><strong>Blackjack</strong><small>Beat the dealer</small><p>Free table chips, a hidden dealer card, and classic Hit or Stand.</p><b>Play Solo</b></button><button class="game-hub-card poker" onclick="openCallGamesFromHub()"><span class="game-hub-icon">&#9824;</span><strong>Texas Hold'em</strong><small>Call table</small><p>Private cards, community cards, and a shared pot with up to six players.</p><b>Play In A Call</b></button></div><div id="games-blackjack-table"></div>`;
