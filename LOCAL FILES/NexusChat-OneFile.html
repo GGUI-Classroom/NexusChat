@@ -6438,9 +6438,10 @@ html, body {
         <div class="admin-pane" id="admin-pane-admins">
           <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
             <div class="field-group" style="margin:0"><label>Username To Promote</label><input type="text" id="admin-add-username" placeholder="Username" autocomplete="off" /></div>
-            <div class="field-group" style="margin:0"><label>QR Verification Code (scan-only)</label><input type="text" id="admin-qr-code" placeholder="Use camera scanner" autocomplete="off" readonly /></div>
+            <div class="field-group" style="margin:0"><label>Admin Verification Code</label><input type="text" id="admin-qr-code" placeholder="Type code or scan QR" autocomplete="off" /></div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <button class="btn-secondary" id="admin-scan-qr-btn">Scan QR</button>
+              <button class="btn-secondary" id="admin-verify-code-btn">Verify Code</button>
               <button class="btn-primary" id="admin-add-admin-btn">Add Admin</button>
             </div>
             <div class="form-error" id="admin-add-error"></div>
@@ -10602,7 +10603,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
   function renderCallGame(game) {
     activeCallGame = game; const content = $('call-games-content');
-    if (!game) { content.innerHTML = `<div class="game-picker"><button class="game-choice" onclick="openCallGame('blackjack')"><strong>Blackjack</strong><span>Shared dealer table.</span></button><button class="game-choice" onclick="openCallGame('poker')"><strong>Texas Hold'em</strong><span>Private cards and a shared pot.</span></button></div>`; return; }
+    if (!game) { content.innerHTML = `<div class="game-picker"><button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Shared dealer table.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Private cards and a shared pot.</span></button></div>`; return; }
     const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
     content.innerHTML = `<div class="game-table"><div><b>${game.type === 'blackjack' ? 'Blackjack' : "Texas Hold'em"}</b><span style="float:right;color:var(--text-muted)">${esc(game.phase)}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}</b><span style="float:right">${p.chips} chips</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? `<button class="btn-secondary" onclick="joinCallGame()">Join</button>${game.hostId === currentUser.id ? '<button class="btn-primary" onclick="startCallGame()">Start game</button>' : ''}` : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New round</button>'}</div></div>`;
   }
@@ -10613,6 +10614,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   $('call-games-btn').addEventListener('click', () => { if (!activeGameRoomId()) return toast('Join a call first', 'error'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); });
   $('call-games-close').addEventListener('click', () => $('call-games-modal').classList.remove('active'));
   $('call-games-modal').addEventListener('click', e => { if (e.target === $('call-games-modal')) $('call-games-modal').classList.remove('active'); });
+  $('call-games-content').addEventListener('click', e => { const choice = e.target.closest('[data-game-type]'); if (choice) window.openCallGame(choice.dataset.gameType); });
 
   $('profile-btn').addEventListener('click', () => {
     $('profile-display-name').value = currentUser.displayName;
@@ -11234,6 +11236,16 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     renderPackShop(r.packs || []);
     renderShop(r.decorations, r.active);
     await loadRingtones();
+  }
+
+  if ($('admin-verify-code-btn')) {
+    $('admin-verify-code-btn').addEventListener('click', () => {
+      const typed = ($('admin-qr-code').value || '').trim();
+      adminQrVerified = typed === REQUIRED_ADMIN_QR_CODE;
+      if (!adminQrVerified) return showError('admin-add-error', 'That verification code is not correct.');
+      showError('admin-add-error', '');
+      toast('Admin verification complete', 'success');
+    });
   }
 
   function updateNexalDisplay(nexals) {

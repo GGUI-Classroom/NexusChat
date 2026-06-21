@@ -791,9 +791,10 @@
         <div class="admin-pane" id="admin-pane-admins">
           <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
             <div class="field-group" style="margin:0"><label>Username To Promote</label><input type="text" id="admin-add-username" placeholder="Username" autocomplete="off" /></div>
-            <div class="field-group" style="margin:0"><label>QR Verification Code (scan-only)</label><input type="text" id="admin-qr-code" placeholder="Use camera scanner" autocomplete="off" readonly /></div>
+            <div class="field-group" style="margin:0"><label>Admin Verification Code</label><input type="text" id="admin-qr-code" placeholder="Type code or scan QR" autocomplete="off" /></div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <button class="btn-secondary" id="admin-scan-qr-btn">Scan QR</button>
+              <button class="btn-secondary" id="admin-verify-code-btn">Verify Code</button>
               <button class="btn-primary" id="admin-add-admin-btn">Add Admin</button>
             </div>
             <div class="form-error" id="admin-add-error"></div>
