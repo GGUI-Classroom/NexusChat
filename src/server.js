@@ -136,7 +136,10 @@ function gameStateFor(game, viewerId) {
     players: game.players.map(p => ({ id: p.id, displayName: p.displayName, chips: p.chips, bet: p.bet || 0, folded: !!p.folded, standing: !!p.standing, hand: p.id === viewerId || game.phase === 'complete' ? p.hand : p.hand.map(() => ({ hidden: true })), score: game.type === 'blackjack' ? blackjackScore(p.hand) : null })), winnerId: game.winnerId || null, message: game.message || '' };
 }
 function emitGame(roomId) { const game = callGames.get(roomId); if (!game) return; for (const player of game.players) io.to(`user:${player.id}`).emit('call_game_state', { roomId, game: gameStateFor(game, player.id) }); }
-async function isInGameRoom(userId, roomId) { return userGroupCallRoom.get(userId) === roomId || (await getUserCallRoom(userId)) === roomId; }
+async function isInGameRoom(userId, roomId) {
+  if (userGroupCallRoom.get(userId) === roomId || groupCallRooms.get(roomId)?.has(userId)) return true;
+  return (await getUserCallRoom(userId)) === roomId;
+}
 const NEXUS_BOT_AUTHOR = {
   username: 'nexusguard',
   displayName: NEXUS_BOT_NAME,
@@ -1383,8 +1386,9 @@ io.on('connection', (socket) => {
     io.to(`user:${toId}`).emit('group_webrtc_ice', { roomId, fromId: userId, candidate });
   });
 
-  socket.on('call_game_open', async ({ roomId, type }) => {
-    if (!roomId || !['blackjack', 'poker'].includes(type) || !await isInGameRoom(userId, roomId)) return;
+  socket.on('call_game_open', async ({ roomId, type }, ack = () => {}) => {
+    if (!roomId || !['blackjack', 'poker'].includes(type)) return ack({ error: 'Choose a valid game.' });
+    if (!await isInGameRoom(userId, roomId)) return ack({ error: 'Join the call before starting a game.' });
     let game = callGames.get(roomId);
     if (!game || game.phase === 'complete') {
       const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
@@ -1395,6 +1399,7 @@ io.on('connection', (socket) => {
     io.to(`groupcall:${roomId}`).emit('call_game_available', { roomId, type: game.type });
     socket.emit('call_game_state', { roomId, game: gameStateFor(game, userId) });
     emitGame(roomId);
+    ack({ success: true });
   });
 
   socket.on('call_game_join', async ({ roomId }) => {
