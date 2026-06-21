@@ -5127,7 +5127,7 @@
     if (data.error) return toast(data.error, 'error');
     const count = $('stats-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
     const rarities = Object.entries(data.rarityBreakdown || {}).map(([rarity, amount]) => `<div class="stat-rarity"><span>${esc(rarity)}</span><b>${amount}</b></div>`).join('');
-    $('stats-content').innerHTML = `<div class="stats-hero"><div><span>COLLECTION VALUE</span><strong>${data.sellableValue.toLocaleString()} Nexals</strong><p>Resale value from your pack-only decorations.</p></div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All</button></div><div class="stats-metrics"><div><b>${data.decorationCount}</b><span>Total copies</span></div><div><b>${data.uniqueDecorations}</b><span>Unique effects</span></div><div><b>${data.nexals.toLocaleString()}</b><span>Current Nexals</span></div></div><div class="stats-rarities">${rarities || '<span>No decorations yet</span>'}</div>`;
+    $('stats-content').innerHTML = `<div class="stats-hero"><div><span>COLLECTION VALUE</span><strong>${data.sellableValue.toLocaleString()} Nexals</strong><p>Resale value from your pack-only decorations.</p></div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All</button></div><div class="stats-metrics"><div><b>${data.decorationCount}</b><span>Total copies</span></div><div><b>${data.uniqueDecorations}</b><span>Unique effects</span></div><div><b>${data.nexals.toLocaleString()}</b><span>Current Nexals</span></div></div><div class="stats-rarities">${rarities || '<span>No decorations yet</span>'}</div><div class="stats-games"><div><div><span>GAME CONTROLLER</span><h2>Blackjack vs Dealer</h2><p>Play against the Nexus dealer using free table chips.</p></div><button class="shop-card-btn buy" onclick="openStatsBlackjack()">Play Blackjack</button></div><div id="stats-blackjack-table"></div></div>`;
   }
 
   window.sellAllDecorations = async function() {
@@ -5138,6 +5138,15 @@
     toast('Sold collection for ' + result.soldValue.toLocaleString() + ' Nexals', 'success');
     await loadCollectionStats();
   };
+
+  function blackjackCards(cards) { return `<div class="game-cards">${(cards || []).map(card => `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`).join('')}</div>`; }
+  function renderStatsBlackjack(table) {
+    const target = $('stats-blackjack-table');
+    if (!target) return;
+    target.innerHTML = `<div class="stats-blackjack"><div class="blackjack-head"><b>Dealer${table.dealerScore !== null ? ' - ' + table.dealerScore : ''}</b><span>${table.chips} table chips</span></div>${blackjackCards(table.dealerHand)}<div class="blackjack-head"><b>You - ${table.playerScore}</b></div>${blackjackCards(table.playerHand)}${table.result ? `<p class="blackjack-result">${esc(table.result)}</p>` : ''}<div class="game-actions">${table.status === 'playing' ? '<button class="btn-secondary" onclick="statsBlackjackAction(\'hit\')">Hit</button><button class="btn-primary" onclick="statsBlackjackAction(\'stand\')">Stand</button>' : '<button class="btn-primary" onclick="openStatsBlackjack()">New Hand</button>'}</div></div>`;
+  }
+  window.openStatsBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/start'); if (r.error) return toast(r.error, 'error'); renderStatsBlackjack(r.table); };
+  window.statsBlackjackAction = async function(action) { const r = await api('POST', '/api/games/blackjack/action', { action }); if (r.error) return toast(r.error, 'error'); renderStatsBlackjack(r.table); };
 
   async function loadPro() {
     const data = await api('GET', '/api/perks');

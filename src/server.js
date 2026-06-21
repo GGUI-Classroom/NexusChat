@@ -98,6 +98,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/colors', require('./routes/colors'));
 app.use('/api/perks', require('./routes/perks'));
 app.use('/api/ringtones', require('./routes/ringtones'));
+app.use('/api/games', require('./routes/games'));
 
 app.get('/health', (req, res) => {
   res.json({ ok: true });
