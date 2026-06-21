@@ -2610,6 +2610,7 @@
     if (view === 'shop') loadShop();
     if (view === 'achievements') loadAchievements();
     if (view === 'stats') loadCollectionStats();
+    if (view === 'games') loadGamesHub();
     if (view === 'pro') loadPro();
   }
 
@@ -5142,7 +5143,7 @@
     if (data.error) return toast(data.error, 'error');
     const count = $('stats-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
     const rarities = Object.entries(data.rarityBreakdown || {}).map(([rarity, amount]) => `<div class="stat-rarity"><span>${esc(rarity)}</span><b>${amount}</b></div>`).join('');
-    $('stats-content').innerHTML = `<div class="stats-hero"><div><span>COLLECTION VALUE</span><strong>${data.sellableValue.toLocaleString()} Nexals</strong><p>Resale value from your pack-only decorations.</p></div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All</button></div><div class="stats-metrics"><div><b>${data.decorationCount}</b><span>Total copies</span></div><div><b>${data.uniqueDecorations}</b><span>Unique effects</span></div><div><b>${data.nexals.toLocaleString()}</b><span>Current Nexals</span></div></div><div class="stats-rarities">${rarities || '<span>No decorations yet</span>'}</div><div class="stats-games"><div><div><span>GAME CONTROLLER</span><h2>Blackjack vs Dealer</h2><p>Play against the Nexus dealer using free table chips.</p></div><button class="shop-card-btn buy" onclick="openStatsBlackjack()">Play Blackjack</button></div><div id="stats-blackjack-table"></div></div>`;
+    $('stats-content').innerHTML = `<div class="stats-hero"><div><span>COLLECTION VALUE</span><strong>${data.sellableValue.toLocaleString()} Nexals</strong><p>Resale value from your pack-only decorations.</p></div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All</button></div><div class="stats-metrics"><div><b>${data.decorationCount}</b><span>Total copies</span></div><div><b>${data.uniqueDecorations}</b><span>Unique effects</span></div><div><b>${data.nexals.toLocaleString()}</b><span>Current Nexals</span></div></div><div class="stats-rarities">${rarities || '<span>No decorations yet</span>'}</div>`;
   }
 
   window.sellAllDecorations = async function() {
@@ -5156,11 +5157,15 @@
 
   function blackjackCards(cards) { return `<div class="game-cards">${(cards || []).map(card => `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`).join('')}</div>`; }
   function renderStatsBlackjack(table) {
-    const target = $('stats-blackjack-table');
+    const target = $('games-blackjack-table');
     if (!target) return;
     target.innerHTML = `<div class="stats-blackjack"><div class="blackjack-head"><b>Dealer${table.dealerScore !== null ? ' - ' + table.dealerScore : ''}</b><span>${table.chips} table chips</span></div>${blackjackCards(table.dealerHand)}<div class="blackjack-head"><b>You - ${table.playerScore}</b></div>${blackjackCards(table.playerHand)}${table.result ? `<p class="blackjack-result">${esc(table.result)}</p>` : ''}<div class="game-actions">${table.status === 'playing' ? '<button class="btn-secondary" onclick="statsBlackjackAction(\'hit\')">Hit</button><button class="btn-primary" onclick="statsBlackjackAction(\'stand\')">Stand</button>' : '<button class="btn-primary" onclick="openStatsBlackjack()">New Hand</button>'}</div></div>`;
   }
+  async function loadGamesHub() {
+    $('games-content').innerHTML = `<div class="games-grid"><button class="game-hub-card blackjack" onclick="openStatsBlackjack()"><span class="game-hub-icon">21</span><strong>Blackjack</strong><small>Beat the dealer</small><p>Free table chips, a hidden dealer card, and classic Hit or Stand.</p><b>Play Solo</b></button><button class="game-hub-card poker" onclick="openCallGamesFromHub()"><span class="game-hub-icon">&#9824;</span><strong>Texas Hold'em</strong><small>Call table</small><p>Private cards, community cards, and a shared pot with up to six players.</p><b>Play In A Call</b></button></div><div id="games-blackjack-table"></div>`;
+  }
   window.openStatsBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/start'); if (r.error) return toast(r.error, 'error'); renderStatsBlackjack(r.table); };
+  window.openCallGamesFromHub = function() { if (!activeGameRoomId()) return toast('Start or join a call to open the Poker table', 'info'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); };
   window.statsBlackjackAction = async function(action) { const r = await api('POST', '/api/games/blackjack/action', { action }); if (r.error) return toast(r.error, 'error'); renderStatsBlackjack(r.table); };
 
   async function loadPro() {
