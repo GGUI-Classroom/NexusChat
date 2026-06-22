@@ -2610,6 +2610,7 @@
     if (view === 'shop') loadShop();
     if (view === 'achievements') loadAchievements();
     if (view === 'stats') loadCollectionStats();
+    if (view === 'quests') loadQuests();
     if (view === 'games') loadGamesHub();
     if (view === 'pro') loadPro();
   }
@@ -5144,6 +5145,13 @@
     const count = $('stats-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
     const rarities = Object.entries(data.rarityBreakdown || {}).map(([rarity, amount]) => `<div class="stat-rarity"><span>${esc(rarity)}</span><b>${amount}</b></div>`).join('');
     $('stats-content').innerHTML = `<div class="stats-hero"><div><span>COLLECTION VALUE</span><strong>${data.sellableValue.toLocaleString()} Nexals</strong><p>Resale value from your pack-only decorations.</p></div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All</button></div><div class="stats-metrics"><div><b>${data.decorationCount}</b><span>Total copies</span></div><div><b>${data.uniqueDecorations}</b><span>Unique effects</span></div><div><b>${data.nexals.toLocaleString()}</b><span>Current Nexals</span></div></div><div class="stats-rarities">${rarities || '<span>No decorations yet</span>'}</div>`;
+  }
+
+  function loadQuests() {
+    const daily = [{ title:'Channel Circuit', desc:'Send 25 messages across your servers', reward:250 }, { title:'Social Loop', desc:'Send 5 direct messages to friends', reward:200 }, { title:'Table Regular', desc:'Complete 3 Blackjack hands', reward:150 }];
+    const weekly = [{ title:'Conversation Engine', desc:'Send 300 messages', reward:1500 }, { title:'Pack Hunter', desc:'Open 5 decoration packs', reward:1000 }, { title:'Blackjack Mastery', desc:'Win 10 Blackjack hands', reward:1800 }];
+    const section = (name, tasks) => `<section class="quest-section"><div class="quest-section-head"><h2>${name}</h2><span>${name === 'Daily' ? 'Resets daily' : 'Resets weekly'}</span></div><div class="quest-grid">${tasks.map(q => `<div class="quest-card"><div><b>${esc(q.title)}</b><p>${esc(q.desc)}</p></div><strong>${q.reward.toLocaleString()} Nexals</strong><div class="quest-progress"><i style="width:0%"></i></div><small>0 / 1</small></div>`).join('')}</div></section>`;
+    $('quests-content').innerHTML = `<div class="quests-hero"><span>ACTIVE OBJECTIVES</span><h2>Earn Nexals through difficult play.</h2><p>Finish all daily objectives for an additional 500 Nexals.</p></div>${section('Daily', daily)}${section('Weekly', weekly)}`;
   }
 
   window.sellAllDecorations = async function() {
