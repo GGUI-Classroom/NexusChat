@@ -101,6 +101,47 @@ app.use('/api/ringtones', require('./routes/ringtones'));
 app.use('/api/games', require('./routes/games'));
 app.use('/api/nexus-link', require('./routes/nexus-link'));
 
+function validNexusLinkRequest(req) {
+  return Boolean(process.env.NEXUS_LINK_SHARED_SECRET) && req.get('x-nexus-link-secret') === process.env.NEXUS_LINK_SHARED_SECRET;
+}
+
+// Receives a reply sent to Nexus LINK in Discord and creates the matching Nexus DM.
+app.post('/api/nexus-link/inbound-dm', async (req, res) => {
+  if (!validNexusLinkRequest(req)) return res.status(401).json({ error: 'Unauthorized Nexus LINK relay' });
+  const fromId = String(req.body.nexusUserId || '');
+  const toId = String(req.body.nexusPeerId || '');
+  const content = String(req.body.content || '').trim().slice(0, 4000);
+  if (!fromId || !toId || !content) return res.status(400).json({ error: 'A sender, recipient, and message are required' });
+  const friendship = await pool.query(
+    `SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1`,
+    [fromId, toId]
+  );
+  if (!friendship.rows.length) return res.status(403).json({ error: 'Nexus users must be friends to relay direct messages' });
+  const sender = await pool.query(
+    `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
+      u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect,
+      ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
+     FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
+    [fromId]
+  );
+  if (!sender.rows[0]) return res.status(404).json({ error: 'Nexus sender was not found' });
+  const user = sender.rows[0];
+  const msg = {
+    id: uuidv4(), fromId, toId, content, createdAt: Math.floor(Date.now() / 1000),
+    author: {
+      username: user.username, displayName: user.display_name,
+      avatarDataUrl: user.avatar_data ? `data:${user.avatar_mime};base64,${user.avatar_data}` : null,
+      activeDecoration: user.active_decoration || null, activeColor: user.active_color || null, activeFont: user.active_font || null,
+      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start, proGradientEnd: user.profile_gradient_end, proNameEffect: user.profile_name_effect,
+      activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_server_name || null, activeServerTagInviteCode: user.tag_invite_code || null
+    }
+  };
+  await pool.query('INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)', [msg.id, fromId, toId, content, msg.createdAt]);
+  io.to(`user:${fromId}`).emit('new_message', msg);
+  io.to(`user:${toId}`).emit('new_message', msg);
+  res.json({ success: true, nexusMessageId: msg.id });
+});
+
 app.get('/health', (req, res) => {
   res.json({ ok: true });
 });
@@ -410,6 +451,18 @@ async function sendBotDirectMessage({ toUserId, content }) {
     'INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
     [msg.id, NEXUS_BOT_ID, toUserId, trimmed, now]
   );
+}
+
+async function relayNexusDirectMessage({ nexusRecipientId, nexusMessageId, sender, content }) {
+  const linkUrl = String(process.env.NEXUS_LINK_URL || '').replace(/\/$/, '');
+  const secret = process.env.NEXUS_LINK_SHARED_SECRET;
+  if (!linkUrl || !secret) return;
+  const response = await fetch(`${linkUrl}/relay/nexus-dm`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-nexus-link-secret': secret },
+    body: JSON.stringify({ nexusRecipientId, nexusMessageId, sender, content, attachments: [] })
+  });
+  if (!response.ok) throw new Error(`Nexus LINK DM relay returned ${response.status}`);
 }
 
 async function logModerationAction({ serverId, channelId, action, actorUserId, targetUserId = null, details = null }) {
@@ -890,6 +943,12 @@ io.on('connection', (socket) => {
     // Persist to DB (non-blocking for perceived speed)
     pool.query('INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
       [msgId, userId, toId, trimmed, now]).catch(e => console.error('DM insert error:', e));
+    relayNexusDirectMessage({
+      nexusRecipientId: toId,
+      nexusMessageId: msgId,
+      sender: { id: userId, username: s.username, displayName: s.display_name },
+      content: trimmed
+    }).catch(error => console.error('Nexus LINK DM relay error:', error));
 
     // Achievement tracking — message count & DM
     trackAchievement(userId, ['messages_sent', 'dms_sent']);
