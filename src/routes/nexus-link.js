@@ -1,7 +1,21 @@
 const express = require('express');
+const crypto = require('crypto');
 const { pool } = require('../models/db');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
+
+// The browser must already be authenticated to Nexus. This creates the signed
+// state consumed by the separate Nexus LINK OAuth service.
+router.get('/connect', requireAuth, (req, res) => {
+  const linkUrl = String(process.env.NEXUS_LINK_URL || '').replace(/\/$/, '');
+  const stateSecret = process.env.NEXUS_LINK_STATE_SECRET;
+  if (!linkUrl || !stateSecret) return res.status(503).send('Nexus LINK account connection is not configured yet.');
+  const nexusUserId = req.session.userId;
+  const signature = crypto.createHmac('sha256', stateSecret).update(nexusUserId).digest('hex');
+  const params = new URLSearchParams({ nexus_user_id: nexusUserId, signature });
+  res.redirect(`${linkUrl}/auth/discord/start?${params}`);
+});
 
 function requireNexusLinkSecret(req, res, next) {
   const secret = process.env.NEXUS_LINK_SHARED_SECRET;

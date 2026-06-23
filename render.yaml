@@ -34,3 +34,7 @@ services:
         value: "1"
       - key: NEXUS_LINK_SHARED_SECRET
         sync: false
+      - key: NEXUS_LINK_URL
+        sync: false
+      - key: NEXUS_LINK_STATE_SECRET
+        sync: false
