@@ -32,3 +32,5 @@ services:
         value: ""
       - key: TRUST_PROXY
         value: "1"
+      - key: NEXUS_LINK_SHARED_SECRET
+        sync: false

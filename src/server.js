@@ -99,6 +99,7 @@ app.use('/api/colors', require('./routes/colors'));
 app.use('/api/perks', require('./routes/perks'));
 app.use('/api/ringtones', require('./routes/ringtones'));
 app.use('/api/games', require('./routes/games'));
+app.use('/api/nexus-link', require('./routes/nexus-link'));
 
 app.get('/health', (req, res) => {
   res.json({ ok: true });
