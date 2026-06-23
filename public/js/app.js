@@ -4074,15 +4074,54 @@
     choices.innerHTML = `<button type="button" class="tag-choice${!currentUser.activeServerTag ? ' selected' : ''}" onclick="adoptServerTag('')">No tag</button>${serversWithTags.map(s => `<button type="button" class="tag-choice${currentUser.activeServerTagServerId === s.id ? ' selected' : ''}" style="--tag-bg:${esc(s.tagBackground || '#5865f2')}" onclick="adoptServerTag('${s.id}')">[${esc(s.tag)}] ${esc(s.name)}</button>`).join('')}`;
   }
 
+  async function loadNexusLinkSettings() {
+    const disconnected = $('nexus-link-disconnected');
+    const settings = $('nexus-link-settings');
+    const error = $('nexus-link-error');
+    if (!disconnected || !settings) return;
+    const data = await api('GET', '/api/nexus-link/settings');
+    if (data.error) {
+      disconnected.style.display = 'block';
+      settings.style.display = 'none';
+      if (error) error.textContent = data.error;
+      return;
+    }
+    const connected = !!data.connected;
+    disconnected.style.display = connected ? 'none' : 'block';
+    settings.style.display = connected ? 'block' : 'none';
+    if (!connected) return;
+    $('nexus-link-account').textContent = `Connected as ${data.discordGlobalName || data.discordUsername || 'Discord user'}`;
+    $('nexus-link-dms').checked = !!data.dmRelayEnabled;
+    $('nexus-link-attachments').checked = !!data.attachmentsEnabled;
+    $('nexus-link-status').checked = !!data.statusSyncEnabled;
+    if (error) error.textContent = '';
+  }
+
+  async function saveNexusLinkSettings() {
+    const data = await api('PATCH', '/api/nexus-link/settings', {
+      dmRelayEnabled: $('nexus-link-dms').checked,
+      attachmentsEnabled: $('nexus-link-attachments').checked,
+      statusSyncEnabled: $('nexus-link-status').checked
+    });
+    if (data.error) return showError('nexus-link-error', data.error);
+    showError('nexus-link-error', '');
+    toast('Nexus LINK settings saved', 'success');
+  }
+
   $('profile-btn').addEventListener('click', () => {
     $('profile-display-name').value = currentUser.displayName;
     $('profile-bio').value = currentUser.bio || '';
     renderAvatar($('profile-avatar-preview'), currentUser);
     loadProfileTagChoices();
+    loadNexusLinkSettings();
     $('profile-modal').classList.add('active');
   });
   $('profile-modal-close').addEventListener('click', () => $('profile-modal').classList.remove('active'));
   $('profile-modal').addEventListener('click', e => { if (e.target === $('profile-modal')) $('profile-modal').classList.remove('active'); });
+  $('connect-discord-btn').addEventListener('click', () => { window.location.href = '/api/nexus-link/connect'; });
+  ['nexus-link-dms', 'nexus-link-attachments', 'nexus-link-status'].forEach(id => {
+    $(id).addEventListener('change', saveNexusLinkSettings);
+  });
 
   $('avatar-file-input').addEventListener('change', async e => {
     const file = e.target.files[0];

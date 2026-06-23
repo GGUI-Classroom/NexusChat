@@ -393,6 +393,19 @@
           <textarea id="profile-bio" placeholder="Tell people a bit about yourself…" rows="3" maxlength="300" style="resize:vertical;min-height:70px"></textarea>
         </div>
         <div class="field-group"><label>Server Tag</label><div id="profile-tag-choices" class="profile-tag-choices"></div></div>
+        <div class="profile-divider"></div>
+        <div class="section-label" style="margin-bottom:12px">NEXUS LINK</div>
+        <div id="nexus-link-disconnected" style="display:none">
+          <p class="field-hint" style="margin:0 0 10px">Connect Discord to relay direct messages and use Nexus LINK in Discord servers.</p>
+          <button type="button" class="btn-secondary" id="connect-discord-btn">Connect Discord</button>
+        </div>
+        <div id="nexus-link-settings" style="display:none">
+          <div id="nexus-link-account" class="field-hint" style="margin-bottom:10px"></div>
+          <label class="toggle-row"><input type="checkbox" id="nexus-link-dms" /><span class="toggle-label"><span class="toggle-title">Relay Direct Messages</span><span class="toggle-hint">Send Nexus and Discord DMs through Nexus LINK.</span></span></label>
+          <label class="toggle-row"><input type="checkbox" id="nexus-link-attachments" /><span class="toggle-label"><span class="toggle-title">Include Attachments</span><span class="toggle-hint">Allow image and file attachments in relayed DMs.</span></span></label>
+          <label class="toggle-row"><input type="checkbox" id="nexus-link-status" /><span class="toggle-label"><span class="toggle-title">Mirror Discord Status</span><span class="toggle-hint">Show Discord online, idle, do not disturb, or offline status in Nexus.</span></span></label>
+          <div class="form-error" id="nexus-link-error"></div>
+        </div>
         <div class="form-error" id="profile-error"></div>
         <button class="btn-primary" id="save-profile-btn">Save Changes</button>
 

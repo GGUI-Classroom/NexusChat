@@ -5,6 +5,23 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+async function nexusLinkService(path, options = {}) {
+  const linkUrl = String(process.env.NEXUS_LINK_URL || '').replace(/\/$/, '');
+  const sharedSecret = process.env.NEXUS_LINK_SHARED_SECRET;
+  if (!linkUrl || !sharedSecret) throw new Error('Nexus LINK is not configured');
+  const response = await fetch(`${linkUrl}${path}`, {
+    ...options,
+    headers: {
+      'content-type': 'application/json',
+      'x-nexus-link-secret': sharedSecret,
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Nexus LINK request failed');
+  return data;
+}
+
 // The browser must already be authenticated to Nexus. This creates the signed
 // state consumed by the separate Nexus LINK OAuth service.
 router.get('/connect', requireAuth, (req, res) => {
@@ -15,6 +32,29 @@ router.get('/connect', requireAuth, (req, res) => {
   const signature = crypto.createHmac('sha256', stateSecret).update(nexusUserId).digest('hex');
   const params = new URLSearchParams({ nexus_user_id: nexusUserId, signature });
   res.redirect(`${linkUrl}/auth/discord/start?${params}`);
+});
+
+router.get('/settings', requireAuth, async (req, res) => {
+  try {
+    res.json(await nexusLinkService(`/connection/${encodeURIComponent(req.session.userId)}`));
+  } catch (error) {
+    res.status(502).json({ error: error.message });
+  }
+});
+
+router.patch('/settings', requireAuth, async (req, res) => {
+  try {
+    const settings = {};
+    for (const key of ['dmRelayEnabled', 'attachmentsEnabled', 'statusSyncEnabled']) {
+      if (typeof req.body[key] === 'boolean') settings[key] = req.body[key];
+    }
+    res.json(await nexusLinkService(`/connection/${encodeURIComponent(req.session.userId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(settings)
+    }));
+  } catch (error) {
+    res.status(502).json({ error: error.message });
+  }
 });
 
 function requireNexusLinkSecret(req, res, next) {
@@ -39,6 +79,23 @@ async function isNexusServerAdmin(serverId, userId) {
 }
 
 router.use(requireNexusLinkSecret);
+
+router.post('/status', async (req, res) => {
+  const status = ['online', 'idle', 'dnd', 'offline'].includes(req.body.status) ? req.body.status : 'offline';
+  const userId = String(req.body.nexusUserId || '');
+  if (!userId) return res.status(400).json({ error: 'Nexus user ID is required' });
+  const updated = await pool.query('UPDATE users SET status=$1 WHERE id=$2 RETURNING id', [status, userId]);
+  if (!updated.rows.length) return res.status(404).json({ error: 'Nexus user was not found' });
+  const io = req.app.get('io');
+  io.to(`user:${userId}`).emit('status_change', { userId, status });
+  const friends = await pool.query(
+    `SELECT CASE WHEN user1_id=$1 THEN user2_id ELSE user1_id END AS user_id
+     FROM friendships WHERE user1_id=$1 OR user2_id=$1`,
+    [userId]
+  );
+  friends.rows.forEach(friend => io.to(`user:${friend.user_id}`).emit('status_change', { userId, status }));
+  res.json({ success: true, status });
+});
 
 // Used only by the Nexus LINK bot to populate its Discord configuration menus.
 router.get('/users/:userId/servers', async (req, res) => {
