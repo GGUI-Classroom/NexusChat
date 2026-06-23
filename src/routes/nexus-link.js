@@ -99,32 +99,42 @@ router.post('/status', async (req, res) => {
 
 // Used only by the Nexus LINK bot to populate its Discord configuration menus.
 router.get('/users/:userId/servers', async (req, res) => {
-  const result = await pool.query(
-    `SELECT DISTINCT s.id, s.name
-     FROM servers s
-     LEFT JOIN server_members sm ON sm.server_id=s.id AND sm.user_id=$1
-     LEFT JOIN server_roles sr ON sr.id=sm.role_id
-     WHERE s.owner_id=$1 OR sm.role='admin' OR sr.is_admin=TRUE
-     ORDER BY LOWER(s.name) ASC
-     LIMIT 25`,
-    [req.params.userId]
-  );
-  res.json({ servers: result.rows.map(row => ({ id: row.id, name: row.name })) });
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT s.id, s.name
+       FROM servers s
+       LEFT JOIN server_members sm ON sm.server_id=s.id AND sm.user_id=$1
+       LEFT JOIN server_roles sr ON sr.id=sm.role_id
+       WHERE s.owner_id=$1 OR sm.role='admin' OR sr.is_admin=TRUE
+       ORDER BY LOWER(s.name) ASC
+       LIMIT 25`,
+      [req.params.userId]
+    );
+    res.json({ servers: result.rows.map(row => ({ id: row.id, name: row.name })) });
+  } catch (error) {
+    console.error('Nexus LINK server list failed:', error);
+    res.status(500).json({ error: 'Nexus could not load the server list. Check NexusChat Render logs.' });
+  }
 });
 
 router.get('/users/:userId/servers/:serverId/channels', async (req, res) => {
-  if (!await isNexusServerAdmin(req.params.serverId, req.params.userId)) {
-    return res.status(403).json({ error: 'Nexus admin permission required' });
+  try {
+    if (!await isNexusServerAdmin(req.params.serverId, req.params.userId)) {
+      return res.status(403).json({ error: 'Nexus admin permission required' });
+    }
+    const result = await pool.query(
+      `SELECT id, name
+       FROM channels
+       WHERE server_id=$1 AND COALESCE(channel_type, 'text')='text'
+       ORDER BY position ASC
+       LIMIT 25`,
+      [req.params.serverId]
+    );
+    res.json({ channels: result.rows.map(row => ({ id: row.id, name: row.name })) });
+  } catch (error) {
+    console.error('Nexus LINK channel list failed:', error);
+    res.status(500).json({ error: 'Nexus could not load the channel list. Check NexusChat Render logs.' });
   }
-  const result = await pool.query(
-    `SELECT id, name
-     FROM channels
-     WHERE server_id=$1 AND COALESCE(channel_type, 'text')='text'
-     ORDER BY position ASC
-     LIMIT 25`,
-    [req.params.serverId]
-  );
-  res.json({ channels: result.rows.map(row => ({ id: row.id, name: row.name })) });
 });
 
 module.exports = router;
