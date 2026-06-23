@@ -4951,7 +4951,9 @@
     if (!grid) return;
     const r = await api('GET', '/api/ringtones');
     if (r.error) {
-      grid.innerHTML = '<div style="padding:12px;color:var(--red)">' + esc(r.error) + '</div>';
+      const fallback = Object.entries(RINGTONE_PRESETS).map(([id, preset]) => ({ id, name: preset.name || id.replace(/_/g, ' '), description: 'Premium call ringtone.', price: 5000, owned: false }));
+      ringtoneShopData = { ringtones: fallback, active: null, nexals: currentUser?.nexals || 0 };
+      renderRingtoneShop(fallback, null);
       return;
     }
     ringtoneShopData = r;
@@ -5147,11 +5149,12 @@
     $('stats-content').innerHTML = `<div class="stats-hero"><div><span>COLLECTION VALUE</span><strong>${data.sellableValue.toLocaleString()} Nexals</strong><p>Resale value from your pack-only decorations.</p></div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All</button></div><div class="stats-metrics"><div><b>${data.decorationCount}</b><span>Total copies</span></div><div><b>${data.uniqueDecorations}</b><span>Unique effects</span></div><div><b>${data.nexals.toLocaleString()}</b><span>Current Nexals</span></div></div><div class="stats-rarities">${rarities || '<span>No decorations yet</span>'}</div>`;
   }
 
-  function loadQuests() {
-    const daily = [{ title:'Channel Circuit', desc:'Send 25 messages across your servers', reward:250 }, { title:'Social Loop', desc:'Send 5 direct messages to friends', reward:200 }, { title:'Table Regular', desc:'Complete 3 Blackjack hands', reward:150 }];
-    const weekly = [{ title:'Conversation Engine', desc:'Send 300 messages', reward:1500 }, { title:'Pack Hunter', desc:'Open 5 decoration packs', reward:1000 }, { title:'Blackjack Mastery', desc:'Win 10 Blackjack hands', reward:1800 }];
-    const section = (name, tasks) => `<section class="quest-section"><div class="quest-section-head"><h2>${name}</h2><span>${name === 'Daily' ? 'Resets daily' : 'Resets weekly'}</span></div><div class="quest-grid">${tasks.map(q => `<div class="quest-card"><div><b>${esc(q.title)}</b><p>${esc(q.desc)}</p></div><strong>${q.reward.toLocaleString()} Nexals</strong><div class="quest-progress"><i style="width:0%"></i></div><small>0 / 1</small></div>`).join('')}</div></section>`;
-    $('quests-content').innerHTML = `<div class="quests-hero"><span>ACTIVE OBJECTIVES</span><h2>Earn Nexals through difficult play.</h2><p>Finish all daily objectives for an additional 500 Nexals.</p></div>${section('Daily', daily)}${section('Weekly', weekly)}`;
+  async function loadQuests() {
+    const r = await api('GET', '/api/achievements/stats'); const stats = r.stats || {};
+    const daily = [{ title:'Channel Circuit', desc:'Send 25 channel messages', reward:250, value:stats.channel_msgs||0, target:25 }, { title:'Social Loop', desc:'Send 5 direct messages', reward:200, value:stats.dms||0, target:5 }, { title:'Collector Run', desc:'Open 5 decoration packs', reward:200, value:stats.packs||0, target:5 }];
+    const weekly = [{ title:'Conversation Engine', desc:'Send 300 messages', reward:1500, value:stats.messages||0, target:300 }, { title:'Pack Hunter', desc:'Open 50 decoration packs', reward:1000, value:stats.packs||0, target:50 }, { title:'Social Network', desc:'Reach 25 friends', reward:1200, value:stats.friends||0, target:25 }];
+    const section = (name, tasks) => `<section class="quest-section"><div class="quest-section-head"><h2>${name}</h2><span>${name === 'Daily' ? 'Daily objective track' : 'Weekly objective track'}</span></div><div class="quest-grid">${tasks.map(q => { const progress=Math.min(q.value,q.target), pct=Math.round(progress/q.target*100); return `<div class="quest-card"><div><b>${esc(q.title)}</b><p>${esc(q.desc)}</p></div><strong>${q.reward.toLocaleString()} Nexals</strong><div class="quest-progress"><i style="width:${pct}%"></i></div><small>${progress.toLocaleString()} / ${q.target.toLocaleString()}</small></div>`; }).join('')}</div></section>`;
+    $('quests-content').innerHTML = `<div class="quests-hero"><span>ACTIVE OBJECTIVES</span><h2>Earn Nexals through difficult play.</h2><p>Progress updates from your live Nexus activity.</p></div>${section('Daily', daily)}${section('Weekly', weekly)}`;
   }
 
   window.sellAllDecorations = async function() {

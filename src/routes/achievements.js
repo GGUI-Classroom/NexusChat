@@ -182,6 +182,10 @@ router.get('/', async (req, res) => {
   res.json(await buildResponse(req.session.userId));
 });
 
+router.get('/stats', async (req, res) => {
+  res.json({ stats: await getUserStats(req.session.userId) });
+});
+
 router.post('/sync', async (req, res) => {
   res.json(await buildResponse(req.session.userId));
 });
