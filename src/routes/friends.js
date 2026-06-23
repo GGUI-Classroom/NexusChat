@@ -7,6 +7,18 @@ const router = express.Router();
 router.use(requireAuth);
 const NEXUS_GUARD_ID = '00000000-0000-0000-0000-000000000001';
 
+async function relayFriendRequest(payload) {
+  const linkUrl = String(process.env.NEXUS_LINK_URL || '').replace(/\/$/, '');
+  const secret = process.env.NEXUS_LINK_SHARED_SECRET;
+  if (!linkUrl || !secret) return;
+  const response = await fetch(`${linkUrl}/relay/friend-request`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-nexus-link-secret': secret },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error(`Nexus LINK friend request relay returned ${response.status}`);
+}
+
 router.get('/search', async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 2) return res.json({ users: [] });
@@ -41,11 +53,29 @@ router.post('/request', async (req, res) => {
   if (existing.rows.length && existing.rows[0].status === 'pending')
     return res.status(409).json({ error: 'Request already pending' });
   try {
-    await pool.query(
+    const requested = await pool.query(
       `INSERT INTO friend_requests (id, from_id, to_id, status) VALUES ($1,$2,$3,'pending')
-       ON CONFLICT (from_id, to_id) DO UPDATE SET status='pending'`,
+       ON CONFLICT (from_id, to_id) DO UPDATE SET status='pending' RETURNING id`,
       [uuidv4(), req.session.userId, toId]
     );
+    const sender = await pool.query(
+      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, ats.server_tag
+       FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
+      [req.session.userId]
+    );
+    const user = sender.rows[0];
+    if (user) {
+      relayFriendRequest({
+        nexusRecipientId: toId,
+        requestId: requested.rows[0].id,
+        sender: {
+          username: user.username,
+          displayName: user.display_name,
+          avatarDataUrl: user.avatar_data ? `data:${user.avatar_mime};base64,${user.avatar_data}` : null,
+          activeServerTag: user.server_tag || null
+        }
+      }).catch(error => console.error('Nexus LINK friend request relay error:', error));
+    }
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: 'Server error' }); }
 });

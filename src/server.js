@@ -142,6 +142,34 @@ app.post('/api/nexus-link/inbound-dm', async (req, res) => {
   res.json({ success: true, nexusMessageId: msg.id });
 });
 
+app.post('/api/nexus-link/friend-requests/:requestId/respond', async (req, res) => {
+  if (!validNexusLinkRequest(req)) return res.status(401).json({ error: 'Unauthorized Nexus LINK relay' });
+  const userId = String(req.body.nexusUserId || '');
+  const action = req.body.action;
+  if (!userId || !['accept', 'decline'].includes(action)) return res.status(400).json({ error: 'Invalid friend-request response' });
+  const result = await pool.query(
+    `SELECT * FROM friend_requests WHERE id=$1 AND to_id=$2 AND status='pending'`,
+    [req.params.requestId, userId]
+  );
+  if (!result.rows[0]) return res.status(404).json({ error: 'Friend request was not found or was already handled' });
+  const request = result.rows[0];
+  if (action === 'accept') {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`UPDATE friend_requests SET status='accepted' WHERE id=$1`, [request.id]);
+      await client.query(`INSERT INTO friendships (id, user1_id, user2_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [uuidv4(), request.from_id, request.to_id]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally { client.release(); }
+  } else {
+    await pool.query(`UPDATE friend_requests SET status='declined' WHERE id=$1`, [request.id]);
+  }
+  res.json({ success: true, action: action === 'accept' ? 'accepted' : 'declined' });
+});
+
 app.get('/health', (req, res) => {
   res.json({ ok: true });
 });
@@ -946,7 +974,13 @@ io.on('connection', (socket) => {
     relayNexusDirectMessage({
       nexusRecipientId: toId,
       nexusMessageId: msgId,
-      sender: { id: userId, username: s.username, displayName: s.display_name },
+      sender: {
+        id: userId,
+        username: s.username,
+        displayName: s.display_name,
+        avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null,
+        activeServerTag: s.server_tag || null
+      },
       content: trimmed
     }).catch(error => console.error('Nexus LINK DM relay error:', error));
 
