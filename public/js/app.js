@@ -18,6 +18,10 @@
   let secretHumNodes = [];
   let secretClaimRunning = false;
 
+  function normalizedStatus(status) {
+    return ['online', 'idle', 'dnd', 'offline'].includes(status) ? status : 'offline';
+  }
+
   const SECRET_CATEGORY = '???SECRET???';
   const SECRET_DECORATION_ID = 'stormveil';
   const SECRET_UNLOCK_PASSPHRASE = 'void';
@@ -2701,7 +2705,7 @@
       <div class="friend-card" data-id="${f.id}">
         <div class="avatar-wrap">
           <div class="avatar" id="fav-${f.id}"></div>
-          <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="fdot-${f.id}"></div>
+          <div class="status-dot ${normalizedStatus(f.status)}" id="fdot-${f.id}"></div>
         </div>
         <div class="person-info">
           <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
@@ -2850,7 +2854,7 @@
     $('chat-peer-name').textContent = user.displayName;
     $('chat-peer-username').textContent = '@' + user.username;
     const statusDot = $('chat-peer-status');
-    statusDot.className = `status-dot ${user.status === 'online' ? 'online' : ''}`;
+    statusDot.className = `status-dot ${normalizedStatus(user.status)}`;
 
     setMobileTitle(user.displayName);
     if (isMobile()) closeMobileSidebar();
@@ -3196,14 +3200,14 @@
       const f = friends.find(f => f.id === userId);
       if (f) f.status = status;
       const dot = $(`fdot-${userId}`);
-      if (dot) dot.className = `status-dot ${status === 'online' ? 'online' : ''}`;
+      if (dot) dot.className = `status-dot ${normalizedStatus(status)}`;
       const fstatus = $(`fstatus-${userId}`);
       if (fstatus) { fstatus.textContent = status === 'online' ? '● Online' : '○ Offline'; fstatus.className = `status ${status === 'online' ? 'online' : ''}`; }
       const ddot = $(`ddot-${userId}`);
-      if (ddot) ddot.className = `status-dot ${status === 'online' ? 'online' : ''}`;
+      if (ddot) ddot.className = `status-dot ${normalizedStatus(status)}`;
       if (activeDmUserId === userId) {
         const dot2 = $('chat-peer-status');
-        if (dot2) dot2.className = `status-dot ${status === 'online' ? 'online' : ''}`;
+        if (dot2) dot2.className = `status-dot ${normalizedStatus(status)}`;
       }
     });
 
@@ -5949,7 +5953,7 @@
     renderAvatar($('popup-avatar'), data);
     $('popup-name').textContent = String(data.displayName || '').replace(/\s*(?:\.\.\.|…)\s*$/, '');
     $('popup-username').textContent = '@' + data.username;
-    $('popup-status').className = 'status-dot ' + (data.status === 'online' ? 'online' : '');
+    $('popup-status').className = 'status-dot ' + normalizedStatus(data.status);
     $('popup-bio-section').style.display = 'none';
     $('popup-bio').textContent = '';
 
