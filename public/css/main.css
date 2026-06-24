@@ -173,6 +173,12 @@ body.light-theme { --bg-void:#dfe7f2; --bg-base:#eef3f9; --bg-surface:#ffffff; -
 .appearance-selected span,.appearance-selected b { display:block; }.appearance-selected span { color:var(--text-muted); font-size:11px; margin-bottom:5px; }.appearance-selected b { font-size:14px; }
 @media (max-width:700px) { .settings-modal .profile-settings-tabs { width:100%; height:auto; top:59px; bottom:auto; flex-direction:row; border-right:0; border-bottom:1px solid var(--border); padding:8px; }.settings-modal .modal-body { margin-left:0; margin-top:55px; width:100%; padding:24px 18px; }.settings-modal .profile-settings-tab { white-space:nowrap; } }
 
+/* Keep Settings independent from the compact modal rules declared later. */
+.modal.settings-modal { width:100vw; max-width:none; height:100vh; border-radius:0; display:flex; flex-direction:column; }
+.modal.settings-modal .modal-body { background:var(--bg-void); color:var(--text-primary); flex:1; margin-left:260px; width:calc(100% - 260px); max-width:920px; padding:38px 54px; overflow-y:auto; }
+.modal.settings-modal .profile-settings-tabs { z-index:2; }
+@media (max-width:700px) { .modal.settings-modal .modal-body { margin-left:0; margin-top:55px; width:100%; padding:24px 18px; } }
+
 .auth-form h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
 .auth-subtitle { color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; }
 
