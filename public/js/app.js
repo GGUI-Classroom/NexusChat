@@ -3263,10 +3263,10 @@
       if (roomId !== activeGameRoomId() || !host) return;
       pendingActivityInvite = { roomId, type };
       availableCallGame = { type, hostName: host.displayName };
-      const label = type === 'poker' ? "Texas Hold'em" : 'Blackjack';
-      $('activity-invite-title').textContent = `${host.displayName} started ${label}`;
-      $('activity-invite-text').textContent = 'Join the activity?';
-      $('activity-invite-modal').classList.add('active');
+      $('call-games-modal').classList.add('active');
+      renderCallGame(null);
+      socket.emit('call_game_join', { roomId });
+      toast(`${host.displayName} started ${type === 'poker' ? "Texas Hold'em" : 'Blackjack'}. Joining activity...`, 'info');
     });
     socket.on('call_game_closed', ({ roomId }) => {
       if (roomId !== activeGameRoomId()) return;

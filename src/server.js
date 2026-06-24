@@ -320,6 +320,24 @@ function gameStateFor(game, viewerId) {
     dealer: game.type === 'blackjack' ? { hand: revealDealer ? game.dealer.hand : [game.dealer.hand[0], { hidden: true }], score: revealDealer ? blackjackScore(game.dealer.hand) : null } : null,
     players: game.players.map(p => ({ id: p.id, displayName: p.displayName, chips: p.chips, bet: p.bet || 0, folded: !!p.folded, standing: !!p.standing, hand: p.id === viewerId || game.phase === 'complete' ? p.hand : p.hand.map(() => ({ hidden: true })), score: game.type === 'blackjack' ? blackjackScore(p.hand) : null })), winnerId: game.winnerId || null, message: game.message || '' };
 }
+function beginCallGameRound(game) {
+  game.deck = shuffle(gameDeck());
+  game.phase = 'playing';
+  game.message = '';
+  game.players.forEach(player => {
+    player.hand = [game.deck.pop(), game.deck.pop()];
+    player.standing = false;
+    player.folded = false;
+    player.bet = 0;
+  });
+  if (game.type === 'blackjack') {
+    game.dealer.hand = [game.deck.pop(), game.deck.pop()];
+  } else {
+    game.community = [game.deck.pop(), game.deck.pop(), game.deck.pop()];
+    game.pot = 0;
+    game.turnId = game.players[0].id;
+  }
+}
 function emitGame(roomId) { const game = callGames.get(roomId); if (!game) return; for (const player of game.players) io.to(`user:${player.id}`).emit('call_game_state', { roomId, game: gameStateFor(game, player.id) }); }
 async function isInGameRoom(userId, roomId) {
   if (userGroupCallRoom.get(userId) === roomId || groupCallRooms.get(roomId)?.has(userId)) return true;
@@ -1688,6 +1706,7 @@ io.on('connection', (socket) => {
     if (!game || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId) || game.players.some(p => p.id === userId) || game.players.length >= 6) return;
     const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
     game.players.push({ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: 1000, hand: [] });
+    if (game.players.length >= 2) beginCallGameRound(game);
     emitGame(roomId);
   });
 
@@ -1698,10 +1717,7 @@ io.on('connection', (socket) => {
       socket.emit('call_game_error', { message: 'A call game needs the other person to join first.' });
       return;
     }
-    game.deck = shuffle(gameDeck()); game.phase = 'playing'; game.message = '';
-    game.players.forEach(p => { p.hand = [game.deck.pop(), game.deck.pop()]; p.standing = false; p.folded = false; p.bet = 0; });
-    if (game.type === 'blackjack') { game.dealer.hand = [game.deck.pop(), game.deck.pop()]; }
-    else { game.community = [game.deck.pop(), game.deck.pop(), game.deck.pop()]; game.pot = 0; game.turnId = game.players[0].id; }
+    beginCallGameRound(game);
     emitGame(roomId);
   });
 
