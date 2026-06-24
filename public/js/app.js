@@ -25,6 +25,8 @@
   function normalizedStatus(status) {
     return ['online', 'idle', 'dnd', 'offline'].includes(status) ? status : 'offline';
   }
+  function visibleStatus(user) { return user.status === 'offline' && user.discordStatus && user.discordStatus !== 'offline' ? user.discordStatus : user.status; }
+  function usesDiscordStatus(user) { return user.status === 'offline' && user.discordStatus && user.discordStatus !== 'offline'; }
 
   const SECRET_CATEGORY = '???SECRET???';
   const SECRET_DECORATION_ID = 'stormveil';
@@ -2709,7 +2711,7 @@
       <div class="friend-card" data-id="${f.id}">
         <div class="avatar-wrap">
           <div class="avatar" id="fav-${f.id}"></div>
-          <div class="status-dot ${normalizedStatus(f.status)}" id="fdot-${f.id}"></div>
+          <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="fdot-${f.id}"></div>
         </div>
         <div class="person-info">
           <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
@@ -3203,18 +3205,21 @@
       if (fromId === activeDmUserId) $('typing-indicator').style.display = 'none';
     });
 
-    socket.on('status_change', ({ userId, status }) => {
+    socket.on('status_change', ({ userId, status, discordStatus }) => {
       const f = friends.find(f => f.id === userId);
-      if (f) f.status = status;
+      if (f && status) f.status = status;
+      if (f && discordStatus) f.discordStatus = discordStatus;
+      const shown = f ? visibleStatus(f) : status;
+      const fromDiscord = f ? usesDiscordStatus(f) : false;
       const dot = $(`fdot-${userId}`);
-      if (dot) dot.className = `status-dot ${normalizedStatus(status)}`;
+      if (dot) dot.className = `status-dot ${normalizedStatus(shown)}${fromDiscord ? ' discord-status' : ''}`;
       const fstatus = $(`fstatus-${userId}`);
       if (fstatus) { fstatus.textContent = status === 'online' ? '● Online' : '○ Offline'; fstatus.className = `status ${status === 'online' ? 'online' : ''}`; }
       const ddot = $(`ddot-${userId}`);
-      if (ddot) ddot.className = `status-dot ${normalizedStatus(status)}`;
+      if (ddot) ddot.className = `status-dot ${normalizedStatus(shown)}${fromDiscord ? ' discord-status' : ''}`;
       if (activeDmUserId === userId) {
         const dot2 = $('chat-peer-status');
-        if (dot2) dot2.className = `status-dot ${normalizedStatus(status)}`;
+        if (dot2) dot2.className = `status-dot ${normalizedStatus(shown)}${fromDiscord ? ' discord-status' : ''}`;
       }
     });
 

@@ -198,6 +198,7 @@ async function initDb() {
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_name_effect TEXT DEFAULT NULL`, 'alter_users_profile_name_effect');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_server_tag_id TEXT DEFAULT NULL`, 'alter_users_active_server_tag');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_ringtone TEXT DEFAULT NULL`, 'alter_users_ringtone');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_status TEXT DEFAULT 'offline'`, 'alter_users_discord_status');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS mod_log_channel_id TEXT DEFAULT NULL`, 'alter_servers_mod_log_channel');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_name TEXT DEFAULT 'NexusBot'`, 'alter_servers_bot_name');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_prefix TEXT DEFAULT '/'`, 'alter_servers_bot_prefix');

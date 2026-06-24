@@ -362,6 +362,7 @@ body.light-theme { --bg-void:#dfe7f2; --bg-base:#eef3f9; --bg-surface:#ffffff; -
 .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
 .status-dot.idle { background: var(--yellow); }
 .status-dot.dnd { background: var(--red); box-shadow: 0 0 6px var(--red-glow); }
+.status-dot.discord-status::after { content:'D'; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font:700 7px Arial,sans-serif; }
 
 .user-info { flex: 1; min-width: 0; }
 .user-info .display-name {
