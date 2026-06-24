@@ -3140,17 +3140,29 @@
   }
 
   let activeCallGame = null;
+  let availableCallGame = null;
   let pendingActivityInvite = null;
   function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
   function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
   function renderCallGame(game) {
     activeCallGame = game;
     const content = $('call-games-content');
-    if (!game) { content.innerHTML = `<div class="game-picker"><button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Shared dealer table. Hit or stand as a group.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Private cards, community cards, turns, folds and a shared pot.</span></button></div>`; return; }
+    if (!game) {
+      const openRoom = availableCallGame ? `<button class="game-choice open" onclick="joinAvailableCallGame()"><strong>${availableCallGame.type === 'poker' ? "Texas Hold'em" : 'Blackjack'} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span></button>` : '';
+      content.innerHTML = `<div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Shared dealer table. Hit or stand as a group.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Private cards, community cards, turns, folds and a shared pot.</span></button></div>`;
+      return;
+    }
     const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
     const joined = game.players.some(player => player.id === currentUser.id);
     const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for the other call participant to join.' : 'Both players joined. Start when ready.'}</p>${!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${game.type === 'poker' ? 'Poker' : 'Blackjack'}</button>` : ''}`;
     const end = game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : '';
+    if (game.type === 'blackjack' && game.phase !== 'lobby') {
+      const actionButtons = game.phase === 'playing'
+        ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>'
+        : `<button class="btn-primary" onclick="openCallGame('blackjack')">New Round</button>`;
+      content.innerHTML = `<div class="call-blackjack-table blackjack-window"><div class="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Blackjack Table</b><small>Call activity</small></div><span>${esc(game.phase)}</span></div><div class="blackjack-window-body"><div class="blackjack-table-felt"><div class="blackjack-head"><b>Dealer${game.dealer?.score !== null && game.dealer?.score !== undefined ? ' - ' + game.dealer.score : ''}</b><span>Shared table</span></div>${blackjackCards(game.dealer?.hand || [])}${game.players.map(player => `<div class="blackjack-seat"><span>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''}</span><b>${player.score || 0}</b></div>${blackjackCards(player.hand || [])}`).join('')}${game.message ? `<p class="blackjack-result">${esc(game.message)}</p>` : ''}<div class="game-actions">${actionButtons}${end}</div></div></div></div>`;
+      return;
+    }
     content.innerHTML = `<div class="game-table"><div><b>${game.type === 'blackjack' ? 'Blackjack' : "Texas Hold'em"}</b><span style="float:right;color:var(--text-muted)">${esc(game.phase)}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}</b><span style="float:right">${p.chips} chips</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? lobby : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New round</button>'}${end}</div></div>`;
   }
   window.openCallGame = function(type) {
@@ -3160,6 +3172,7 @@
     socket.emit('call_game_open', { roomId, type }, result => { if (result && result.error) { activeCallGame = null; renderCallGame(null); toast(result.error, 'error'); } });
   };
   window.joinCallGame = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_join', { roomId }); };
+  window.joinAvailableCallGame = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_join', { roomId }); };
   window.startCallGame = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_start', { roomId }); };
   window.callGameAction = function(action) { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
   window.endCallGame = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_close', { roomId }); };
@@ -3237,12 +3250,19 @@
     socket.on('call_game_state', ({ roomId, game }) => {
       if (roomId !== activeGameRoomId()) return;
       activeCallGame = game;
+      availableCallGame = null;
       if ($('call-games-modal').classList.contains('active')) renderCallGame(game);
+    });
+    socket.on('call_game_available', ({ roomId, type, hostName }) => {
+      if (roomId !== activeGameRoomId()) return;
+      if (!activeCallGame) availableCallGame = { type, hostName };
+      if ($('call-games-modal').classList.contains('active')) renderCallGame(activeCallGame);
     });
     socket.on('call_game_error', ({ message }) => toast(message || 'Game action unavailable', 'error'));
     socket.on('call_game_invite', ({ roomId, type, host }) => {
       if (roomId !== activeGameRoomId() || !host) return;
       pendingActivityInvite = { roomId, type };
+      availableCallGame = { type, hostName: host.displayName };
       const label = type === 'poker' ? "Texas Hold'em" : 'Blackjack';
       $('activity-invite-title').textContent = `${host.displayName} started ${label}`;
       $('activity-invite-text').textContent = 'Join the activity?';
@@ -3969,6 +3989,8 @@
   }
 
   function showCallHud(peerUser, connected) {
+    const mainBounds = document.querySelector('.main-content')?.getBoundingClientRect();
+    if (mainBounds) $('call-hud').style.left = `${Math.round(mainBounds.left)}px`;
     renderAvatar($('hud-peer-avatar'), peerUser);
     $('hud-peer-name').textContent = peerUser.displayName;
     $('hud-status').textContent = connected ? 'Connecting…' : 'Calling…';

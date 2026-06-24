@@ -1675,8 +1675,9 @@ io.on('connection', (socket) => {
       socket.to(`call:${roomId}`).emit('call_game_invite', { roomId, type, host });
       socket.to(`groupcall:${roomId}`).emit('call_game_invite', { roomId, type, host });
     }
-    io.to(`call:${roomId}`).emit('call_game_available', { roomId, type: game.type });
-    io.to(`groupcall:${roomId}`).emit('call_game_available', { roomId, type: game.type });
+    const hostName = game.players.find(player => player.id === game.hostId)?.displayName || 'A caller';
+    io.to(`call:${roomId}`).emit('call_game_available', { roomId, type: game.type, hostName });
+    io.to(`groupcall:${roomId}`).emit('call_game_available', { roomId, type: game.type, hostName });
     socket.emit('call_game_state', { roomId, game: gameStateFor(game, userId) });
     emitGame(roomId);
     ack({ success: true });
