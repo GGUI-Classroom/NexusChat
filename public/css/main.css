@@ -160,7 +160,18 @@ html, body {
 .profile-settings-tab.active { color:var(--text-primary); border-bottom-color:var(--accent); }
 .profile-settings-panel { display:none; }
 .profile-settings-panel.active { display:block; }
-body.light-theme { --bg-void:#edf1f8; --bg-base:#e4e9f3; --bg-surface:#ffffff; --bg-elevated:#f7f9fd; --bg-hover:#e9eef8; --text-primary:#172033; --text-secondary:#52627d; --text-muted:#71809a; --border:#cbd5e5; --border-bright:#aab9d0; }
+body.light-theme { --bg-void:#dfe7f2; --bg-base:#eef3f9; --bg-surface:#ffffff; --bg-elevated:#f7f9fc; --bg-hover:#dbe5f4; --text-primary:#101827; --text-secondary:#35445f; --text-muted:#5b6a82; --border:#aebbd0; --border-bright:#8293ae; }
+.settings-modal { width:100vw; height:100vh; max-width:none; max-height:none; border-radius:0; display:flex; flex-direction:column; background:var(--bg-void); }
+.settings-modal .modal-header { flex:0 0 58px; padding:0 26px; border-bottom:1px solid var(--border); }
+.settings-modal .modal-body { padding:34px 44px; overflow-y:auto; }
+.settings-modal .profile-settings-tabs { position:absolute; left:0; top:59px; bottom:0; width:260px; margin:0; padding:24px 14px; display:flex; flex-direction:column; border:0; border-right:1px solid var(--border); background:var(--bg-base); overflow:auto; }
+.settings-modal .profile-settings-tab { text-align:left; padding:11px 13px; border-radius:6px; border:0; font-size:13px; }
+.settings-modal .profile-settings-tab.active { background:var(--bg-hover); color:var(--text-primary); }
+.settings-modal .modal-body { margin-left:260px; max-width:860px; width:calc(100% - 260px); }
+.appearance-selected { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:18px 0; }
+.appearance-selected>div { padding:14px; border:1px solid var(--border); background:var(--bg-surface); }
+.appearance-selected span,.appearance-selected b { display:block; }.appearance-selected span { color:var(--text-muted); font-size:11px; margin-bottom:5px; }.appearance-selected b { font-size:14px; }
+@media (max-width:700px) { .settings-modal .profile-settings-tabs { width:100%; height:auto; top:59px; bottom:auto; flex-direction:row; border-right:0; border-bottom:1px solid var(--border); padding:8px; }.settings-modal .modal-body { margin-left:0; margin-top:55px; width:100%; padding:24px 18px; }.settings-modal .profile-settings-tab { white-space:nowrap; } }
 
 .auth-form h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
 .auth-subtitle { color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; }

@@ -4144,6 +4144,8 @@
     renderAvatar($('profile-avatar-preview'), currentUser);
     loadProfileTagChoices();
     loadNexusLinkSettings();
+    $('appearance-decoration').textContent = currentUser.activeDecoration ? currentUser.activeDecoration.replace(/_/g, ' ') : 'None equipped';
+    $('appearance-ringtone').textContent = currentUser.activeRingtone ? currentUser.activeRingtone.replace(/_/g, ' ') : 'Default ringtone';
     $('profile-modal').classList.add('active');
   });
   $('profile-modal-close').addEventListener('click', () => $('profile-modal').classList.remove('active'));
