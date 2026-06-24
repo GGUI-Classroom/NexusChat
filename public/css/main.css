@@ -923,42 +923,55 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 /* ===== CALL HUD ===== */
 .call-hud {
   position: fixed;
-  bottom: 20px; left: 50%; transform: translateX(-50%);
+  top: 58px; left: 80px; right: 0;
   z-index: 1000;
-  animation: slide-up 0.3s ease;
+  height: 282px;
+  animation: call-stage-in 0.25s ease;
+  background:#07090e;
+  border-bottom:1px solid var(--border);
 }
 
-@keyframes slide-up {
-  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+@keyframes call-stage-in {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .call-hud-inner {
-  background: var(--bg-elevated);
-  border: 1px solid var(--green);
-  border-radius: var(--radius-xl);
-  padding: 10px 16px;
-  display: flex; align-items: center; gap: 16px;
-  box-shadow: 0 0 30px rgba(61,214,140,0.2), var(--shadow-lg);
-  white-space: nowrap;
+  height:100%;
+  padding:28px 44px 22px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:28px;
+  white-space:nowrap;
+  position:relative;
 }
 
-.call-hud-peer { display: flex; align-items: center; gap: 8px; }
-.call-hud-name { font-size: 13px; font-weight: 700; }
-.call-hud-status { font-size: 11px; color: var(--green); }
+.call-hud-peer { display:flex; flex-direction:column; align-items:center; gap:9px; }
+.call-hud-peer .avatar { width:112px !important; height:112px !important; font-size:36px; border:2px solid var(--green); }
+.call-hud-name { font-size:18px; font-weight:800; text-align:center; }
+.call-hud-status { font-size:12px; color:var(--green); text-align:center; }
 .call-hud-timer {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px; font-weight: 500;
-  color: var(--text-secondary);
-  min-width: 36px;
+  position:absolute; top:16px; right:24px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:12px; font-weight:700; color:var(--text-secondary);
 }
 
-.call-hud-controls { display: flex; gap: 6px; }
+.call-hud-controls { position:absolute; bottom:22px; display:flex; gap:10px; }
+.call-hud .hud-btn { width:48px; height:48px; border-radius:12px; background:#1b202b; }
+.call-hud .hud-btn-wide { width:auto; min-width:92px; padding:0 13px; font:700 12px 'Syne',sans-serif; }
+.call-hud .hud-btn.end { background:var(--red); }
+.chat-container.dm-call-active .messages-wrap { padding-top:282px; }
 .call-games-modal { max-width: 540px; }
 .game-picker { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
 .game-choice { min-height:120px; border:1px solid var(--border); background:var(--bg-surface); color:var(--text-primary); border-radius:6px; cursor:pointer; font:inherit; text-align:left; padding:14px; }
 .game-choice strong { display:block; font-size:18px; margin-bottom:5px; }.game-choice span { color:var(--text-muted); font-size:12px; }
 .game-table { display:flex; flex-direction:column; gap:12px; }.game-cards { display:flex; gap:5px; flex-wrap:wrap; }.game-card { width:34px; height:48px; background:#f7f8fb; color:#192133; border-radius:4px; display:grid; place-items:center; font:700 13px monospace; }.game-card.hidden { background:linear-gradient(135deg,#5366f5,#a855f7); color:transparent; }.game-player { border:1px solid var(--border); padding:9px; border-radius:5px; }.game-player.turn { border-color:var(--accent); }.game-actions { display:flex; gap:8px; flex-wrap:wrap; }.game-actions button { flex:1; min-width:90px; }
+.activity-invite-modal { width:min(420px,calc(100vw - 32px)); padding:22px; display:grid; grid-template-columns:54px 1fr; gap:14px; }
+.activity-invite-icon { width:54px; height:54px; display:grid; place-items:center; border-radius:14px; background:linear-gradient(135deg,#5b6ef5,#a855f7); font-size:26px; color:#fff; }
+.activity-invite-copy h2 { margin:3px 0 5px; font-size:18px; }.activity-invite-copy p { margin:0; color:var(--text-secondary); font-size:13px; }
+.activity-invite-actions { grid-column:1/-1; display:flex; justify-content:flex-end; gap:8px; margin-top:4px; }
+@media (max-width:720px) { .call-hud { left:0; top:0; height:240px; }.call-hud-inner { padding:20px; }.call-hud-peer .avatar { width:86px !important; height:86px !important; }.chat-container.dm-call-active .messages-wrap { padding-top:240px; } }
 
 .hud-btn {
   width: 34px; height: 34px;

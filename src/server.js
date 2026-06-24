@@ -1671,6 +1671,9 @@ io.on('connection', (socket) => {
       const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
       game = { type, phase: 'lobby', hostId: userId, players: [{ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: 1000, hand: [] }], dealer: { hand: [] }, deck: [], community: [], pot: 0 };
       callGames.set(roomId, game);
+      const host = { id: userId, displayName: me.rows[0]?.display_name || 'Player' };
+      socket.to(`call:${roomId}`).emit('call_game_invite', { roomId, type, host });
+      socket.to(`groupcall:${roomId}`).emit('call_game_invite', { roomId, type, host });
     }
     io.to(`call:${roomId}`).emit('call_game_available', { roomId, type: game.type });
     io.to(`groupcall:${roomId}`).emit('call_game_available', { roomId, type: game.type });
@@ -1699,6 +1702,14 @@ io.on('connection', (socket) => {
     if (game.type === 'blackjack') { game.dealer.hand = [game.deck.pop(), game.deck.pop()]; }
     else { game.community = [game.deck.pop(), game.deck.pop(), game.deck.pop()]; game.pot = 0; game.turnId = game.players[0].id; }
     emitGame(roomId);
+  });
+
+  socket.on('call_game_close', async ({ roomId }) => {
+    const game = callGames.get(roomId);
+    if (!game || game.hostId !== userId || !await isInGameRoom(userId, roomId)) return;
+    callGames.delete(roomId);
+    io.to(`call:${roomId}`).emit('call_game_closed', { roomId });
+    io.to(`groupcall:${roomId}`).emit('call_game_closed', { roomId });
   });
 
   socket.on('call_game_action', async ({ roomId, action }) => {
