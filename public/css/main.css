@@ -362,7 +362,9 @@ body.light-theme { --bg-void:#dfe7f2; --bg-base:#eef3f9; --bg-surface:#ffffff; -
 .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
 .status-dot.idle { background: var(--yellow); }
 .status-dot.dnd { background: var(--red); box-shadow: 0 0 6px var(--red-glow); }
-.status-dot.discord-status::after { content:'D'; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font:700 7px Arial,sans-serif; }
+.status-dot.discord-status { width:14px; height:14px; border-color:var(--bg-surface); box-shadow:0 0 0 2px var(--bg-surface), 0 0 7px currentColor; }
+.status-dot.discord-status::after { content:'D'; position:absolute; inset:2px; display:grid; place-items:center; border-radius:50%; background:#0d1320; color:#fff; font:800 8px Arial,sans-serif; line-height:1; text-shadow:none; }
+body.light-theme .status-dot.discord-status::after { background:#172033; color:#fff; }
 
 .user-info { flex: 1; min-width: 0; }
 .user-info .display-name {
