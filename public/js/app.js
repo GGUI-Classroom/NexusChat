@@ -4124,6 +4124,8 @@
     $('nexus-link-dms').checked = !!data.dmRelayEnabled;
     $('nexus-link-attachments').checked = !!data.attachmentsEnabled;
     $('nexus-link-status').checked = !!data.statusSyncEnabled;
+    $('nexus-link-message-notify').checked = data.messageNotificationsEnabled !== false;
+    $('nexus-link-call-notify').checked = data.callNotificationsEnabled !== false;
     if (error) error.textContent = '';
   }
 
@@ -4139,7 +4141,9 @@
     const data = await api('PATCH', '/api/nexus-link/settings', {
       dmRelayEnabled: $('nexus-link-dms').checked,
       attachmentsEnabled: $('nexus-link-attachments').checked,
-      statusSyncEnabled: $('nexus-link-status').checked
+      statusSyncEnabled: $('nexus-link-status').checked,
+      messageNotificationsEnabled: $('nexus-link-message-notify').checked,
+      callNotificationsEnabled: $('nexus-link-call-notify').checked
     });
     if (data.error) return showError('nexus-link-error', data.error);
     showError('nexus-link-error', '');
@@ -4168,7 +4172,7 @@
   $('connect-discord-btn').addEventListener('click', () => { window.location.href = '/api/nexus-link/connect'; });
   $('appearance-decoration-select').addEventListener('change', async e => { const r = await api('POST', '/api/shop/equip', { decorationId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeDecoration = e.target.value || null; toast('Decoration updated', 'success'); });
   $('appearance-ringtone-select').addEventListener('change', async e => { const r = await api('POST', '/api/ringtones/equip', { ringtoneId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeRingtone = e.target.value || null; toast('Ringtone updated', 'success'); });
-  ['nexus-link-dms', 'nexus-link-attachments', 'nexus-link-status'].forEach(id => {
+  ['nexus-link-dms', 'nexus-link-attachments', 'nexus-link-status', 'nexus-link-message-notify', 'nexus-link-call-notify'].forEach(id => {
     $(id).addEventListener('change', saveNexusLinkSettings);
   });
 

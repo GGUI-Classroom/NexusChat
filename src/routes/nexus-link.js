@@ -45,7 +45,7 @@ router.get('/settings', requireAuth, async (req, res) => {
 router.patch('/settings', requireAuth, async (req, res) => {
   try {
     const settings = {};
-    for (const key of ['dmRelayEnabled', 'attachmentsEnabled', 'statusSyncEnabled']) {
+    for (const key of ['dmRelayEnabled', 'attachmentsEnabled', 'statusSyncEnabled', 'messageNotificationsEnabled', 'callNotificationsEnabled']) {
       if (typeof req.body[key] === 'boolean') settings[key] = req.body[key];
     }
     res.json(await nexusLinkService(`/connection/${encodeURIComponent(req.session.userId)}`, {
