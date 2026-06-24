@@ -2825,7 +2825,7 @@
       <div class="dm-item ${activeDmUserId === f.id ? 'active' : ''}" data-id="${f.id}" onclick="railSelect('dms');switchView('dm');openDm(window._friendsMap['${f.id}'])">
         <div class="avatar-wrap">
           <div class="avatar sm" id="dav-${f.id}"></div>
-          <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="ddot-${f.id}"></div>
+          <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="ddot-${f.id}"></div>
         </div>
         <div class="person-info">
           <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
@@ -2860,7 +2860,7 @@
     $('chat-peer-name').textContent = user.displayName;
     $('chat-peer-username').textContent = '@' + user.username;
     const statusDot = $('chat-peer-status');
-    statusDot.className = `status-dot ${normalizedStatus(user.status)}`;
+    statusDot.className = `status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}`;
 
     setMobileTitle(user.displayName);
     if (isMobile()) closeMobileSidebar();
@@ -6007,7 +6007,7 @@
     renderAvatar($('popup-avatar'), data);
     $('popup-name').textContent = String(data.displayName || '').replace(/\s*(?:\.\.\.|…)\s*$/, '');
     $('popup-username').textContent = '@' + data.username;
-    $('popup-status').className = 'status-dot ' + normalizedStatus(data.status);
+    $('popup-status').className = 'status-dot ' + normalizedStatus(visibleStatus(data)) + (usesDiscordStatus(data) ? ' discord-status' : '');
     $('popup-bio-section').style.display = 'none';
     $('popup-bio').textContent = '';
 
