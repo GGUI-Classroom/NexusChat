@@ -170,6 +170,17 @@ app.post('/api/nexus-link/friend-requests/:requestId/respond', async (req, res) 
   res.json({ success: true, action: action === 'accept' ? 'accepted' : 'declined' });
 });
 
+app.post('/api/nexus-link/calls/:roomId/decline', (req, res) => {
+  if (!validNexusLinkRequest(req)) return res.status(401).json({ error: 'Unauthorized Nexus LINK relay' });
+  const invite = directCallInvites.get(req.params.roomId);
+  const userId = String(req.body.nexusUserId || '');
+  if (!invite || invite.toId !== userId) return res.status(404).json({ error: 'Call invitation was not found' });
+  directCallInvites.delete(req.params.roomId);
+  callTypes.delete(req.params.roomId);
+  io.to(`user:${invite.fromId}`).emit('call_declined', { roomId: req.params.roomId, byId: userId });
+  res.json({ success: true });
+});
+
 app.get('/health', (req, res) => {
   res.json({ ok: true });
 });
@@ -183,6 +194,7 @@ io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
 const userSockets = new Map();
 const voiceRooms = new Map();
 const callTypes = new Map();
+const directCallInvites = new Map();
 const userInCall = new Map();
 const groupCallRooms = new Map(); // roomId -> Set<userId>
 const userGroupCallRoom = new Map(); // userId -> roomId
@@ -491,6 +503,18 @@ async function relayNexusDirectMessage({ nexusRecipientId, nexusMessageId, sende
     body: JSON.stringify({ nexusRecipientId, nexusMessageId, sender, content, attachments: [] })
   });
   if (!response.ok) throw new Error(`Nexus LINK DM relay returned ${response.status}`);
+}
+
+async function relayNexusCallInvite({ nexusRecipientId, roomId, callType, caller }) {
+  const linkUrl = String(process.env.NEXUS_LINK_URL || '').replace(/\/$/, '');
+  const secret = process.env.NEXUS_LINK_SHARED_SECRET;
+  if (!linkUrl || !secret) return;
+  const response = await fetch(`${linkUrl}/relay/call-invite`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-nexus-link-secret': secret },
+    body: JSON.stringify({ nexusRecipientId, roomId, callType, caller })
+  });
+  if (!response.ok) throw new Error(`Nexus LINK call relay returned ${response.status}`);
 }
 
 async function logModerationAction({ serverId, channelId, action, actorUserId, targetUserId = null, details = null }) {
@@ -1316,7 +1340,11 @@ io.on('connection', (socket) => {
     const roomId = uuidv4();
     const normalizedCallType = callType === 'video' ? 'video' : 'voice';
     callTypes.set(roomId, normalizedCallType);
-    const caller = await pool.query('SELECT username, display_name, avatar_data, avatar_mime FROM users WHERE id=$1', [userId]);
+    directCallInvites.set(roomId, { fromId: userId, toId, callType: normalizedCallType });
+    const caller = await pool.query(
+      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, ats.server_tag
+       FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`, [userId]
+    );
     const c = caller.rows[0];
     io.to(`user:${toId}`).emit('incoming_call', {
       roomId, fromId: userId,
@@ -1326,10 +1354,25 @@ io.on('connection', (socket) => {
         avatarDataUrl: c.avatar_data ? `data:${c.avatar_mime};base64,${c.avatar_data}` : null
       }
     });
+    relayNexusCallInvite({
+      nexusRecipientId: toId,
+      roomId,
+      callType: normalizedCallType,
+      caller: {
+        id: userId,
+        username: c.username,
+        displayName: c.display_name,
+        avatarDataUrl: c.avatar_data ? `data:${c.avatar_mime};base64,${c.avatar_data}` : null,
+        activeServerTag: c.server_tag || null
+      }
+    }).catch(error => console.error('Nexus LINK call relay error:', error));
     socket.emit('call_ringing', { roomId, toId, callType: normalizedCallType });
   });
 
   socket.on('call_accept', async ({ roomId, toId }) => {
+    const invite = directCallInvites.get(roomId);
+    if (!invite || invite.fromId !== toId || invite.toId !== userId) return;
+    directCallInvites.delete(roomId);
     const callType = callTypes.get(roomId) || 'voice';
     await setRoomParticipants(roomId, [userId, toId]);
     await setUserCallRoom(userId, roomId);
@@ -1340,6 +1383,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('call_decline', ({ roomId, toId }) => {
+    const invite = directCallInvites.get(roomId);
+    if (!invite || invite.fromId !== toId || invite.toId !== userId) return;
+    directCallInvites.delete(roomId);
     callTypes.delete(roomId);
     io.to(`user:${toId}`).emit('call_declined', { roomId, byId: userId });
   });
@@ -1373,7 +1419,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('call_cancel', ({ toId, roomId }) => {
-    if (roomId) callTypes.delete(roomId);
+    if (roomId) { callTypes.delete(roomId); directCallInvites.delete(roomId); }
     // Receiver will ignore if there is no pending call.
     io.to(`user:${toId}`).emit('call_cancelled', { fromId: userId });
   });

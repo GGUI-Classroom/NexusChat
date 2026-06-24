@@ -17,6 +17,10 @@
   let secretHumCtx = null;
   let secretHumNodes = [];
   let secretClaimRunning = false;
+  const externalCallParams = new URLSearchParams(window.location.search);
+  let externalCallJoinPending = externalCallParams.get('nexusCall')
+    ? { roomId: externalCallParams.get('nexusCall'), fromId: externalCallParams.get('from'), callType: externalCallParams.get('type') === 'video' ? 'video' : 'voice' }
+    : null;
 
   function normalizedStatus(status) {
     return ['online', 'idle', 'dnd', 'offline'].includes(status) ? status : 'offline';
@@ -3154,7 +3158,10 @@
     });
     socket.on('call_game_error', ({ message }) => toast(message || 'Game action unavailable', 'error'));
 
-    socket.on('connect', () => console.log('Socket connected'));
+    socket.on('connect', () => {
+      console.log('Socket connected');
+      joinExternalNexusCall();
+    });
     socket.on('disconnect', () => console.log('Socket disconnected'));
     socket.on('connect_error', err => {
       console.warn('Socket connect error:', err && err.message ? err.message : err);
@@ -4076,6 +4083,25 @@
     if (data.error) return;
     const serversWithTags = (data.servers || []).filter(s => s.tag);
     choices.innerHTML = `<button type="button" class="tag-choice${!currentUser.activeServerTag ? ' selected' : ''}" onclick="adoptServerTag('')">No tag</button>${serversWithTags.map(s => `<button type="button" class="tag-choice${currentUser.activeServerTagServerId === s.id ? ' selected' : ''}" style="--tag-bg:${esc(s.tagBackground || '#5865f2')}" onclick="adoptServerTag('${s.id}')">[${esc(s.tag)}] ${esc(s.name)}</button>`).join('')}`;
+  }
+
+  async function joinExternalNexusCall() {
+    if (!externalCallJoinPending || !socket || !currentUser || callState) return;
+    const join = externalCallJoinPending;
+    externalCallJoinPending = null;
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('nexusCall');
+    cleanUrl.searchParams.delete('from');
+    cleanUrl.searchParams.delete('type');
+    window.history.replaceState({}, '', cleanUrl);
+    const friend = friends.find(item => item.id === join.fromId) || { id: join.fromId, displayName: 'Nexus caller', username: 'caller' };
+    socket.emit('call_accept', { roomId: join.roomId, toId: join.fromId });
+    try {
+      await startWebRTCCall(join.roomId, join.fromId, friend, false, join.callType);
+    } catch (error) {
+      console.error('Could not join Nexus LINK call', error);
+      toast('Could not join the Nexus call. Check microphone permissions.', 'error');
+    }
   }
 
   async function loadNexusLinkSettings() {
