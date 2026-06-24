@@ -1530,16 +1530,27 @@
     $('invite-badge-count').textContent = invites.length;
     badge.style.display = 'flex';
     badge.textContent = invites.length;
-    container.innerHTML = invites.map(inv => `
-      <div class="server-invite-item" id="inv-${inv.id}">
+    container.innerHTML = invites.map(inv => {
+      const mode = ['solid', 'gradient', 'image'].includes(inv.inviteBannerMode) ? inv.inviteBannerMode : 'solid';
+      const bannerStyle = mode === 'image' && inv.inviteBannerImage
+        ? `background-image:linear-gradient(90deg,rgba(10,14,28,.25),rgba(10,14,28,.55)),url('${esc(inv.inviteBannerImage)}')`
+        : mode === 'gradient'
+          ? `background:linear-gradient(135deg,${esc(inv.inviteBannerStart || '#5865f2')},${esc(inv.inviteBannerEnd || '#a855f7')})`
+          : `background:${esc(inv.inviteBannerStart || '#5865f2')}`;
+      const tags = String(inv.inviteTags || '').split(',').map(tag => tag.trim()).filter(Boolean).map(tag => `<span>${esc(tag)}</span>`).join('');
+      return `
+      <div class="server-invite-item rich-server-invite" id="inv-${inv.id}">
+        <div class="rich-invite-banner" style="${bannerStyle}"></div>
         <div class="inv-server-name">${esc(inv.serverName)}</div>
+        ${inv.inviteDescription ? `<div class="inv-description">${esc(inv.inviteDescription)}</div>` : ''}
+        ${tags ? `<div class="inv-tags">${tags}</div>` : ''}
         <div class="inv-from">Invited by ${esc(inv.from.displayName)}</div>
         <div class="inv-actions">
           <button class="inv-accept" onclick="respondServerInvite('${inv.id}','accept','${inv.serverId}')">Accept</button>
           <button class="inv-decline" onclick="respondServerInvite('${inv.id}','decline','${inv.serverId}')">Decline</button>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   }
 
   window.respondServerInvite = async function(inviteId, action, serverId) {

@@ -1701,6 +1701,12 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   margin-bottom: 8px;
 }
 .server-invite-item .inv-actions { display: flex; gap: 6px; }
+.rich-server-invite { position:relative; overflow:hidden; padding:0 10px 10px; border:1px solid var(--border-bright); border-radius:8px; margin-bottom:8px; }
+.rich-invite-banner { height:46px; margin:0 -10px 9px; background-size:cover; background-position:center; }
+.rich-server-invite .inv-server-name { font-size:14px; }
+.inv-description { margin:4px 0 7px; color:var(--text-secondary); font-size:12px; line-height:1.35; }
+.inv-tags { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
+.inv-tags span { padding:2px 6px; border:1px solid var(--border-bright); border-radius:999px; color:var(--text-secondary); font-size:10px; font-weight:700; }
 .inv-accept { background: rgba(61,214,140,0.15); color: var(--green); border: none; border-radius: var(--radius-sm); padding: 5px 10px; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: var(--transition); }
 .inv-accept:hover { background: rgba(61,214,140,0.25); }
 .inv-decline { background: rgba(240,84,84,0.1); color: var(--red); border: none; border-radius: var(--radius-sm); padding: 5px 10px; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: var(--transition); }
