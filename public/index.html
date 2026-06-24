@@ -191,8 +191,8 @@
               <div class="username" id="self-username">–</div>
             </div>
             <div class="user-actions">
-              <button class="icon-btn" id="profile-btn" title="Edit Profile">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              <button class="icon-btn" id="profile-btn" title="Settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.1 2.1-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-3v-.08A1.7 1.7 0 0 0 10.7 18.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.1-2.1.06-.06A1.7 1.7 0 0 0 7.06 14.8 1.7 1.7 0 0 0 5.5 13.77H5v-3h.5A1.7 1.7 0 0 0 7.06 9.74 1.7 1.7 0 0 0 6.72 7.86l-.06-.06 2.1-2.1.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11.73 4.5V4h3v.5a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.1 2.1-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03h.5v3h-.5A1.7 1.7 0 0 0 19.4 15z"/></svg>
               </button>
               <button class="icon-btn" id="logout-btn" title="Sign Out">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -381,9 +381,10 @@
   <!-- Profile Modal -->
   <div class="modal-overlay" id="profile-modal">
     <div class="modal">
-      <div class="modal-header"><h2>Edit Profile</h2><button class="modal-close" id="profile-modal-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div class="modal-header"><h2>Settings</h2><button class="modal-close" id="profile-modal-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
       <div class="modal-body">
-        <div class="avatar-upload-area">
+        <div class="profile-settings-tabs"><button class="profile-settings-tab active" data-ptab="profile">Profile</button><button class="profile-settings-tab" data-ptab="link">Nexus LINK</button><button class="profile-settings-tab" data-ptab="appearance">Appearance</button><button class="profile-settings-tab" data-ptab="account">Account</button></div>
+        <section class="profile-settings-panel active" data-ppanel="profile"><div class="avatar-upload-area">
           <div class="avatar-preview" id="profile-avatar-preview">?</div>
           <div class="avatar-upload-info"><label for="avatar-file-input" class="btn-secondary">Choose Photo</label><input type="file" id="avatar-file-input" accept="image/*" style="display:none" /><p class="field-hint">JPEG, PNG, GIF, WebP – max 2 MB</p></div>
         </div>
@@ -392,8 +393,8 @@
           <label>Bio <span style="color:var(--text-muted);font-weight:400;font-size:10px">— max 300 chars</span></label>
           <textarea id="profile-bio" placeholder="Tell people a bit about yourself…" rows="3" maxlength="300" style="resize:vertical;min-height:70px"></textarea>
         </div>
-        <div class="field-group"><label>Server Tag</label><div id="profile-tag-choices" class="profile-tag-choices"></div></div>
-        <div class="profile-divider"></div>
+        <div class="field-group"><label>Server Tag</label><div id="profile-tag-choices" class="profile-tag-choices"></div></div><div class="form-error" id="profile-error"></div><button class="btn-primary" id="save-profile-btn">Save Changes</button></section>
+        <section class="profile-settings-panel" data-ppanel="link"><div class="profile-divider"></div>
         <div class="section-label" style="margin-bottom:12px">NEXUS LINK</div>
         <div id="nexus-link-disconnected" style="display:none">
           <p class="field-hint" style="margin:0 0 10px">Connect Discord to relay direct messages and use Nexus LINK in Discord servers.</p>
@@ -406,16 +407,13 @@
           <label class="toggle-row"><input type="checkbox" id="nexus-link-status" /><span class="toggle-label"><span class="toggle-title">Mirror Discord Status</span><span class="toggle-hint">Show Discord online, idle, do not disturb, or offline status in Nexus.</span></span></label>
           <div class="form-error" id="nexus-link-error"></div>
         </div>
-        <div class="form-error" id="profile-error"></div>
-        <button class="btn-primary" id="save-profile-btn">Save Changes</button>
-
-        <div class="profile-divider"></div>
+        </section><section class="profile-settings-panel" data-ppanel="appearance"><div class="section-label">APPEARANCE</div><p class="field-hint">Choose how Nexus looks on this device.</p><div class="settings-actions"><button class="btn-secondary" id="theme-dark-btn">Dark Mode</button><button class="btn-secondary" id="theme-light-btn">Light Mode</button></div></section><section class="profile-settings-panel" data-ppanel="account"><div class="profile-divider"></div>
         <div class="section-label" style="margin-bottom:12px">CHANGE PASSWORD</div>
         <div class="field-group"><label>Current Password</label><input type="password" id="profile-old-password" placeholder="••••••••" autocomplete="current-password" /></div>
         <div class="field-group"><label>New Password</label><input type="password" id="profile-new-password" placeholder="••••••••" autocomplete="new-password" /></div>
         <div class="field-group"><label>Confirm New Password</label><input type="password" id="profile-confirm-password" placeholder="••••••••" autocomplete="new-password" /></div>
         <div class="form-error" id="password-error"></div>
-        <button class="btn-primary" id="change-password-btn">Change Password</button>
+        <button class="btn-primary" id="change-password-btn">Change Password</button></section>
       </div>
     </div>
   </div>

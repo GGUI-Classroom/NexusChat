@@ -155,6 +155,13 @@ html, body {
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
+.profile-settings-tabs { display:flex; gap:6px; border-bottom:1px solid var(--border); margin-bottom:18px; overflow-x:auto; }
+.profile-settings-tab { background:none; border:0; color:var(--text-secondary); padding:9px 10px; cursor:pointer; font:600 12px 'Syne',sans-serif; white-space:nowrap; border-bottom:2px solid transparent; }
+.profile-settings-tab.active { color:var(--text-primary); border-bottom-color:var(--accent); }
+.profile-settings-panel { display:none; }
+.profile-settings-panel.active { display:block; }
+body.light-theme { --bg-void:#edf1f8; --bg-base:#e4e9f3; --bg-surface:#ffffff; --bg-elevated:#f7f9fd; --bg-hover:#e9eef8; --text-primary:#172033; --text-secondary:#52627d; --text-muted:#71809a; --border:#cbd5e5; --border-bright:#aab9d0; }
+
 .auth-form h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
 .auth-subtitle { color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; }
 

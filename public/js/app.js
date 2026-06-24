@@ -4148,6 +4148,14 @@
   });
   $('profile-modal-close').addEventListener('click', () => $('profile-modal').classList.remove('active'));
   $('profile-modal').addEventListener('click', e => { if (e.target === $('profile-modal')) $('profile-modal').classList.remove('active'); });
+  document.querySelectorAll('.profile-settings-tab').forEach(button => button.addEventListener('click', () => {
+    document.querySelectorAll('.profile-settings-tab').forEach(item => item.classList.toggle('active', item === button));
+    document.querySelectorAll('.profile-settings-panel').forEach(panel => panel.classList.toggle('active', panel.dataset.ppanel === button.dataset.ptab));
+  }));
+  function applyTheme(theme) { document.body.classList.toggle('light-theme', theme === 'light'); localStorage.setItem('nexus-theme', theme); }
+  applyTheme(localStorage.getItem('nexus-theme') || 'dark');
+  $('theme-dark-btn').addEventListener('click', () => applyTheme('dark'));
+  $('theme-light-btn').addEventListener('click', () => applyTheme('light'));
   $('connect-discord-btn').addEventListener('click', () => { window.location.href = '/api/nexus-link/connect'; });
   ['nexus-link-dms', 'nexus-link-attachments', 'nexus-link-status'].forEach(id => {
     $(id).addEventListener('change', saveNexusLinkSettings);
