@@ -219,7 +219,7 @@ router.get('/:id', async (req, res) => {
     `, [id, req.session.userId]),
     pool.query(
       `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start, sr.gradient_end, sr.gradient_animated, sr.is_admin,
-       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
+       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.discord_status, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
@@ -257,7 +257,7 @@ router.get('/:id', async (req, res) => {
     members: memRes.rows.map(m => ({
       id: m.id, username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
-      status: m.status, role: m.role, roleId: m.role_id,
+      status: m.status, discordStatus: m.discord_status || 'offline', role: m.role, roleId: m.role_id,
       roleName: m.role_name, roleColor: m.role_color, roleGradientStart: boostRes.has('gradients') ? m.gradient_start : null, roleGradientEnd: boostRes.has('gradients') ? m.gradient_end : null, isAdmin: m.is_admin,
       activeDecoration: m.active_decoration || null,
       activeColor: m.active_color || null,

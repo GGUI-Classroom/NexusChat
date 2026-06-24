@@ -1682,7 +1682,7 @@
         <div class="server-member-item" onclick="showProfilePopup(event, '${popupData}')">
           <div class="avatar-wrap" style="flex-shrink:0">
             <div class="avatar sm" id="smav-${m.id}"></div>
-            <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
+            <div class="status-dot ${normalizedStatus(visibleStatus(m))}${usesDiscordStatus(m) ? ' discord-status' : ''}" style="border-color:var(--bg-surface)"></div>
           </div>
           <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
           ${canManage ? `<div class="member-actions">
