@@ -199,6 +199,7 @@ async function initDb() {
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_server_tag_id TEXT DEFAULT NULL`, 'alter_users_active_server_tag');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_ringtone TEXT DEFAULT NULL`, 'alter_users_ringtone');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_status TEXT DEFAULT 'offline'`, 'alter_users_discord_status');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_activity TEXT DEFAULT NULL`, 'alter_users_discord_activity');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS mod_log_channel_id TEXT DEFAULT NULL`, 'alter_servers_mod_log_channel');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_name TEXT DEFAULT 'NexusBot'`, 'alter_servers_bot_name');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_prefix TEXT DEFAULT '/'`, 'alter_servers_bot_prefix');
@@ -226,6 +227,12 @@ async function initDb() {
     UNIQUE(server_id, feature)
   )`, 'server_boost_allocations');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS tag_background TEXT DEFAULT '#5865f2'`, 'alter_servers_tag_background');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_description TEXT DEFAULT NULL`, 'alter_servers_invite_description');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_tags TEXT DEFAULT ''`, 'alter_servers_invite_tags');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_banner_mode TEXT DEFAULT 'solid'`, 'alter_servers_invite_banner_mode');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_banner_start TEXT DEFAULT '#5865f2'`, 'alter_servers_invite_banner_start');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_banner_end TEXT DEFAULT '#a855f7'`, 'alter_servers_invite_banner_end');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_banner_image TEXT DEFAULT NULL`, 'alter_servers_invite_banner_image');
   await runSql(`UPDATE users SET active_color=NULL, active_font=NULL WHERE active_color IS NOT NULL OR active_font IS NOT NULL`, 'clear_retired_color_font');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_spam_window INTEGER DEFAULT 6`, 'alter_servers_bot_spam_window');
   await runSql(`CREATE TABLE IF NOT EXISTS user_fonts (

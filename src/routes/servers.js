@@ -42,7 +42,13 @@ function fmtServer(s) {
     id: s.id, name: s.name, ownerId: s.owner_id,
     iconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
     inviteCode: s.invite_code, createdAt: s.created_at,
-    tag: s.server_tag || null
+    tag: s.server_tag || null,
+    inviteDescription: s.invite_description || '',
+    inviteTags: s.invite_tags || '',
+    inviteBannerMode: s.invite_banner_mode || 'solid',
+    inviteBannerStart: s.invite_banner_start || '#5865f2',
+    inviteBannerEnd: s.invite_banner_end || '#a855f7',
+    inviteBannerImage: s.invite_banner_image || null
   };
 }
 
@@ -105,7 +111,8 @@ router.get('/', async (req, res) => {
 router.get('/invites/pending', async (req, res) => {
   const r = await pool.query(
     `SELECT si.id, si.server_id, si.from_id, si.created_at,
-       s.name as server_name, s.icon_data, s.icon_mime,
+       s.name as server_name, s.icon_data, s.icon_mime, s.invite_description, s.invite_tags,
+       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end, s.invite_banner_image,
        u.username as from_username, u.display_name as from_display_name,
        u.avatar_data as from_avatar, u.avatar_mime as from_avatar_mime
      FROM server_invites si
@@ -118,6 +125,9 @@ router.get('/invites/pending', async (req, res) => {
     id: i.id, serverId: i.server_id, fromId: i.from_id,
     serverName: i.server_name,
     serverIconDataUrl: i.icon_data ? `data:${i.icon_mime};base64,${i.icon_data}` : null,
+    inviteDescription: i.invite_description || '', inviteTags: i.invite_tags || '',
+    inviteBannerMode: i.invite_banner_mode || 'solid', inviteBannerStart: i.invite_banner_start || '#5865f2',
+    inviteBannerEnd: i.invite_banner_end || '#a855f7', inviteBannerImage: i.invite_banner_image || null,
     from: {
       username: i.from_username, displayName: i.from_display_name,
       avatarDataUrl: i.from_avatar ? `data:${i.from_avatar_mime};base64,${i.from_avatar}` : null
@@ -219,7 +229,7 @@ router.get('/:id', async (req, res) => {
     `, [id, req.session.userId]),
     pool.query(
       `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start, sr.gradient_end, sr.gradient_animated, sr.is_admin,
-       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.discord_status, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
+       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.discord_status, u.discord_activity, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
@@ -257,7 +267,7 @@ router.get('/:id', async (req, res) => {
     members: memRes.rows.map(m => ({
       id: m.id, username: m.username, displayName: m.display_name,
       avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
-      status: m.status, discordStatus: m.discord_status || 'offline', role: m.role, roleId: m.role_id,
+      status: m.status, discordStatus: m.discord_status || 'offline', discordActivity: m.discord_activity || null, role: m.role, roleId: m.role_id,
       roleName: m.role_name, roleColor: m.role_color, roleGradientStart: boostRes.has('gradients') ? m.gradient_start : null, roleGradientEnd: boostRes.has('gradients') ? m.gradient_end : null, isAdmin: m.is_admin,
       activeDecoration: m.active_decoration || null,
       activeColor: m.active_color || null,
@@ -381,6 +391,28 @@ router.post('/:id/channels', async (req, res) => {
     [chId, id, chName, parseInt(pos.rows[0].count), channelType]
   );
   res.json({ channel: { id: chId, name: chName, type: channelType, serverId: id } });
+});
+
+router.patch('/:id/invite-style', async (req, res) => {
+  const { id } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  const description = String(req.body.description || '').trim().slice(0, 180);
+  const tags = String(req.body.tags || '').split(',').map(tag => tag.trim().replace(/[^a-z0-9 _-]/gi, '').slice(0, 18)).filter(Boolean).slice(0, 5).join(', ');
+  const mode = String(req.body.bannerMode || 'solid');
+  const start = /^#[0-9a-f]{6}$/i.test(String(req.body.bannerStart || '')) ? req.body.bannerStart : '#5865f2';
+  const end = /^#[0-9a-f]{6}$/i.test(String(req.body.bannerEnd || '')) ? req.body.bannerEnd : '#a855f7';
+  const image = String(req.body.bannerImage || '').trim().slice(0, 2000);
+  if (!['solid', 'gradient', 'image'].includes(mode)) return res.status(400).json({ error: 'Invalid invite banner mode' });
+  if (mode === 'image' && !/^https:\/\/.+/i.test(image)) return res.status(400).json({ error: 'Banner image must use a secure https URL' });
+  if (mode !== 'solid') {
+    const features = await activeBoostFeatures(id);
+    if (!features.has('invite_banner')) return res.status(403).json({ error: 'Spend two boosts on Invite Banners before using gradients or images' });
+  }
+  await pool.query(`UPDATE servers SET invite_description=$1, invite_tags=$2, invite_banner_mode=$3,
+    invite_banner_start=$4, invite_banner_end=$5, invite_banner_image=$6 WHERE id=$7`,
+  [description || null, tags, mode, start, end, mode === 'image' ? image : null, id]);
+  const updated = await pool.query('SELECT * FROM servers WHERE id=$1', [id]);
+  res.json({ success: true, server: fmtServer(updated.rows[0]) });
 });
 
 // Persist an admin-controlled channel order.
@@ -542,6 +574,9 @@ router.post('/:id/invite', async (req, res) => {
       const inviteData = {
         serverId: id, serverName: s.name,
         serverIconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
+        inviteDescription: s.invite_description || '', inviteTags: s.invite_tags || '',
+        inviteBannerMode: s.invite_banner_mode || 'solid', inviteBannerStart: s.invite_banner_start || '#5865f2',
+        inviteBannerEnd: s.invite_banner_end || '#a855f7', inviteBannerImage: s.invite_banner_image || null,
         from: {
           username: u.username, displayName: u.display_name,
           avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null

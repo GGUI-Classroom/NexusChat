@@ -2313,6 +2313,13 @@
     $('settings-invite-code').value = s.inviteCode;
     $('settings-boost-status').textContent = `${s.boostCount || 0} active boosts. Tags and gradients unlock at 2.`;
     $('settings-server-tag').value = s.tag || '';
+    $('settings-invite-description').value = s.inviteDescription || '';
+    $('settings-invite-tags').value = s.inviteTags || '';
+    $('settings-invite-banner-mode').value = s.inviteBannerMode || 'solid';
+    $('settings-invite-banner-start').value = s.inviteBannerStart || '#5865f2';
+    $('settings-invite-banner-end').value = s.inviteBannerEnd || '#a855f7';
+    $('settings-invite-banner-image').value = s.inviteBannerImage || '';
+    updateInviteBannerControls();
     $('settings-tag-group').style.display = (s.boostCount || 0) >= 2 ? 'block' : 'none';
     if (s.iconDataUrl) {
       $('settings-icon-preview').innerHTML = `<img src="${s.iconDataUrl}" alt="">`;
@@ -2333,7 +2340,7 @@
 
   function renderBoostSettings(server) {
     const features = new Set(server.boostFeatures || []);
-    $('boosts-settings-content').innerHTML = `<div class="shop-card"><div class="shop-card-name">${server.boostCount || 0} active boosts</div><div class="shop-card-desc">Allocate two boosts per server feature. Expired boosts automatically disable the feature they funded.</div></div><div class="shop-grid" style="margin-top:12px"><div class="shop-card"><div class="shop-card-name">Server Tag</div><div class="shop-card-desc">A clickable tag card shown beside members across DMs and servers.</div><button class="shop-card-btn ${features.has('tag') ? 'equip' : 'buy'}" onclick="spendBoosts('tag')">${features.has('tag') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Role Gradients</div><div class="shop-card-desc">Unlock animated gradient colors in the role editor.</div><button class="shop-card-btn ${features.has('gradients') ? 'equip' : 'buy'}" onclick="spendBoosts('gradients')">${features.has('gradients') ? 'Allocated' : 'Spend 2 Boosts'}</button></div></div>`;
+    $('boosts-settings-content').innerHTML = `<div class="shop-card"><div class="shop-card-name">${server.boostCount || 0} active boosts</div><div class="shop-card-desc">Allocate two boosts per server feature. Expired boosts automatically disable the feature they funded.</div></div><div class="shop-grid" style="margin-top:12px"><div class="shop-card"><div class="shop-card-name">Server Tag</div><div class="shop-card-desc">A clickable tag card shown beside members across DMs and servers.</div><button class="shop-card-btn ${features.has('tag') ? 'equip' : 'buy'}" onclick="spendBoosts('tag')">${features.has('tag') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Role Gradients</div><div class="shop-card-desc">Unlock animated gradient colors in the role editor.</div><button class="shop-card-btn ${features.has('gradients') ? 'equip' : 'buy'}" onclick="spendBoosts('gradients')">${features.has('gradients') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Invite Banners</div><div class="shop-card-desc">Unlock a gradient or secure image banner for rich server invites.</div><button class="shop-card-btn ${features.has('invite_banner') ? 'equip' : 'buy'}" onclick="spendBoosts('invite_banner')">${features.has('invite_banner') ? 'Allocated' : 'Spend 2 Boosts'}</button></div></div>`;
   }
 
   function identityTagHtml(user) {
@@ -2359,6 +2366,29 @@
     if (r.error) return toast(r.error, 'error');
     toast('Server tag saved', 'success');
     await loadServerSidebar(activeServerId);
+  });
+
+  function updateInviteBannerControls() {
+    const mode = $('settings-invite-banner-mode')?.value || 'solid';
+    $('settings-invite-banner-colors').style.display = mode === 'image' ? 'none' : 'flex';
+    $('settings-invite-banner-image-wrap').style.display = mode === 'image' ? 'block' : 'none';
+  }
+  $('settings-invite-banner-mode').addEventListener('change', updateInviteBannerControls);
+  $('save-invite-style-btn').addEventListener('click', async () => {
+    if (!activeServerId) return;
+    const r = await api('PATCH', `/api/servers/${activeServerId}/invite-style`, {
+      description: $('settings-invite-description').value,
+      tags: $('settings-invite-tags').value,
+      bannerMode: $('settings-invite-banner-mode').value,
+      bannerStart: $('settings-invite-banner-start').value,
+      bannerEnd: $('settings-invite-banner-end').value,
+      bannerImage: $('settings-invite-banner-image').value
+    });
+    if (r.error) return toast(r.error, 'error');
+    activeServerData.server = { ...activeServerData.server, ...r.server };
+    const index = servers.findIndex(server => server.id === activeServerId);
+    if (index >= 0) servers[index] = { ...servers[index], ...r.server };
+    toast('Invite card saved', 'success');
   });
 
   // Settings tab switching
@@ -2940,13 +2970,40 @@
       const reacted = !!r.reacted;
       return `<button class="msg-reaction-chip${reacted ? ' reacted' : ''}" onclick="toggleChannelReaction('${msgId}','${channelId}','${encodeURIComponent(emoji)}')">${esc(emoji)} ${count}</button>`;
     }).join('');
-    return `${chips}<button class="msg-reaction-add" onclick="promptChannelReaction('${msgId}','${channelId}')">+</button>`;
+    return `${chips}<button class="msg-reaction-add" title="Add reaction" onclick="openChannelEmojiPicker(event,'${msgId}','${channelId}')">+</button>`;
   }
 
   window.promptChannelReaction = function(msgId, channelId) {
     const emoji = prompt('React with emoji (examples: 👍 🔥 😂)');
     if (!emoji || !emoji.trim()) return;
     window.toggleChannelReaction(msgId, channelId, encodeURIComponent(emoji.trim().slice(0, 16)));
+  };
+
+  const reactionEmojiSet = ['👍', '👎', '❤️', '🔥', '😂', '😮', '😢', '😡', '🎉', '✨', '👀', '✅', '❌', '💯', '🫡', '🤝', '🚀', '💜'];
+  let activeEmojiPicker = null;
+  function closeChannelEmojiPicker() {
+    if (activeEmojiPicker) activeEmojiPicker.remove();
+    activeEmojiPicker = null;
+  }
+  window.openChannelEmojiPicker = function(event, msgId, channelId) {
+    event?.stopPropagation();
+    closeChannelEmojiPicker();
+    const picker = document.createElement('div');
+    picker.className = 'channel-emoji-picker';
+    picker.setAttribute('role', 'dialog');
+    picker.setAttribute('aria-label', 'Choose a reaction');
+    picker.innerHTML = `<div class="emoji-picker-title">Quick reactions</div><div class="emoji-picker-grid">${reactionEmojiSet.map(emoji => `<button type="button" title="${emoji}">${emoji}</button>`).join('')}</div>`;
+    picker.querySelectorAll('button').forEach((button, index) => button.addEventListener('click', () => {
+      window.toggleChannelReaction(msgId, channelId, encodeURIComponent(reactionEmojiSet[index]));
+      closeChannelEmojiPicker();
+    }));
+    document.body.appendChild(picker);
+    const rect = event?.currentTarget?.getBoundingClientRect();
+    const width = 270;
+    picker.style.left = `${Math.max(10, Math.min((rect?.left || 20), window.innerWidth - width - 10))}px`;
+    picker.style.top = `${Math.max(10, (rect?.bottom || 40) + 8)}px`;
+    activeEmojiPicker = picker;
+    setTimeout(() => document.addEventListener('click', closeChannelEmojiPicker, { once: true }), 0);
   };
 
   window.toggleChannelReaction = function(msgId, channelId, encodedEmoji) {
@@ -3208,10 +3265,11 @@
       if (fromId === activeDmUserId) $('typing-indicator').style.display = 'none';
     });
 
-    socket.on('status_change', ({ userId, status, discordStatus }) => {
+    socket.on('status_change', ({ userId, status, discordStatus, discordActivity }) => {
       const f = friends.find(f => f.id === userId);
       if (f && status) f.status = status;
       if (f && discordStatus) f.discordStatus = discordStatus;
+      if (f && discordActivity !== undefined) f.discordActivity = discordActivity;
       const shown = f ? visibleStatus(f) : status;
       const fromDiscord = f ? usesDiscordStatus(f) : false;
       const dot = $(`fdot-${userId}`);
@@ -6011,6 +6069,9 @@
     $('popup-name').textContent = String(data.displayName || '').replace(/\s*(?:\.\.\.|…)\s*$/, '');
     $('popup-username').textContent = '@' + data.username;
     $('popup-status').className = 'status-dot ' + normalizedStatus(visibleStatus(data)) + (usesDiscordStatus(data) ? ' discord-status' : '');
+    const discordActivity = $('popup-discord-activity');
+    discordActivity.style.display = data.discordActivity && usesDiscordStatus(data) ? 'block' : 'none';
+    discordActivity.textContent = data.discordActivity ? `Discord activity: ${data.discordActivity}` : '';
     $('popup-bio-section').style.display = 'none';
     $('popup-bio').textContent = '';
 

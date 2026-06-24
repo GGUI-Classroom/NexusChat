@@ -82,19 +82,20 @@ router.use(requireNexusLinkSecret);
 
 router.post('/status', async (req, res) => {
   const status = ['online', 'idle', 'dnd', 'offline'].includes(req.body.status) ? req.body.status : 'offline';
+  const activity = String(req.body.activity || '').trim().slice(0, 120) || null;
   const userId = String(req.body.nexusUserId || '');
   if (!userId) return res.status(400).json({ error: 'Nexus user ID is required' });
-  const updated = await pool.query('UPDATE users SET discord_status=$1 WHERE id=$2 RETURNING id', [status, userId]);
+  const updated = await pool.query('UPDATE users SET discord_status=$1, discord_activity=$2 WHERE id=$3 RETURNING id', [status, activity, userId]);
   if (!updated.rows.length) return res.status(404).json({ error: 'Nexus user was not found' });
   const io = req.app.get('io');
-  io.to(`user:${userId}`).emit('status_change', { userId, discordStatus: status });
+  io.to(`user:${userId}`).emit('status_change', { userId, discordStatus: status, discordActivity: activity });
   const friends = await pool.query(
     `SELECT CASE WHEN user1_id=$1 THEN user2_id ELSE user1_id END AS user_id
      FROM friendships WHERE user1_id=$1 OR user2_id=$1`,
     [userId]
   );
-  friends.rows.forEach(friend => io.to(`user:${friend.user_id}`).emit('status_change', { userId, discordStatus: status }));
-  res.json({ success: true, status });
+  friends.rows.forEach(friend => io.to(`user:${friend.user_id}`).emit('status_change', { userId, discordStatus: status, discordActivity: activity }));
+  res.json({ success: true, status, activity });
 });
 
 // Used only by the Nexus LINK bot to populate its Discord configuration menus.

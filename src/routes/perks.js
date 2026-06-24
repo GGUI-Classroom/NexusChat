@@ -105,7 +105,7 @@ router.patch('/servers/:serverId/tag', async (req, res) => {
 router.post('/servers/:serverId/spend', async (req, res) => {
   const { serverId } = req.params;
   const feature = String(req.body.feature || '');
-  if (!['tag', 'gradients'].includes(feature)) return res.status(400).json({ error: 'Invalid boost feature' });
+  if (!['tag', 'gradients', 'invite_banner'].includes(feature)) return res.status(400).json({ error: 'Invalid boost feature' });
   if (!await isServerAdmin(serverId, req.session.userId)) return res.status(403).json({ error: 'Owners and admins only' });
   const now = nowSeconds();
   const [boosts, allocations] = await Promise.all([

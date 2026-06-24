@@ -145,7 +145,7 @@ router.delete('/:friendId', async (req, res) => {
 
 router.get('/', async (req, res) => {
   const r = await pool.query(
-    `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status, u.discord_status, u.active_decoration, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
+    `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status, u.discord_status, u.discord_activity, u.active_decoration, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
      FROM friendships f
      JOIN users u ON u.id = CASE WHEN f.user1_id=$1 THEN f.user2_id ELSE f.user1_id END
      LEFT JOIN servers ats ON ats.id=u.active_server_tag_id
@@ -167,7 +167,7 @@ router.get('/', async (req, res) => {
 
   const combined = [...r.rows, ...botDm.rows];
   res.json({ friends: combined.map(u => ({
-    id: u.id, username: u.username, displayName: u.display_name, status: u.status, discordStatus: u.discord_status || 'offline', proActive: (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: u.profile_gradient_start, proGradientEnd: u.profile_gradient_end, proNameEffect: u.profile_name_effect, activeServerTag: u.server_tag || null, activeServerTagBackground: u.tag_background || '#5865f2', activeServerTagServerId: u.tag_server_id || null, activeServerTagServerName: u.tag_server_name || null, activeServerTagInviteCode: u.tag_invite_code || null,
+    id: u.id, username: u.username, displayName: u.display_name, status: u.status, discordStatus: u.discord_status || 'offline', discordActivity: u.discord_activity || null, proActive: (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: u.profile_gradient_start, proGradientEnd: u.profile_gradient_end, proNameEffect: u.profile_name_effect, activeServerTag: u.server_tag || null, activeServerTagBackground: u.tag_background || '#5865f2', activeServerTagServerId: u.tag_server_id || null, activeServerTagServerName: u.tag_server_name || null, activeServerTagInviteCode: u.tag_invite_code || null,
     avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
     activeDecoration: u.active_decoration || null
   }))});

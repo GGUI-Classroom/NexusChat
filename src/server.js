@@ -142,6 +142,108 @@ app.post('/api/nexus-link/inbound-dm', async (req, res) => {
   res.json({ success: true, nexusMessageId: msg.id });
 });
 
+// Explicit Discord /reply delivery. The Discord bot resolves a Nexus username,
+// while Nexus remains the source of truth for friendship and message delivery.
+app.post('/api/nexus-link/outbound-dm', async (req, res) => {
+  if (!validNexusLinkRequest(req)) return res.status(401).json({ error: 'Unauthorized Nexus LINK relay' });
+  const fromId = String(req.body.nexusUserId || '');
+  const username = String(req.body.username || '').trim().replace(/^@/, '');
+  const content = String(req.body.content || '').trim().slice(0, 4000);
+  if (!fromId || !username || !content) return res.status(400).json({ error: 'A recipient and message are required' });
+
+  const recipientResult = await pool.query(
+    `SELECT id, username, display_name FROM users WHERE LOWER(username)=LOWER($1) LIMIT 1`,
+    [username]
+  );
+  const recipient = recipientResult.rows[0];
+  if (!recipient) return res.status(404).json({ error: 'No Nexus user has that username' });
+  if (recipient.id === fromId) return res.status(400).json({ error: 'You cannot send a Nexus DM to yourself' });
+
+  const senderResult = await pool.query(
+    `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
+      u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect,
+      ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
+      EXISTS(SELECT 1 FROM friendships f WHERE (f.user1_id=u.id AND f.user2_id=$2) OR (f.user1_id=$2 AND f.user2_id=u.id)) AS friends
+     FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
+    [fromId, recipient.id]
+  );
+  const sender = senderResult.rows[0];
+  if (!sender) return res.status(404).json({ error: 'Linked Nexus user was not found' });
+  if (!sender.friends) return res.status(403).json({ error: 'You can only use /reply with Nexus friends' });
+
+  const now = Math.floor(Date.now() / 1000);
+  const msg = {
+    id: uuidv4(), fromId, toId: recipient.id, content, createdAt: now,
+    author: {
+      username: sender.username, displayName: sender.display_name,
+      avatarDataUrl: sender.avatar_data ? `data:${sender.avatar_mime};base64,${sender.avatar_data}` : null,
+      activeDecoration: sender.active_decoration || null, activeColor: sender.active_color || null, activeFont: sender.active_font || null,
+      proActive: (sender.pro_expires_at || 0) > now, proGradientStart: sender.profile_gradient_start, proGradientEnd: sender.profile_gradient_end, proNameEffect: sender.profile_name_effect,
+      activeServerTag: sender.server_tag || null, activeServerTagBackground: sender.tag_background || '#5865f2', activeServerTagServerId: sender.tag_server_id || null, activeServerTagServerName: sender.tag_server_name || null, activeServerTagInviteCode: sender.tag_invite_code || null
+    }
+  };
+  await pool.query('INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)', [msg.id, fromId, recipient.id, content, now]);
+  io.to(`user:${fromId}`).emit('new_message', msg);
+  io.to(`user:${recipient.id}`).emit('new_message', msg);
+  relayNexusDirectMessage({
+    nexusRecipientId: recipient.id,
+    nexusMessageId: msg.id,
+    sender: { id: fromId, username: sender.username, displayName: sender.display_name, avatarDataUrl: msg.author.avatarDataUrl, activeServerTag: sender.server_tag || null },
+    content
+  }).catch(error => console.error('Nexus LINK explicit DM relay error:', error));
+  res.json({ success: true, nexusMessageId: msg.id, recipient: { id: recipient.id, username: recipient.username, displayName: recipient.display_name } });
+});
+
+app.post('/api/nexus-link/inbound-channel', async (req, res) => {
+  if (!validNexusLinkRequest(req)) return res.status(401).json({ error: 'Unauthorized Nexus LINK relay' });
+  const userId = String(req.body.nexusUserId || '');
+  const serverId = String(req.body.serverId || '');
+  const channelId = String(req.body.channelId || '');
+  const content = String(req.body.content || '').trim().slice(0, 4000);
+  if (!userId || !serverId || !channelId || !content) return res.status(400).json({ error: 'A mapped Nexus channel and message are required' });
+  const result = await pool.query(
+    `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration,
+      sm.role, sr.name AS role_name, sr.color AS role_color, sr.gradient_start, sr.gradient_end,
+      ch.id AS valid_channel
+     FROM server_members sm
+     JOIN users u ON u.id=sm.user_id
+     JOIN channels ch ON ch.id=$3 AND ch.server_id=$2 AND COALESCE(ch.channel_type, 'text')='text'
+     LEFT JOIN server_roles sr ON sr.id=sm.role_id
+     WHERE sm.server_id=$2 AND sm.user_id=$1`,
+    [userId, serverId, channelId]
+  );
+  const row = result.rows[0];
+  if (!row) return res.status(403).json({ error: 'The linked Nexus account cannot post in that mapped channel' });
+  const now = Math.floor(Date.now() / 1000);
+  const msg = {
+    id: uuidv4(), serverId, channelId, fromId: userId, content, createdAt: now, isPinned: false,
+    author: {
+      username: row.username, displayName: row.display_name,
+      avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null,
+      roleColor: row.role_color || null, roleName: row.role_name || null,
+      roleGradientStart: row.gradient_start || null, roleGradientEnd: row.gradient_end || null,
+      activeDecoration: row.active_decoration || null
+    }
+  };
+  await pool.query('INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)', [msg.id, channelId, userId, content, now]);
+  io.to(`server:${serverId}`).emit('new_channel_message', msg);
+  res.json({ success: true, nexusMessageId: msg.id });
+});
+
+app.post('/api/nexus-link/inbound-channel-reaction', async (req, res) => {
+  if (!validNexusLinkRequest(req)) return res.status(401).json({ error: 'Unauthorized Nexus LINK relay' });
+  const userId = String(req.body.nexusUserId || '');
+  const messageId = String(req.body.nexusMessageId || '');
+  const emoji = String(req.body.emoji || '').trim().slice(0, 16);
+  if (!userId || !messageId || !emoji) return res.status(400).json({ error: 'A reaction is required' });
+  const message = await pool.query(`SELECT cm.channel_id, ch.server_id FROM channel_messages cm JOIN channels ch ON ch.id=cm.channel_id JOIN server_members sm ON sm.server_id=ch.server_id AND sm.user_id=$2 WHERE cm.id=$1`, [messageId, userId]);
+  if (!message.rows[0]) return res.status(403).json({ error: 'The linked account cannot react to that message' });
+  await pool.query(`INSERT INTO channel_message_reactions (id, message_id, user_id, emoji) VALUES ($1,$2,$3,$4) ON CONFLICT (message_id, user_id, emoji) DO NOTHING`, [uuidv4(), messageId, userId, emoji]);
+  const aggregate = await pool.query(`SELECT emoji, COUNT(*)::int AS count, BOOL_OR(user_id=$2) AS reacted FROM channel_message_reactions WHERE message_id=$1 GROUP BY emoji ORDER BY count DESC, emoji ASC`, [messageId, userId]);
+  io.to(`server:${message.rows[0].server_id}`).emit('channel_message_reaction_updated', { channelId: message.rows[0].channel_id, messageId, reactions: aggregate.rows.map(row => ({ emoji: row.emoji, count: parseInt(row.count, 10) || 0, reacted: !!row.reacted })) });
+  res.json({ success: true });
+});
+
 app.post('/api/nexus-link/friend-requests/:requestId/respond', async (req, res) => {
   if (!validNexusLinkRequest(req)) return res.status(401).json({ error: 'Unauthorized Nexus LINK relay' });
   const userId = String(req.body.nexusUserId || '');
@@ -515,6 +617,30 @@ async function relayNexusCallInvite({ nexusRecipientId, roomId, callType, caller
     body: JSON.stringify({ nexusRecipientId, roomId, callType, caller })
   });
   if (!response.ok) throw new Error(`Nexus LINK call relay returned ${response.status}`);
+}
+
+async function relayNexusChannelMessage({ serverId, channelId, nexusMessageId, sender, content, replyTo }) {
+  const linkUrl = String(process.env.NEXUS_LINK_URL || '').replace(/\/$/, '');
+  const secret = process.env.NEXUS_LINK_SHARED_SECRET;
+  if (!linkUrl || !secret) return;
+  const response = await fetch(`${linkUrl}/relay/nexus-channel`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-nexus-link-secret': secret },
+    body: JSON.stringify({ serverId, channelId, nexusMessageId, sender, content, replyTo })
+  });
+  if (!response.ok) throw new Error(`Nexus LINK channel relay returned ${response.status}`);
+}
+
+async function relayNexusChannelReaction({ nexusMessageId, emoji }) {
+  const linkUrl = String(process.env.NEXUS_LINK_URL || '').replace(/\/$/, '');
+  const secret = process.env.NEXUS_LINK_SHARED_SECRET;
+  if (!linkUrl || !secret) return;
+  const response = await fetch(`${linkUrl}/relay/nexus-channel-reaction`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-nexus-link-secret': secret },
+    body: JSON.stringify({ nexusMessageId, emoji })
+  });
+  if (!response.ok) throw new Error(`Nexus LINK reaction relay returned ${response.status}`);
 }
 
 async function logModerationAction({ serverId, channelId, action, actorUserId, targetUserId = null, details = null }) {
@@ -1246,6 +1372,14 @@ io.on('connection', (socket) => {
       'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at, reply_to_id) VALUES ($1,$2,$3,$4,$5,$6)',
       [msgId, channelId, userId, trimmed, now, normalizedReplyId]
     ).catch(e => console.error('Channel msg insert error:', e));
+    relayNexusChannelMessage({
+      serverId,
+      channelId,
+      nexusMessageId: msgId,
+      sender: { id: userId, username: row.username, displayName: row.display_name, avatarDataUrl: msg.author.avatarDataUrl },
+      content: trimmed,
+      replyTo
+    }).catch(error => console.error('Nexus LINK channel relay error:', error));
 
     // Achievement tracking
     trackAchievement(userId, ['messages_sent', 'channel_msgs']);
@@ -1323,6 +1457,8 @@ io.on('connection', (socket) => {
         reacted: !!r.reacted
       }))
     });
+    relayNexusChannelReaction({ nexusMessageId: messageId, emoji: normalizedEmoji })
+      .catch(error => console.error('Nexus LINK reaction relay error:', error));
   });
 
   // Admin: force-suspend an active user
