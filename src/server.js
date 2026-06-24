@@ -316,7 +316,7 @@ function shuffle(cards) { for (let i = cards.length - 1; i > 0; i--) { const j =
 function blackjackScore(cards) { let total = cards.reduce((sum, c) => sum + (c.rank === 'A' ? 11 : ['J','Q','K'].includes(c.rank) ? 10 : Number(c.rank)), 0); let aces = cards.filter(c => c.rank === 'A').length; while (total > 21 && aces--) total -= 10; return total; }
 function gameStateFor(game, viewerId) {
   const revealDealer = game.type !== 'blackjack' || game.phase === 'complete';
-  return { type: game.type, phase: game.phase, hostId: game.hostId, turnId: game.turnId || null, community: game.community || [], pot: game.pot || 0,
+  return { type: game.type, phase: game.phase, hostId: game.hostId, roundsTotal: game.roundsTotal || 1, roundNumber: game.roundNumber || 0, turnId: game.turnId || null, community: game.community || [], pot: game.pot || 0,
     dealer: game.type === 'blackjack' ? { hand: revealDealer ? game.dealer.hand : [game.dealer.hand[0], { hidden: true }], score: revealDealer ? blackjackScore(game.dealer.hand) : null } : null,
     players: game.players.map(p => ({ id: p.id, displayName: p.displayName, chips: p.chips, bet: p.bet || 0, folded: !!p.folded, standing: !!p.standing, hand: p.id === viewerId || game.phase === 'complete' ? p.hand : p.hand.map(() => ({ hidden: true })), score: game.type === 'blackjack' ? blackjackScore(p.hand) : null })), winnerId: game.winnerId || null, message: game.message || '' };
 }
@@ -1687,7 +1687,7 @@ io.on('connection', (socket) => {
     let game = callGames.get(roomId);
     if (!game || game.phase === 'complete') {
       const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
-      game = { type, phase: 'lobby', hostId: userId, players: [{ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: 1000, hand: [] }], dealer: { hand: [] }, deck: [], community: [], pot: 0 };
+      game = { type, phase: 'lobby', hostId: userId, roundsTotal: 3, roundNumber: 0, players: [{ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: 1000, hand: [] }], dealer: { hand: [] }, deck: [], community: [], pot: 0 };
       callGames.set(roomId, game);
       const host = { id: userId, displayName: me.rows[0]?.display_name || 'Player' };
       socket.to(`call:${roomId}`).emit('call_game_invite', { roomId, type, host });
@@ -1706,17 +1706,18 @@ io.on('connection', (socket) => {
     if (!game || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId) || game.players.some(p => p.id === userId) || game.players.length >= 6) return;
     const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
     game.players.push({ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: 1000, hand: [] });
-    if (game.players.length >= 2) beginCallGameRound(game);
     emitGame(roomId);
   });
 
-  socket.on('call_game_start', async ({ roomId }) => {
+  socket.on('call_game_start', async ({ roomId, rounds }) => {
     const game = callGames.get(roomId);
     if (!game || game.hostId !== userId || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId)) return;
     if (game.players.length < 2) {
       socket.emit('call_game_error', { message: 'A call game needs the other person to join first.' });
       return;
     }
+    game.roundsTotal = Math.max(1, Math.min(10, parseInt(rounds, 10) || game.roundsTotal || 3));
+    game.roundNumber = 1;
     beginCallGameRound(game);
     emitGame(roomId);
   });
@@ -1727,6 +1728,14 @@ io.on('connection', (socket) => {
     callGames.delete(roomId);
     io.to(`call:${roomId}`).emit('call_game_closed', { roomId });
     io.to(`groupcall:${roomId}`).emit('call_game_closed', { roomId });
+  });
+
+  socket.on('call_game_next_round', async ({ roomId }) => {
+    const game = callGames.get(roomId);
+    if (!game || game.hostId !== userId || game.phase !== 'round_complete' || !await isInGameRoom(userId, roomId)) return;
+    game.roundNumber += 1;
+    beginCallGameRound(game);
+    emitGame(roomId);
   });
 
   socket.on('call_game_action', async ({ roomId, action }) => {
@@ -1743,15 +1752,21 @@ io.on('connection', (socket) => {
         while (blackjackScore(game.dealer.hand) < 17) game.dealer.hand.push(game.deck.pop());
         const dealerScore = blackjackScore(game.dealer.hand);
         game.players.forEach(p => { const score = blackjackScore(p.hand); if (score <= 21 && (dealerScore > 21 || score > dealerScore)) p.chips += 100; else if (score > 21 || score < dealerScore) p.chips -= 50; });
-        game.phase = 'complete'; game.message = dealerScore > 21 ? 'Dealer busts' : 'Round complete';
+        if (game.roundNumber >= game.roundsTotal) {
+          game.phase = 'complete';
+          game.message = dealerScore > 21 ? 'Match complete: dealer busts.' : 'Match complete.';
+        } else {
+          game.phase = 'round_complete';
+          game.message = `Round ${game.roundNumber} complete. ${game.roundsTotal - game.roundNumber} round${game.roundsTotal - game.roundNumber === 1 ? '' : 's'} remaining.`;
+        }
       }
     } else {
       if (game.turnId !== userId || !['check','call','fold'].includes(action)) return;
       if (action === 'fold') player.folded = true; else { player.bet += 20; player.chips -= 20; game.pot += 20; }
       const active = game.players.filter(p => !p.folded);
       const index = active.findIndex(p => p.id === userId);
-      if (active.length === 1) { game.winnerId = active[0].id; active[0].chips += game.pot; game.phase = 'complete'; game.message = 'Everyone else folded'; }
-      else if (index === active.length - 1) { game.community.push(game.deck.pop(), game.deck.pop()); const winner = active[Math.floor(Math.random() * active.length)]; winner.chips += game.pot; game.winnerId = winner.id; game.phase = 'complete'; game.message = 'Showdown complete'; }
+      if (active.length === 1) { game.winnerId = active[0].id; active[0].chips += game.pot; game.phase = game.roundNumber >= game.roundsTotal ? 'complete' : 'round_complete'; game.message = game.phase === 'complete' ? 'Match complete: everyone else folded.' : `Round ${game.roundNumber} complete. Host can start the next round.`; }
+      else if (index === active.length - 1) { game.community.push(game.deck.pop(), game.deck.pop()); const winner = active[Math.floor(Math.random() * active.length)]; winner.chips += game.pot; game.winnerId = winner.id; game.phase = game.roundNumber >= game.roundsTotal ? 'complete' : 'round_complete'; game.message = game.phase === 'complete' ? 'Match complete: showdown complete.' : `Round ${game.roundNumber} complete. Host can start the next round.`; }
       else game.turnId = active[index + 1].id;
     }
     emitGame(roomId);
