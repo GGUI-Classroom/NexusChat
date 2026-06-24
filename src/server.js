@@ -1560,6 +1560,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('call_end', async ({ roomId }) => {
+    if (callGames.delete(roomId)) {
+      io.to(`call:${roomId}`).emit('call_game_closed', { roomId });
+      io.to(`groupcall:${roomId}`).emit('call_game_closed', { roomId });
+    }
     const room = await getRoomParticipants(roomId);
     if (room && room.size) {
       for (const uid of room) {
@@ -1728,6 +1732,14 @@ io.on('connection', (socket) => {
     callGames.delete(roomId);
     io.to(`call:${roomId}`).emit('call_game_closed', { roomId });
     io.to(`groupcall:${roomId}`).emit('call_game_closed', { roomId });
+  });
+
+  socket.on('call_game_leave', async ({ roomId }) => {
+    const game = callGames.get(roomId);
+    if (!game || !game.players.some(player => player.id === userId) || !await isInGameRoom(userId, roomId)) return;
+    callGames.delete(roomId);
+    io.to(`call:${roomId}`).emit('call_game_closed', { roomId, reason: 'A participant left the activity.' });
+    io.to(`groupcall:${roomId}`).emit('call_game_closed', { roomId, reason: 'A participant left the activity.' });
   });
 
   socket.on('call_game_next_round', async ({ roomId }) => {
