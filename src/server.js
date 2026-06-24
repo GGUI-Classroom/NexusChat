@@ -1554,8 +1554,8 @@ io.on('connection', (socket) => {
   socket.on('call_game_start', async ({ roomId }) => {
     const game = callGames.get(roomId);
     if (!game || game.hostId !== userId || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId)) return;
-    if (game.type === 'poker' && game.players.length < 2) {
-      socket.emit('call_game_error', { message: 'Poker needs at least two players.' });
+    if (game.players.length < 2) {
+      socket.emit('call_game_error', { message: 'A call game needs the other person to join first.' });
       return;
     }
     game.deck = shuffle(gameDeck()); game.phase = 'playing'; game.message = '';

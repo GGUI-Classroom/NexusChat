@@ -4127,6 +4127,14 @@
     if (error) error.textContent = '';
   }
 
+  async function loadAppearanceSettings() {
+    const [shop, ringtones] = await Promise.all([api('GET', '/api/shop'), api('GET', '/api/ringtones')]);
+    const deco = $('appearance-decoration-select');
+    const ring = $('appearance-ringtone-select');
+    if (!shop.error) deco.innerHTML = `<option value="">No decoration</option>${(shop.decorations || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+    if (!ringtones.error) ring.innerHTML = `<option value="">Default ringtone</option>${(ringtones.ringtones || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === ringtones.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+  }
+
   async function saveNexusLinkSettings() {
     const data = await api('PATCH', '/api/nexus-link/settings', {
       dmRelayEnabled: $('nexus-link-dms').checked,
@@ -4144,8 +4152,7 @@
     renderAvatar($('profile-avatar-preview'), currentUser);
     loadProfileTagChoices();
     loadNexusLinkSettings();
-    $('appearance-decoration').textContent = currentUser.activeDecoration ? currentUser.activeDecoration.replace(/_/g, ' ') : 'None equipped';
-    $('appearance-ringtone').textContent = currentUser.activeRingtone ? currentUser.activeRingtone.replace(/_/g, ' ') : 'Default ringtone';
+    loadAppearanceSettings();
     $('profile-modal').classList.add('active');
   });
   $('profile-modal-close').addEventListener('click', () => $('profile-modal').classList.remove('active'));
@@ -4159,6 +4166,8 @@
   $('theme-dark-btn').addEventListener('click', () => applyTheme('dark'));
   $('theme-light-btn').addEventListener('click', () => applyTheme('light'));
   $('connect-discord-btn').addEventListener('click', () => { window.location.href = '/api/nexus-link/connect'; });
+  $('appearance-decoration-select').addEventListener('change', async e => { const r = await api('POST', '/api/shop/equip', { decorationId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeDecoration = e.target.value || null; toast('Decoration updated', 'success'); });
+  $('appearance-ringtone-select').addEventListener('change', async e => { const r = await api('POST', '/api/ringtones/equip', { ringtoneId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeRingtone = e.target.value || null; toast('Ringtone updated', 'success'); });
   ['nexus-link-dms', 'nexus-link-attachments', 'nexus-link-status'].forEach(id => {
     $(id).addEventListener('change', saveNexusLinkSettings);
   });
