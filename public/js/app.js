@@ -15,6 +15,7 @@
   let reportAlarmCtx = null;
   let reportAlarmTimer = null;
   let reportAlarmNodes = [];
+  let visibleSystemReportId = null;
   let typingTimer = null;
   let isTyping = false;
   let isAppAdmin = false;
@@ -1374,6 +1375,7 @@
     $('nexus-report-title').textContent = report.title || 'System Report';
     $('nexus-report-message').textContent = report.message || '';
     const card = $('nexus-report-card');
+    visibleSystemReportId = report.id || null;
     card.classList.remove('maintenance', 'ets', 'custom');
     card.classList.add(report.category || 'custom');
     $('nexus-report-overlay').style.display = 'flex';
@@ -1539,8 +1541,13 @@
   }
 
   if ($('nexus-report-ack-btn')) {
-    $('nexus-report-ack-btn').addEventListener('click', () => {
+    $('nexus-report-ack-btn').addEventListener('click', async () => {
       stopSystemReportAlarm();
+      const reportId = visibleSystemReportId;
+      visibleSystemReportId = null;
+      if (reportId) {
+        api('POST', `/api/users/system-report/${encodeURIComponent(reportId)}/ack`).catch(() => {});
+      }
       $('nexus-report-overlay').style.display = 'none';
     });
   }

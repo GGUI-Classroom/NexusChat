@@ -316,6 +316,14 @@ async function initDb() {
   )`, 'system_reports');
   await runSql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_system_reports_one_active ON system_reports(active) WHERE active=TRUE`, 'idx_system_reports_one_active');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_system_reports_created ON system_reports(created_at DESC)`, 'idx_system_reports_created');
+  await runSql(`CREATE TABLE IF NOT EXISTS system_report_acknowledgements (
+    id TEXT PRIMARY KEY,
+    report_id TEXT NOT NULL REFERENCES system_reports(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    acknowledged_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(report_id, user_id)
+  )`, 'system_report_acknowledgements');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_system_report_acks_user_report ON system_report_acknowledgements(user_id, report_id)`, 'idx_system_report_acks_user_report');
 
   await runSql(`CREATE TABLE IF NOT EXISTS server_mutes (
     id TEXT PRIMARY KEY,

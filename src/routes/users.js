@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../middleware/auth');
 const { pool } = require('../models/db');
 const { avatarUrl, clearCachedAvatar, getAvatar } = require('../utils/avatar');
@@ -95,6 +96,20 @@ router.get('/client-state', requireAuth, async (req, res) => {
     paused: !!(row && row.is_paused),
     message: row && row.pause_message ? row.pause_message : null
   });
+});
+
+router.post('/system-report/:reportId/ack', requireAuth, async (req, res) => {
+  const reportId = String(req.params.reportId || '').trim();
+  if (!reportId) return res.status(400).json({ error: 'Report id required' });
+  const active = await pool.query('SELECT id FROM system_reports WHERE id=$1 AND active=TRUE LIMIT 1', [reportId]);
+  if (!active.rows.length) return res.status(404).json({ error: 'Active report not found' });
+  await pool.query(
+    `INSERT INTO system_report_acknowledgements (id, report_id, user_id)
+     VALUES ($1,$2,$3)
+     ON CONFLICT (report_id, user_id) DO NOTHING`,
+    [uuidv4(), reportId, req.session.userId]
+  );
+  res.json({ success: true });
 });
 
 module.exports = router;

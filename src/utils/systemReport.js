@@ -34,6 +34,16 @@ async function getActiveReport(pool) {
   return activeReportCache.report;
 }
 
+async function getActiveReportForUser(pool, userId) {
+  const report = await getActiveReport(pool);
+  if (!report || !userId) return report;
+  const ack = await pool.query(
+    'SELECT id FROM system_report_acknowledgements WHERE report_id=$1 AND user_id=$2 LIMIT 1',
+    [report.id, userId]
+  );
+  return ack.rows.length ? null : report;
+}
+
 function clearReportCache() {
   activeReportCache = { loadedAt: 0, report: null };
 }
@@ -62,4 +72,4 @@ function buildReportPayload(body) {
   return { category, title, message };
 }
 
-module.exports = { REPORT_PRESETS, buildReportPayload, clearReportCache, getActiveReport };
+module.exports = { REPORT_PRESETS, buildReportPayload, clearReportCache, getActiveReport, getActiveReportForUser };
