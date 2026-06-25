@@ -2,6 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 const { requireAuth } = require('../middleware/auth');
+const { avatarUrl } = require('../utils/avatar');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -23,13 +24,13 @@ router.get('/search', async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 2) return res.json({ users: [] });
   const r = await pool.query(
-    `SELECT id, username, display_name, avatar_data, avatar_mime, active_decoration FROM users
+    `SELECT id, username, display_name, (avatar_data IS NOT NULL) AS has_avatar, active_decoration FROM users
      WHERE LOWER(username) LIKE LOWER($1) AND id != $2 AND id != $3 LIMIT 10`,
     [`%${q}%`, req.session.userId, NEXUS_GUARD_ID]
   );
   res.json({ users: r.rows.map(u => ({
     id: u.id, username: u.username, displayName: u.display_name,
-    avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
+    avatarDataUrl: avatarUrl(u.id, !!u.has_avatar),
     activeDecoration: u.active_decoration || null
   }))});
 });
@@ -71,7 +72,7 @@ router.post('/request', async (req, res) => {
         sender: {
           username: user.username,
           displayName: user.display_name,
-          avatarDataUrl: user.avatar_data ? `data:${user.avatar_mime};base64,${user.avatar_data}` : null,
+          avatarDataUrl: avatarUrl(req.session.userId, !!user.avatar_data),
           activeServerTag: user.server_tag || null
         }
       }).catch(error => console.error('Nexus LINK friend request relay error:', error));
@@ -82,14 +83,14 @@ router.post('/request', async (req, res) => {
 
 router.get('/requests/incoming', async (req, res) => {
   const r = await pool.query(
-    `SELECT fr.id, fr.from_id, fr.created_at, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration
+    `SELECT fr.id, fr.from_id, fr.created_at, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration
      FROM friend_requests fr JOIN users u ON u.id=fr.from_id
      WHERE fr.to_id=$1 AND fr.status='pending' AND fr.from_id != $2`,
     [req.session.userId, NEXUS_GUARD_ID]
   );
   res.json({ requests: r.rows.map(r => ({
     id: r.id, fromId: r.from_id, username: r.username, displayName: r.display_name,
-    avatarDataUrl: r.avatar_data ? `data:${r.avatar_mime};base64,${r.avatar_data}` : null,
+    avatarDataUrl: avatarUrl(r.from_id, !!r.has_avatar),
     createdAt: r.created_at,
     activeDecoration: r.active_decoration || null
   }))});
@@ -97,14 +98,14 @@ router.get('/requests/incoming', async (req, res) => {
 
 router.get('/requests/outgoing', async (req, res) => {
   const r = await pool.query(
-    `SELECT fr.id, fr.to_id, fr.created_at, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration
+    `SELECT fr.id, fr.to_id, fr.created_at, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration
      FROM friend_requests fr JOIN users u ON u.id=fr.to_id
      WHERE fr.from_id=$1 AND fr.status='pending' AND fr.to_id != $2`,
     [req.session.userId, NEXUS_GUARD_ID]
   );
   res.json({ requests: r.rows.map(r => ({
     id: r.id, toId: r.to_id, username: r.username, displayName: r.display_name,
-    avatarDataUrl: r.avatar_data ? `data:${r.avatar_mime};base64,${r.avatar_data}` : null,
+    avatarDataUrl: avatarUrl(r.to_id, !!r.has_avatar),
     createdAt: r.created_at,
     activeDecoration: r.active_decoration || null
   }))});
@@ -145,7 +146,7 @@ router.delete('/:friendId', async (req, res) => {
 
 router.get('/', async (req, res) => {
   const r = await pool.query(
-    `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status, u.discord_status, u.discord_activity, u.active_decoration, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
+    `SELECT u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.status, u.discord_status, u.discord_activity, u.active_decoration, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
      FROM friendships f
      JOIN users u ON u.id = CASE WHEN f.user1_id=$1 THEN f.user2_id ELSE f.user1_id END
      LEFT JOIN servers ats ON ats.id=u.active_server_tag_id
@@ -155,7 +156,7 @@ router.get('/', async (req, res) => {
 
   // Surface NexusGuard in DMs if there is message history, even without friendship.
   const botDm = await pool.query(
-    `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.status, u.active_decoration
+    `SELECT u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.status, u.active_decoration
      FROM users u
      WHERE u.id = $2
        AND EXISTS (
@@ -168,7 +169,7 @@ router.get('/', async (req, res) => {
   const combined = [...r.rows, ...botDm.rows];
   res.json({ friends: combined.map(u => ({
     id: u.id, username: u.username, displayName: u.display_name, status: u.status, discordStatus: u.discord_status || 'offline', discordActivity: u.discord_activity || null, proActive: (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: u.profile_gradient_start, proGradientEnd: u.profile_gradient_end, proNameEffect: u.profile_name_effect, activeServerTag: u.server_tag || null, activeServerTagBackground: u.tag_background || '#5865f2', activeServerTagServerId: u.tag_server_id || null, activeServerTagServerName: u.tag_server_name || null, activeServerTagInviteCode: u.tag_invite_code || null,
-    avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
+    avatarDataUrl: avatarUrl(u.id, !!u.has_avatar),
     activeDecoration: u.active_decoration || null
   }))});
 });

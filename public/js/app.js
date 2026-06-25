@@ -9,6 +9,7 @@
   let activeDmUserId = null;
   let activeDmUser = null;
   let friends = [];
+  const authorCache = {};
   let typingTimer = null;
   let isTyping = false;
   let isAppAdmin = false;
@@ -27,6 +28,30 @@
   }
   function visibleStatus(user) { return user.status === 'offline' && user.discordStatus && user.discordStatus !== 'offline' ? user.discordStatus : user.status; }
   function usesDiscordStatus(user) { return user.status === 'offline' && user.discordStatus && user.discordStatus !== 'offline'; }
+
+  function rememberAuthors(authors) {
+    Object.entries(authors || {}).forEach(([id, author]) => {
+      authorCache[id] = { ...(authorCache[id] || {}), ...author, id };
+    });
+  }
+
+  function hydrateMessages(response) {
+    rememberAuthors(response && response.authors);
+    return (response && response.messages || []).map(message => {
+      if (message.author) {
+        authorCache[message.fromId] = { ...(authorCache[message.fromId] || {}), ...message.author, id: message.fromId };
+        return message;
+      }
+      const authorId = message.authorId || message.fromId;
+      return { ...message, author: { ...(authorCache[authorId] || {}), id: authorId } };
+    });
+  }
+
+  function normalizeAssetUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.startsWith('/api/') && window.NEXUS_API_URL) return String(window.NEXUS_API_URL).replace(/\/+$/, '') + url;
+    return url;
+  }
 
   const SECRET_CATEGORY = '???SECRET???';
   const SECRET_DECORATION_ID = 'stormveil';
@@ -325,7 +350,7 @@
     // Fill the avatar element
     if (url) {
       const img = document.createElement('img');
-      img.src = url;
+      img.src = normalizeAssetUrl(url);
       img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
       img.onerror = () => { el.textContent = (user.displayName || user.username || '?')[0].toUpperCase(); };
       el.innerHTML = '';
@@ -1828,17 +1853,18 @@
     const beforeTs = prepend && oldest ? oldest.dataset.ts : undefined;
     const url = `/api/servers/${activeServerId}/channels/${channelId}/messages${beforeTs?`?before=${beforeTs}`:''}`;
     const r = await api('GET', url);
-    if (!r.messages || !r.messages.length) {
+    const messages = hydrateMessages(r);
+    if (!messages.length) {
       if (prepend) chLoadingOlder = false;
       return;
     }
     if (!prepend) {
       list.innerHTML = '';
-      r.messages.forEach(m => appendChannelMessage(m, false));
+      messages.forEach(m => appendChannelMessage(m, false));
       requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
     } else {
       const distFromBottom = wrap.scrollHeight - wrap.scrollTop;
-      r.messages.forEach(m => prependChannelMessage(m));
+      messages.forEach(m => prependChannelMessage(m));
       requestAnimationFrame(() => {
         wrap.scrollTop = wrap.scrollHeight - distFromBottom;
         chLoadingOlder = false;
@@ -2933,21 +2959,22 @@
     // Don't re-fetch if we got nothing last time for this conversation
     const url = `/api/messages/${userId}${beforeTs ? `?before=${beforeTs}` : ''}`;
     const r = await api('GET', url);
+    const messages = hydrateMessages(r);
 
-    if (!r.messages || !r.messages.length) {
+    if (!messages.length) {
       if (prepend) dmLoadingOlder = false;
       return;
     }
 
     if (!prepend) {
       list.innerHTML = '';
-      r.messages.forEach(m => appendMessage(m, false));
+      messages.forEach(m => appendMessage(m, false));
       // Use requestAnimationFrame so DOM is painted before we scroll
       requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
     } else {
       // Save scroll position from the bottom before adding content
       const distFromBottom = wrap.scrollHeight - wrap.scrollTop;
-      r.messages.forEach(m => prependMessage(m));
+      messages.forEach(m => prependMessage(m));
       // Restore position from bottom after DOM updates
       requestAnimationFrame(() => {
         wrap.scrollTop = wrap.scrollHeight - distFromBottom;

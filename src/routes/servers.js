@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 const { requireAuth } = require('../middleware/auth');
 const { syncAll } = require('./achievements');
+const { avatarUrl } = require('../utils/avatar');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -114,7 +115,7 @@ router.get('/invites/pending', async (req, res) => {
        s.name as server_name, s.icon_data, s.icon_mime, s.invite_description, s.invite_tags,
        s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end, s.invite_banner_image,
        u.username as from_username, u.display_name as from_display_name,
-       u.avatar_data as from_avatar, u.avatar_mime as from_avatar_mime
+       (u.avatar_data IS NOT NULL) as from_has_avatar
      FROM server_invites si
      JOIN servers s ON s.id=si.server_id
      JOIN users u ON u.id=si.from_id
@@ -130,7 +131,7 @@ router.get('/invites/pending', async (req, res) => {
     inviteBannerEnd: i.invite_banner_end || '#a855f7', inviteBannerImage: i.invite_banner_image || null,
     from: {
       username: i.from_username, displayName: i.from_display_name,
-      avatarDataUrl: i.from_avatar ? `data:${i.from_avatar_mime};base64,${i.from_avatar}` : null
+      avatarDataUrl: avatarUrl(i.from_id, !!i.from_has_avatar)
     }
   }))});
 });
@@ -229,7 +230,7 @@ router.get('/:id', async (req, res) => {
     `, [id, req.session.userId]),
     pool.query(
       `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start, sr.gradient_end, sr.gradient_animated, sr.is_admin,
-       u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.discord_status, u.discord_activity, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
+       u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.discord_status, u.discord_activity, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
@@ -266,7 +267,7 @@ router.get('/:id', async (req, res) => {
     })),
     members: memRes.rows.map(m => ({
       id: m.id, username: m.username, displayName: m.display_name,
-      avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
+      avatarDataUrl: avatarUrl(m.id, !!m.has_avatar),
       status: m.status, discordStatus: m.discord_status || 'offline', discordActivity: m.discord_activity || null, role: m.role, roleId: m.role_id,
       roleName: m.role_name, roleColor: m.role_color, roleGradientStart: boostRes.has('gradients') ? m.gradient_start : null, roleGradientEnd: boostRes.has('gradients') ? m.gradient_end : null, isAdmin: m.is_admin,
       activeDecoration: m.active_decoration || null,
@@ -579,7 +580,7 @@ router.post('/:id/invite', async (req, res) => {
         inviteBannerEnd: s.invite_banner_end || '#a855f7', inviteBannerImage: s.invite_banner_image || null,
         from: {
           username: u.username, displayName: u.display_name,
-          avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null
+          avatarDataUrl: avatarUrl(req.session.userId, !!u.avatar_data)
         }
       };
       io.to(`user:${userId}`).emit('server_invite', inviteData);
@@ -754,14 +755,15 @@ router.delete('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
 // Get channel messages
 router.get('/:id/channels/:chId/messages', async (req, res) => {
   const { id, chId } = req.params;
-  const { before, limit = 50 } = req.query;
+  const { before } = req.query;
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 50));
   const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
   const channelMeta = await pool.query('SELECT channel_type FROM channels WHERE id=$1 AND server_id=$2', [chId, id]);
   if (!channelMeta.rows.length) return res.status(404).json({ error: 'Channel not found' });
   if ((channelMeta.rows[0].channel_type || 'text') === 'voice') return res.json({ messages: [] });
   let q = `SELECT cm.id, cm.channel_id, cm.from_id, cm.content, cm.created_at, cm.reply_to_id,
-    u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
+    u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
     sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
     rm.content as reply_content,
     rm.from_id as reply_from_id,
@@ -796,12 +798,26 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
     ) react ON true
     WHERE cm.channel_id=$2`;
   const params = [id, chId, req.session.userId];
-  if (before) { params.push(parseInt(before)); q += ` AND cm.created_at < $${params.length}`; }
+  if (before) { params.push(parseInt(before, 10)); q += ` AND cm.created_at < $${params.length}`; }
   q += ` ORDER BY cm.created_at DESC LIMIT $${params.length+1}`;
-  params.push(parseInt(limit));
+  params.push(limit);
   const r = await pool.query(q, params);
   const messages = r.rows.reverse();
-  res.json({ messages: messages.map(m => ({
+  const authors = {};
+  messages.forEach(m => {
+    if (!authors[m.from_id]) {
+      authors[m.from_id] = {
+        username: m.username, displayName: m.display_name,
+        avatarDataUrl: avatarUrl(m.from_id, !!m.has_avatar),
+        roleColor: m.role_color || null, roleName: m.role_name || null, roleGradientStart: m.role_gradient_start || null, roleGradientEnd: m.role_gradient_end || null,
+        activeDecoration: m.active_decoration || null,
+        activeColor: m.active_color || null,
+        activeFont: m.active_font || null, proActive: (m.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: m.profile_gradient_start, proGradientEnd: m.profile_gradient_end, proNameEffect: m.profile_name_effect,
+        activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_server_name || null, activeServerTagInviteCode: m.tag_invite_code || null
+      };
+    }
+  });
+  res.json({ authors, messages: messages.map(m => ({
     id: m.id, channelId: m.channel_id, fromId: m.from_id,
     content: m.content, createdAt: parseInt(m.created_at),
     isPinned: !!m.is_pinned,
@@ -812,16 +828,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
       displayName: m.reply_display_name || m.reply_username || 'Unknown user',
       content: m.reply_content || '[Original message unavailable]'
     } : null,
-    author: {
-      username: m.username, displayName: m.display_name,
-      avatarDataUrl: m.avatar_data ? `data:${m.avatar_mime};base64,${m.avatar_data}` : null,
-      roleColor: m.role_color || null, roleName: m.role_name || null, roleGradientStart: m.role_gradient_start || null, roleGradientEnd: m.role_gradient_end || null,
-      activeDecoration: m.active_decoration || null,
-      activeColor: m.active_color || null,
-      activeColor: m.active_color || null,
-      activeFont: m.active_font || null, proActive: (m.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: m.profile_gradient_start, proGradientEnd: m.profile_gradient_end, proNameEffect: m.profile_name_effect,
-      activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_server_name || null, activeServerTagInviteCode: m.tag_invite_code || null
-    }
+    authorId: m.from_id
   }))});
 });
 

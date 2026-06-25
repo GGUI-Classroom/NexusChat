@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
+const { avatarUrl } = require('../utils/avatar');
 
 const router = express.Router();
 const DEFAULT_SERVER_INVITE_CODE = 'GPFA9B32';
@@ -46,7 +47,13 @@ router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'All fields required' });
   try {
-    const r = await pool.query('SELECT * FROM users WHERE LOWER(username)=LOWER($1)', [username]);
+    const r = await pool.query(
+      `SELECT id, username, display_name, password_hash, bio, (avatar_data IS NOT NULL) AS has_avatar,
+        active_decoration, active_color, active_font, active_ringtone, pro_expires_at,
+        profile_gradient_start, profile_gradient_end, profile_name_effect
+       FROM users WHERE LOWER(username)=LOWER($1)`,
+      [username]
+    );
     const user = r.rows[0];
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const match = await bcrypt.compare(password, user.password_hash);
@@ -69,7 +76,7 @@ router.post('/login', async (req, res) => {
     req.session.userId = user.id;
     return res.json({ success: true, user: {
       id: user.id, username: user.username, displayName: user.display_name,
-      avatarDataUrl: user.avatar_data ? `data:${user.avatar_mime};base64,${user.avatar_data}` : null,
+      avatarDataUrl: avatarUrl(user.id, !!user.has_avatar),
       bio: user.bio || null,
       activeDecoration: user.active_decoration || null,
       activeColor: user.active_color || null,
@@ -106,14 +113,14 @@ router.get('/me', async (req, res) => {
     }
 
     const r = await pool.query(
-      'SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.bio, u.active_decoration, u.active_color, u.active_font, u.active_ringtone, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, s.id AS tag_server_id, s.name AS tag_server_name, s.invite_code AS tag_invite_code, s.server_tag, s.tag_background FROM users u LEFT JOIN servers s ON s.id=u.active_server_tag_id WHERE u.id=$1',
+      'SELECT u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.bio, u.active_decoration, u.active_color, u.active_font, u.active_ringtone, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, s.id AS tag_server_id, s.name AS tag_server_name, s.invite_code AS tag_invite_code, s.server_tag, s.tag_background FROM users u LEFT JOIN servers s ON s.id=u.active_server_tag_id WHERE u.id=$1',
       [req.session.userId]
     );
     const user = r.rows[0];
     if (!user) return res.json({ user: null });
     return res.json({ user: {
       id: user.id, username: user.username, displayName: user.display_name,
-      avatarDataUrl: user.avatar_data ? `data:${user.avatar_mime};base64,${user.avatar_data}` : null,
+      avatarDataUrl: avatarUrl(user.id, !!user.has_avatar),
       bio: user.bio || null,
       activeDecoration: user.active_decoration || null,
       activeColor: user.active_color || null,

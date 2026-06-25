@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { requireAuth } = require('../middleware/auth');
 const { pool } = require('../models/db');
+const { avatarUrl, clearCachedAvatar, getAvatar } = require('../utils/avatar');
 
 const router = express.Router();
 
@@ -24,14 +25,25 @@ router.post('/avatar', requireAuth, upload.single('avatar'), async (req, res) =>
   const mime = req.file.mimetype;
   await pool.query('UPDATE users SET avatar_data=$1, avatar_mime=$2 WHERE id=$3',
     [base64, mime, req.session.userId]);
-  const dataUrl = `data:${mime};base64,${base64}`;
-  res.json({ success: true, avatarDataUrl: dataUrl });
+  clearCachedAvatar(req.session.userId);
+  res.json({ success: true, avatarDataUrl: avatarUrl(req.session.userId, true) });
+});
+
+router.get('/avatar/:userId', requireAuth, async (req, res) => {
+  const avatar = await getAvatar(pool, req.params.userId);
+  if (!avatar) return res.sendStatus(404);
+  const etag = `"avatar-${req.params.userId}-${avatar.data.length}"`;
+  res.setHeader('Content-Type', avatar.mime);
+  res.setHeader('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800');
+  res.setHeader('ETag', etag);
+  if (req.headers['if-none-match'] === etag) return res.sendStatus(304);
+  res.send(avatar.data);
 });
 
 // Get any user's public profile
 router.get('/profile/:userId', requireAuth, async (req, res) => {
   const r = await pool.query(
-    'SELECT id, username, display_name, avatar_data, avatar_mime, bio, active_decoration, pro_expires_at, profile_gradient_start, profile_gradient_end, profile_name_effect, active_server_tag_id FROM users WHERE id=$1',
+    'SELECT id, username, display_name, (avatar_data IS NOT NULL) AS has_avatar, bio, active_decoration, pro_expires_at, profile_gradient_start, profile_gradient_end, profile_name_effect, active_server_tag_id FROM users WHERE id=$1',
     [req.params.userId]
   );
   if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
@@ -39,7 +51,7 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
   const tag = await pool.query(`SELECT s.name, s.invite_code, s.server_tag, s.tag_background, s.icon_data, s.icon_mime FROM servers s JOIN server_boost_allocations a ON a.server_id=s.id AND a.feature='tag' WHERE s.id=$1`, [u.active_server_tag_id]);
   res.json({
     id: u.id, username: u.username, displayName: u.display_name,
-    avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
+    avatarDataUrl: avatarUrl(u.id, !!u.has_avatar),
     bio: u.bio || null,
     activeDecoration: u.active_decoration || null,
     pro: (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileGradientStart: u.profile_gradient_start, profileGradientEnd: u.profile_gradient_end, profileNameEffect: u.profile_name_effect,

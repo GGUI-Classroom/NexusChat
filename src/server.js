@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const compression = require('compression');
 const { Server } = require('socket.io');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
@@ -9,6 +10,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { envFlag } = require('./config/env');
 const { pool, initDb } = require('./models/db');
+const { avatarUrl } = require('./utils/avatar');
 
 const app = express();
 const server = http.createServer(app);
@@ -78,11 +80,15 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '4mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(sessionMiddleware);
 app.use((req, res, next) => { req.io = io; req.userSockets = userSockets; next(); });
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, '../public'), {
+  etag: true,
+  maxAge: isProd ? '1h' : 0
+}));
 
 // Expose io so routes can emit socket events
 app.set('io', io);
@@ -118,7 +124,7 @@ app.post('/api/nexus-link/inbound-dm', async (req, res) => {
   );
   if (!friendship.rows.length) return res.status(403).json({ error: 'Nexus users must be friends to relay direct messages' });
   const sender = await pool.query(
-    `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
+    `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_color, u.active_font,
       u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect,
       ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
      FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
@@ -130,7 +136,7 @@ app.post('/api/nexus-link/inbound-dm', async (req, res) => {
     id: uuidv4(), fromId, toId, content, createdAt: Math.floor(Date.now() / 1000),
     author: {
       username: user.username, displayName: user.display_name,
-      avatarDataUrl: user.avatar_data ? `data:${user.avatar_mime};base64,${user.avatar_data}` : null,
+      avatarDataUrl: avatarUrl(fromId, !!user.has_avatar),
       activeDecoration: user.active_decoration || null, activeColor: user.active_color || null, activeFont: user.active_font || null,
       proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start, proGradientEnd: user.profile_gradient_end, proNameEffect: user.profile_name_effect,
       activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_server_name || null, activeServerTagInviteCode: user.tag_invite_code || null
@@ -202,7 +208,7 @@ app.post('/api/nexus-link/inbound-channel', async (req, res) => {
   const content = String(req.body.content || '').trim().slice(0, 4000);
   if (!userId || !serverId || !channelId || !content) return res.status(400).json({ error: 'A mapped Nexus channel and message are required' });
   const result = await pool.query(
-    `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration,
+    `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration,
       sm.role, sr.name AS role_name, sr.color AS role_color, sr.gradient_start, sr.gradient_end,
       ch.id AS valid_channel
      FROM server_members sm
@@ -219,7 +225,7 @@ app.post('/api/nexus-link/inbound-channel', async (req, res) => {
     id: uuidv4(), serverId, channelId, fromId: userId, content, createdAt: now, isPinned: false,
     author: {
       username: row.username, displayName: row.display_name,
-      avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null,
+      avatarDataUrl: avatarUrl(userId, !!row.has_avatar),
       roleColor: row.role_color || null, roleName: row.role_name || null,
       roleGradientStart: row.gradient_start || null, roleGradientEnd: row.gradient_end || null,
       activeDecoration: row.active_decoration || null
@@ -443,7 +449,7 @@ function mapUserForClient(row) {
     id: row.id,
     username: row.username,
     displayName: row.display_name,
-    avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null
+    avatarDataUrl: avatarUrl(row.from_id || row.user_id || row.id, !!row.avatar_data)
   };
 }
 
@@ -1123,7 +1129,7 @@ io.on('connection', (socket) => {
       id: msgId, fromId: userId, toId, content: trimmed, createdAt: now,
       author: {
         username: s.username, displayName: s.display_name,
-        avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null,
+        avatarDataUrl: avatarUrl(userId, !!s.avatar_data),
         activeDecoration: s.active_decoration || null,
         activeColor: s.active_color || null,
         activeFont: s.active_font || null, proActive: (s.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: s.profile_gradient_start, proGradientEnd: s.profile_gradient_end, proNameEffect: s.profile_name_effect,
@@ -1339,7 +1345,7 @@ io.on('connection', (socket) => {
       replyTo,
       author: {
         username: row.username, displayName: row.display_name,
-        avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null,
+        avatarDataUrl: avatarUrl(userId, !!row.avatar_data),
         roleColor: row.role_color || null, roleName: row.role_name || null, roleGradientStart: row.role_gradient_start || null, roleGradientEnd: row.role_gradient_end || null,
         activeDecoration: row.active_decoration || null,
         activeColor: row.active_color || null,
@@ -1394,7 +1400,7 @@ io.on('connection', (socket) => {
       serverId,
       channelId,
       nexusMessageId: msgId,
-      sender: { id: userId, username: row.username, displayName: row.display_name, avatarDataUrl: msg.author.avatarDataUrl },
+      sender: { id: userId, username: row.username, displayName: row.display_name, avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null },
       content: trimmed,
       replyTo
     }).catch(error => console.error('Nexus LINK channel relay error:', error));
@@ -1505,7 +1511,7 @@ io.on('connection', (socket) => {
       callType: normalizedCallType,
       caller: {
         username: c.username, displayName: c.display_name,
-        avatarDataUrl: c.avatar_data ? `data:${c.avatar_mime};base64,${c.avatar_data}` : null
+        avatarDataUrl: avatarUrl(userId, !!c.avatar_data)
       }
     });
     relayNexusCallInvite({
@@ -1516,7 +1522,7 @@ io.on('connection', (socket) => {
         id: userId,
         username: c.username,
         displayName: c.display_name,
-        avatarDataUrl: c.avatar_data ? `data:${c.avatar_mime};base64,${c.avatar_data}` : null,
+        avatarDataUrl: avatarUrl(userId, !!c.avatar_data),
         activeServerTag: c.server_tag || null
       }
     }).catch(error => console.error('Nexus LINK call relay error:', error));
