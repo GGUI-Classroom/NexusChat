@@ -2,6 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 const { requireAuth } = require('../middleware/auth');
+const { buildReportPayload, clearReportCache, getActiveReport } = require('../utils/systemReport');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -77,9 +78,50 @@ async function requireAdmin(req, res, next) {
 }
 router.use(requireAdmin);
 
+function requireCoreAdmin(req, res, next) {
+  if (!ADMIN_IDS.has(req.session.userId)) {
+    return res.status(403).json({ error: 'Core admins only' });
+  }
+  next();
+}
+
 // Check if current user is admin (used by frontend on load)
 router.get('/check', (req, res) => {
-  res.json({ isAdmin: true });
+  res.json({ isAdmin: true, isCoreAdmin: ADMIN_IDS.has(req.session.userId) });
+});
+
+router.get('/system-report', requireCoreAdmin, async (req, res) => {
+  res.json({ report: await getActiveReport(pool) });
+});
+
+router.post('/system-report', requireCoreAdmin, async (req, res) => {
+  try {
+    const report = buildReportPayload(req.body || {});
+    await pool.query('UPDATE system_reports SET active=FALSE, cleared_at=EXTRACT(EPOCH FROM NOW())::BIGINT, cleared_by=$1 WHERE active=TRUE', [req.session.userId]);
+    const created = await pool.query(
+      `INSERT INTO system_reports (id, category, title, message, published_by)
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING id, category, title, message, published_by, created_at`,
+      [uuidv4(), report.category, report.title, report.message, req.session.userId]
+    );
+    clearReportCache();
+    res.json({ success: true, report: {
+      id: created.rows[0].id,
+      category: created.rows[0].category,
+      title: created.rows[0].title,
+      message: created.rows[0].message,
+      createdAt: parseInt(created.rows[0].created_at, 10),
+      publishedBy: created.rows[0].published_by
+    } });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Could not publish report' });
+  }
+});
+
+router.delete('/system-report', requireCoreAdmin, async (req, res) => {
+  await pool.query('UPDATE system_reports SET active=FALSE, cleared_at=EXTRACT(EPOCH FROM NOW())::BIGINT, cleared_by=$1 WHERE active=TRUE', [req.session.userId]);
+  clearReportCache();
+  res.json({ success: true });
 });
 
 // Get all users

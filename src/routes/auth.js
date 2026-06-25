@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 const { avatarUrl } = require('../utils/avatar');
+const { getActiveReport } = require('../utils/systemReport');
 
 const router = express.Router();
 const DEFAULT_SERVER_INVITE_CODE = 'GPFA9B32';
@@ -36,7 +37,8 @@ router.post('/register', async (req, res) => {
       );
     }
     req.session.userId = id;
-    return res.json({ success: true, user: { id, username: username.toLowerCase(), displayName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null } });
+    const systemReport = await getActiveReport(pool);
+    return res.json({ success: true, systemReport, user: { id, username: username.toLowerCase(), displayName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null } });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'Server error' });
@@ -74,7 +76,8 @@ router.post('/login', async (req, res) => {
     }
 
     req.session.userId = user.id;
-    return res.json({ success: true, user: {
+    const systemReport = await getActiveReport(pool);
+    return res.json({ success: true, systemReport, user: {
       id: user.id, username: user.username, displayName: user.display_name,
       avatarDataUrl: avatarUrl(user.id, !!user.has_avatar),
       bio: user.bio || null,
@@ -118,7 +121,8 @@ router.get('/me', async (req, res) => {
     );
     const user = r.rows[0];
     if (!user) return res.json({ user: null });
-    return res.json({ user: {
+    const systemReport = await getActiveReport(pool);
+    return res.json({ systemReport, user: {
       id: user.id, username: user.username, displayName: user.display_name,
       avatarDataUrl: avatarUrl(user.id, !!user.has_avatar),
       bio: user.bio || null,

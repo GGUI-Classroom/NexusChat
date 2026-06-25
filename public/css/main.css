@@ -3690,6 +3690,136 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .susp-active { color: var(--red); font-weight: 700; }
 .susp-expired { color: var(--text-muted); }
 
+.admin-report-current {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  padding: 14px;
+}
+
+.admin-report-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.admin-report-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.admin-report-message {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.nexus-report-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background:
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 10px, transparent 10px 22px),
+    rgba(2, 4, 10, 0.92);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.nexus-report-card {
+  --report-a: #ff4545;
+  --report-b: #ffd166;
+  width: min(620px, 100%);
+  border: 1px solid color-mix(in srgb, var(--report-a) 65%, transparent);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(24,28,44,0.98), rgba(8,10,18,0.98));
+  box-shadow: 0 28px 80px rgba(0,0,0,0.58), 0 0 44px color-mix(in srgb, var(--report-a) 28%, transparent);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.nexus-report-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--report-a) 28%, transparent), transparent 34%),
+              radial-gradient(circle at 86% 16%, color-mix(in srgb, var(--report-b) 20%, transparent), transparent 28%);
+  pointer-events: none;
+}
+
+.nexus-report-card.maintenance { --report-a: #f6c343; --report-b: #62e6ff; }
+.nexus-report-card.ets { --report-a: #ff4242; --report-b: #ffffff; }
+.nexus-report-card.custom { --report-a: #7c8cff; --report-b: #e040fb; }
+
+.nexus-report-siren {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  z-index: 1;
+}
+
+.nexus-report-siren span {
+  height: 8px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--report-a);
+  box-shadow: 0 0 22px var(--report-a);
+  animation: nexus-report-flash 0.62s steps(2, end) infinite;
+}
+
+.nexus-report-siren span:nth-child(2) {
+  background: var(--report-b);
+  box-shadow: 0 0 22px var(--report-b);
+  animation-delay: 0.18s;
+}
+
+.nexus-report-siren span:nth-child(3) { animation-delay: 0.34s; }
+
+.nexus-report-kicker {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--report-b);
+}
+
+.nexus-report-card h2 {
+  position: relative;
+  z-index: 1;
+  margin: 8px 0 0;
+  font-size: clamp(26px, 4vw, 42px);
+  line-height: 1.05;
+}
+
+.nexus-report-card p {
+  position: relative;
+  z-index: 1;
+  margin: 14px 0 20px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.nexus-report-card button {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes nexus-report-flash {
+  0%, 44% { opacity: 1; transform: scaleY(1); }
+  45%, 100% { opacity: 0.26; transform: scaleY(0.7); }
+}
+
 /* ===== SUSPENSION SCREEN ===== */
 #suspension-screen {
   justify-content: center;

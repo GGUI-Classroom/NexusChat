@@ -722,6 +722,7 @@
         <button class="admin-tab" data-tab="servers">🌐 Servers</button>
         <button class="admin-tab" data-tab="userinfo">👤 User Info</button>
         <button class="admin-tab" data-tab="control">🎛 Control</button>
+        <button class="admin-tab" data-tab="reports">Reports</button>
         <button class="admin-tab" data-tab="admins">🛡 Admins</button>
         <button class="admin-tab" data-tab="history">📋 Log</button>
       </div>
@@ -799,6 +800,34 @@
             <div class="form-error" id="admin-control-error"></div>
           </div>
         </div>
+        <div class="admin-pane" id="admin-pane-reports">
+          <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+            <div class="admin-report-current" id="admin-report-current">
+              <div style="font-size:12px;color:var(--text-muted)">Loading active report...</div>
+            </div>
+            <div class="field-group" style="margin:0">
+              <label>Report Category</label>
+              <select id="admin-report-category" style="width:100%;padding:9px 10px;background:var(--bg-void);border:1px solid var(--border-bright);border-radius:6px;color:var(--text-primary);font-family:Syne,sans-serif;font-size:13px">
+                <option value="maintenance">Maintenance</option>
+                <option value="ets">ETS - Emergency Temporary Shutdown</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div class="field-group" id="admin-report-title-wrap" style="margin:0;display:none">
+              <label>Custom Title</label>
+              <input type="text" id="admin-report-title" maxlength="90" placeholder="Important Nexus Report" />
+            </div>
+            <div class="field-group" style="margin:0">
+              <label>Message</label>
+              <textarea id="admin-report-message" maxlength="800" placeholder="Tell users what is happening..." style="min-height:120px"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn-primary" id="admin-publish-report-btn">Publish Report</button>
+              <button class="btn-secondary" id="admin-clear-report-btn">Clear Active Report</button>
+            </div>
+            <div class="form-error" id="admin-report-error"></div>
+          </div>
+        </div>
         <div class="admin-pane" id="admin-pane-admins">
           <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
             <div class="field-group" style="margin:0"><label>Username To Promote</label><input type="text" id="admin-add-username" placeholder="Username" autocomplete="off" /></div>
@@ -826,6 +855,18 @@
 
   <div class="nexus-quick-popup" id="nexus-quick-popup" style="display:none">
     <div class="nexus-quick-popup-card" id="nexus-quick-popup-text"></div>
+  </div>
+
+  <div class="nexus-report-overlay" id="nexus-report-overlay" style="display:none">
+    <div class="nexus-report-card" id="nexus-report-card">
+      <div class="nexus-report-siren">
+        <span></span><span></span><span></span>
+      </div>
+      <div class="nexus-report-kicker" id="nexus-report-kicker">Nexus Report</div>
+      <h2 id="nexus-report-title">System Report</h2>
+      <p id="nexus-report-message"></p>
+      <button class="btn-primary" id="nexus-report-ack-btn">Acknowledge</button>
+    </div>
   </div>
 
   <div class="modal-overlay" id="admin-qr-scan-modal">

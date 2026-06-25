@@ -10,6 +10,11 @@
   let activeDmUser = null;
   let friends = [];
   const authorCache = {};
+  let pendingSystemReport = null;
+  let isCoreAdmin = false;
+  let reportAlarmCtx = null;
+  let reportAlarmTimer = null;
+  let reportAlarmNodes = [];
   let typingTimer = null;
   let isTyping = false;
   let isAppAdmin = false;
@@ -1320,6 +1325,61 @@
     }, duration);
   }
 
+  function stopSystemReportAlarm() {
+    if (reportAlarmTimer) {
+      clearInterval(reportAlarmTimer);
+      reportAlarmTimer = null;
+    }
+    reportAlarmNodes.forEach(node => {
+      try { node.stop && node.stop(); } catch (_) {}
+      try { node.disconnect && node.disconnect(); } catch (_) {}
+    });
+    reportAlarmNodes = [];
+  }
+
+  function playSystemReportAlarm() {
+    try {
+      stopSystemReportAlarm();
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      reportAlarmCtx = reportAlarmCtx || new Ctx();
+      if (reportAlarmCtx.state === 'suspended') reportAlarmCtx.resume().catch(() => {});
+      const pulse = () => {
+        const now = reportAlarmCtx.currentTime;
+        [620, 920].forEach((freq, index) => {
+          const osc = reportAlarmCtx.createOscillator();
+          const gain = reportAlarmCtx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now + index * 0.22);
+          gain.gain.setValueAtTime(0.0001, now + index * 0.22);
+          gain.gain.exponentialRampToValueAtTime(0.12, now + index * 0.22 + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.22 + 0.18);
+          osc.connect(gain).connect(reportAlarmCtx.destination);
+          osc.start(now + index * 0.22);
+          osc.stop(now + index * 0.22 + 0.2);
+          reportAlarmNodes.push(osc, gain);
+        });
+      };
+      pulse();
+      reportAlarmTimer = setInterval(pulse, 680);
+      setTimeout(stopSystemReportAlarm, 8500);
+    } catch (error) {
+      console.warn('System report alarm could not play:', error.message);
+    }
+  }
+
+  function showSystemReport(report) {
+    if (!report || !$('nexus-report-overlay')) return;
+    $('nexus-report-kicker').textContent = report.categoryLabel || 'Nexus Report';
+    $('nexus-report-title').textContent = report.title || 'System Report';
+    $('nexus-report-message').textContent = report.message || '';
+    const card = $('nexus-report-card');
+    card.classList.remove('maintenance', 'ets', 'custom');
+    card.classList.add(report.category || 'custom');
+    $('nexus-report-overlay').style.display = 'flex';
+    playSystemReportAlarm();
+  }
+
   function showError(id, msg) {
     const el = $(id);
     if (!el) return;
@@ -1372,6 +1432,7 @@
     }
     if (auth && auth.user) {
       currentUser = auth.user;
+      pendingSystemReport = auth.systemReport || null;
       enterApp();
     } else {
       showScreen('auth-screen');
@@ -1428,6 +1489,7 @@
     if (r.error) return showError('login-error', r.error);
     if (!r.user) return showError('login-error', 'Unexpected response — check browser console');
     currentUser = r.user;
+    pendingSystemReport = r.systemReport || null;
     enterApp();
   });
 
@@ -1445,6 +1507,7 @@
     if (r.error) return showError('register-error', r.error);
     if (!r.user) return showError('register-error', 'Unexpected response — check browser console');
     currentUser = r.user;
+    pendingSystemReport = r.systemReport || null;
     enterApp();
   });
 
@@ -1464,10 +1527,22 @@
       switchView('friends');
       if (activeView === 'shop') loadShop();
       checkAdminStatus();
+      if (pendingSystemReport) {
+        const report = pendingSystemReport;
+        pendingSystemReport = null;
+        setTimeout(() => showSystemReport(report), 350);
+      }
     } catch(e) {
       console.error('enterApp crash:', e);
       alert('Login succeeded but app failed to load: ' + e.message);
     }
+  }
+
+  if ($('nexus-report-ack-btn')) {
+    $('nexus-report-ack-btn').addEventListener('click', () => {
+      stopSystemReportAlarm();
+      $('nexus-report-overlay').style.display = 'none';
+    });
   }
 
   async function loadPersistedClientState() {
@@ -4419,7 +4494,10 @@
     if (!btn) return;
     const r = await api('GET', '/api/admin/check');
     isAppAdmin = !r.error;
+    isCoreAdmin = !!r.isCoreAdmin;
     btn.style.display = isAppAdmin ? 'flex' : 'none';
+    const reportsTab = document.querySelector('.admin-tab[data-tab="reports"]');
+    if (reportsTab) reportsTab.style.display = isCoreAdmin ? '' : 'none';
   }
 
   window.openAdminPanel = function() {
@@ -4442,6 +4520,7 @@
     if (tab === 'servers') adminLoadServers();
     if (tab === 'history') adminLoadHistory();
     if (tab === 'admins') adminLoadAdmins();
+    if (tab === 'reports') adminLoadSystemReport();
     if (tab === 'userinfo') { $('admin-userinfo-result').innerHTML = ''; }
   }
 
@@ -4773,6 +4852,71 @@
       const view = $('admin-control-view').value;
       const message = ($('admin-control-message').value || '').trim();
       await sendAdminClientControl('force_view', { view, message });
+    });
+  }
+
+  function renderAdminReportCurrent(report) {
+    const box = $('admin-report-current');
+    if (!box) return;
+    if (!report) {
+      box.innerHTML = '<div class="admin-report-title">No active report</div><div class="admin-report-meta">Users will not see an emergency notice on open.</div>';
+      return;
+    }
+    box.innerHTML = `
+      <div class="admin-report-title">${esc(report.title)}</div>
+      <div class="admin-report-meta">${esc(report.categoryLabel || report.category || 'Report')} • Published ${new Date((report.createdAt || 0) * 1000).toLocaleString()}</div>
+      <div class="admin-report-message">${esc(report.message)}</div>
+    `;
+  }
+
+  async function adminLoadSystemReport() {
+    if (!isCoreAdmin) return;
+    const box = $('admin-report-current');
+    if (box) box.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Loading active report...</div>';
+    const r = await api('GET', '/api/admin/system-report');
+    if (r.error) {
+      if (box) box.innerHTML = '<div style="font-size:12px;color:var(--red)">' + esc(r.error) + '</div>';
+      return;
+    }
+    renderAdminReportCurrent(r.report || null);
+  }
+
+  if ($('admin-report-category')) {
+    $('admin-report-category').addEventListener('change', () => {
+      const custom = $('admin-report-category').value === 'custom';
+      $('admin-report-title-wrap').style.display = custom ? 'block' : 'none';
+    });
+  }
+
+  if ($('admin-publish-report-btn')) {
+    $('admin-publish-report-btn').addEventListener('click', async () => {
+      showError('admin-report-error', '');
+      const payload = {
+        category: $('admin-report-category').value,
+        title: $('admin-report-title').value,
+        message: $('admin-report-message').value
+      };
+      const btn = $('admin-publish-report-btn');
+      btn.disabled = true;
+      btn.textContent = 'Publishing...';
+      const r = await api('POST', '/api/admin/system-report', payload);
+      btn.disabled = false;
+      btn.textContent = 'Publish Report';
+      if (r.error) return showError('admin-report-error', r.error);
+      $('admin-report-message').value = '';
+      $('admin-report-title').value = '';
+      renderAdminReportCurrent(r.report);
+      toast('System report published', 'success');
+    });
+  }
+
+  if ($('admin-clear-report-btn')) {
+    $('admin-clear-report-btn').addEventListener('click', async () => {
+      showError('admin-report-error', '');
+      const r = await api('DELETE', '/api/admin/system-report');
+      if (r.error) return showError('admin-report-error', r.error);
+      renderAdminReportCurrent(null);
+      toast('Active report cleared', 'info');
     });
   }
 

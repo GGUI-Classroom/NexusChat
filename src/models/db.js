@@ -303,6 +303,20 @@ async function initDb() {
     UNIQUE(user_id)
   )`, 'user_client_state');
 
+  await runSql(`CREATE TABLE IF NOT EXISTS system_reports (
+    id TEXT PRIMARY KEY,
+    category TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    active BOOLEAN DEFAULT TRUE,
+    published_by TEXT NOT NULL REFERENCES users(id),
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    cleared_at BIGINT DEFAULT NULL,
+    cleared_by TEXT DEFAULT NULL REFERENCES users(id)
+  )`, 'system_reports');
+  await runSql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_system_reports_one_active ON system_reports(active) WHERE active=TRUE`, 'idx_system_reports_one_active');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_system_reports_created ON system_reports(created_at DESC)`, 'idx_system_reports_created');
+
   await runSql(`CREATE TABLE IF NOT EXISTS server_mutes (
     id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,

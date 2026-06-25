@@ -3576,6 +3576,136 @@ html, body {
 .susp-active { color: var(--red); font-weight: 700; }
 .susp-expired { color: var(--text-muted); }
 
+.admin-report-current {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  padding: 14px;
+}
+
+.admin-report-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.admin-report-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.admin-report-message {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.nexus-report-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background:
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 10px, transparent 10px 22px),
+    rgba(2, 4, 10, 0.92);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.nexus-report-card {
+  --report-a: #ff4545;
+  --report-b: #ffd166;
+  width: min(620px, 100%);
+  border: 1px solid color-mix(in srgb, var(--report-a) 65%, transparent);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(24,28,44,0.98), rgba(8,10,18,0.98));
+  box-shadow: 0 28px 80px rgba(0,0,0,0.58), 0 0 44px color-mix(in srgb, var(--report-a) 28%, transparent);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.nexus-report-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--report-a) 28%, transparent), transparent 34%),
+              radial-gradient(circle at 86% 16%, color-mix(in srgb, var(--report-b) 20%, transparent), transparent 28%);
+  pointer-events: none;
+}
+
+.nexus-report-card.maintenance { --report-a: #f6c343; --report-b: #62e6ff; }
+.nexus-report-card.ets { --report-a: #ff4242; --report-b: #ffffff; }
+.nexus-report-card.custom { --report-a: #7c8cff; --report-b: #e040fb; }
+
+.nexus-report-siren {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  z-index: 1;
+}
+
+.nexus-report-siren span {
+  height: 8px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--report-a);
+  box-shadow: 0 0 22px var(--report-a);
+  animation: nexus-report-flash 0.62s steps(2, end) infinite;
+}
+
+.nexus-report-siren span:nth-child(2) {
+  background: var(--report-b);
+  box-shadow: 0 0 22px var(--report-b);
+  animation-delay: 0.18s;
+}
+
+.nexus-report-siren span:nth-child(3) { animation-delay: 0.34s; }
+
+.nexus-report-kicker {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--report-b);
+}
+
+.nexus-report-card h2 {
+  position: relative;
+  z-index: 1;
+  margin: 8px 0 0;
+  font-size: clamp(26px, 4vw, 42px);
+  line-height: 1.05;
+}
+
+.nexus-report-card p {
+  position: relative;
+  z-index: 1;
+  margin: 14px 0 20px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.nexus-report-card button {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes nexus-report-flash {
+  0%, 44% { opacity: 1; transform: scaleY(1); }
+  45%, 100% { opacity: 0.26; transform: scaleY(0.7); }
+}
+
 /* ===== SUSPENSION SCREEN ===== */
 #suspension-screen {
   justify-content: center;
@@ -6378,6 +6508,7 @@ html, body {
         <button class="admin-tab" data-tab="servers">🌐 Servers</button>
         <button class="admin-tab" data-tab="userinfo">👤 User Info</button>
         <button class="admin-tab" data-tab="control">🎛 Control</button>
+        <button class="admin-tab" data-tab="reports">Reports</button>
         <button class="admin-tab" data-tab="admins">🛡 Admins</button>
         <button class="admin-tab" data-tab="history">📋 Log</button>
       </div>
@@ -6455,6 +6586,34 @@ html, body {
             <div class="form-error" id="admin-control-error"></div>
           </div>
         </div>
+        <div class="admin-pane" id="admin-pane-reports">
+          <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+            <div class="admin-report-current" id="admin-report-current">
+              <div style="font-size:12px;color:var(--text-muted)">Loading active report...</div>
+            </div>
+            <div class="field-group" style="margin:0">
+              <label>Report Category</label>
+              <select id="admin-report-category" style="width:100%;padding:9px 10px;background:var(--bg-void);border:1px solid var(--border-bright);border-radius:6px;color:var(--text-primary);font-family:Syne,sans-serif;font-size:13px">
+                <option value="maintenance">Maintenance</option>
+                <option value="ets">ETS - Emergency Temporary Shutdown</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div class="field-group" id="admin-report-title-wrap" style="margin:0;display:none">
+              <label>Custom Title</label>
+              <input type="text" id="admin-report-title" maxlength="90" placeholder="Important Nexus Report" />
+            </div>
+            <div class="field-group" style="margin:0">
+              <label>Message</label>
+              <textarea id="admin-report-message" maxlength="800" placeholder="Tell users what is happening..." style="min-height:120px"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn-primary" id="admin-publish-report-btn">Publish Report</button>
+              <button class="btn-secondary" id="admin-clear-report-btn">Clear Active Report</button>
+            </div>
+            <div class="form-error" id="admin-report-error"></div>
+          </div>
+        </div>
         <div class="admin-pane" id="admin-pane-admins">
           <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
             <div class="field-group" style="margin:0"><label>Username To Promote</label><input type="text" id="admin-add-username" placeholder="Username" autocomplete="off" /></div>
@@ -6482,6 +6641,18 @@ html, body {
 
   <div class="nexus-quick-popup" id="nexus-quick-popup" style="display:none">
     <div class="nexus-quick-popup-card" id="nexus-quick-popup-text"></div>
+  </div>
+
+  <div class="nexus-report-overlay" id="nexus-report-overlay" style="display:none">
+    <div class="nexus-report-card" id="nexus-report-card">
+      <div class="nexus-report-siren">
+        <span></span><span></span><span></span>
+      </div>
+      <div class="nexus-report-kicker" id="nexus-report-kicker">Nexus Report</div>
+      <h2 id="nexus-report-title">System Report</h2>
+      <p id="nexus-report-message"></p>
+      <button class="btn-primary" id="nexus-report-ack-btn">Acknowledge</button>
+    </div>
   </div>
 
   <div class="modal-overlay" id="admin-qr-scan-modal">
@@ -6563,6 +6734,11 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   let activeDmUser = null;
   let friends = [];
   const authorCache = {};
+  let pendingSystemReport = null;
+  let isCoreAdmin = false;
+  let reportAlarmCtx = null;
+  let reportAlarmTimer = null;
+  let reportAlarmNodes = [];
   let typingTimer = null;
   let isTyping = false;
   let isAppAdmin = false;
@@ -7893,6 +8069,61 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     }, duration);
   }
 
+  function stopSystemReportAlarm() {
+    if (reportAlarmTimer) {
+      clearInterval(reportAlarmTimer);
+      reportAlarmTimer = null;
+    }
+    reportAlarmNodes.forEach(node => {
+      try { node.stop && node.stop(); } catch (_) {}
+      try { node.disconnect && node.disconnect(); } catch (_) {}
+    });
+    reportAlarmNodes = [];
+  }
+
+  function playSystemReportAlarm() {
+    try {
+      stopSystemReportAlarm();
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      reportAlarmCtx = reportAlarmCtx || new Ctx();
+      if (reportAlarmCtx.state === 'suspended') reportAlarmCtx.resume().catch(() => {});
+      const pulse = () => {
+        const now = reportAlarmCtx.currentTime;
+        [620, 920].forEach((freq, index) => {
+          const osc = reportAlarmCtx.createOscillator();
+          const gain = reportAlarmCtx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now + index * 0.22);
+          gain.gain.setValueAtTime(0.0001, now + index * 0.22);
+          gain.gain.exponentialRampToValueAtTime(0.12, now + index * 0.22 + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.22 + 0.18);
+          osc.connect(gain).connect(reportAlarmCtx.destination);
+          osc.start(now + index * 0.22);
+          osc.stop(now + index * 0.22 + 0.2);
+          reportAlarmNodes.push(osc, gain);
+        });
+      };
+      pulse();
+      reportAlarmTimer = setInterval(pulse, 680);
+      setTimeout(stopSystemReportAlarm, 8500);
+    } catch (error) {
+      console.warn('System report alarm could not play:', error.message);
+    }
+  }
+
+  function showSystemReport(report) {
+    if (!report || !$('nexus-report-overlay')) return;
+    $('nexus-report-kicker').textContent = report.categoryLabel || 'Nexus Report';
+    $('nexus-report-title').textContent = report.title || 'System Report';
+    $('nexus-report-message').textContent = report.message || '';
+    const card = $('nexus-report-card');
+    card.classList.remove('maintenance', 'ets', 'custom');
+    card.classList.add(report.category || 'custom');
+    $('nexus-report-overlay').style.display = 'flex';
+    playSystemReportAlarm();
+  }
+
   function showError(id, msg) {
     const el = $(id);
     if (!el) return;
@@ -7932,6 +8163,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     }
     if (auth && auth.user) {
       currentUser = auth.user;
+      pendingSystemReport = auth.systemReport || null;
       enterApp();
     } else {
       showScreen('auth-screen');
@@ -7988,6 +8220,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     if (r.error) return showError('login-error', r.error);
     if (!r.user) return showError('login-error', 'Unexpected response — check browser console');
     currentUser = r.user;
+    pendingSystemReport = r.systemReport || null;
     enterApp();
   });
 
@@ -8005,6 +8238,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     if (r.error) return showError('register-error', r.error);
     if (!r.user) return showError('register-error', 'Unexpected response — check browser console');
     currentUser = r.user;
+    pendingSystemReport = r.systemReport || null;
     enterApp();
   });
 
@@ -8024,10 +8258,22 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       switchView('friends');
       if (activeView === 'shop') loadShop();
       checkAdminStatus();
+      if (pendingSystemReport) {
+        const report = pendingSystemReport;
+        pendingSystemReport = null;
+        setTimeout(() => showSystemReport(report), 350);
+      }
     } catch(e) {
       console.error('enterApp crash:', e);
       alert('Login succeeded but app failed to load: ' + e.message);
     }
+  }
+
+  if ($('nexus-report-ack-btn')) {
+    $('nexus-report-ack-btn').addEventListener('click', () => {
+      stopSystemReportAlarm();
+      $('nexus-report-overlay').style.display = 'none';
+    });
   }
 
   async function loadPersistedClientState() {
@@ -10760,7 +11006,10 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     if (!btn) return;
     const r = await api('GET', '/api/admin/check');
     isAppAdmin = !r.error;
+    isCoreAdmin = !!r.isCoreAdmin;
     btn.style.display = isAppAdmin ? 'flex' : 'none';
+    const reportsTab = document.querySelector('.admin-tab[data-tab="reports"]');
+    if (reportsTab) reportsTab.style.display = isCoreAdmin ? '' : 'none';
   }
 
   window.openAdminPanel = function() {
@@ -10783,6 +11032,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     if (tab === 'servers') adminLoadServers();
     if (tab === 'history') adminLoadHistory();
     if (tab === 'admins') adminLoadAdmins();
+    if (tab === 'reports') adminLoadSystemReport();
     if (tab === 'userinfo') { $('admin-userinfo-result').innerHTML = ''; }
   }
 
@@ -11114,6 +11364,71 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       const view = $('admin-control-view').value;
       const message = ($('admin-control-message').value || '').trim();
       await sendAdminClientControl('force_view', { view, message });
+    });
+  }
+
+  function renderAdminReportCurrent(report) {
+    const box = $('admin-report-current');
+    if (!box) return;
+    if (!report) {
+      box.innerHTML = '<div class="admin-report-title">No active report</div><div class="admin-report-meta">Users will not see an emergency notice on open.</div>';
+      return;
+    }
+    box.innerHTML = `
+      <div class="admin-report-title">${esc(report.title)}</div>
+      <div class="admin-report-meta">${esc(report.categoryLabel || report.category || 'Report')} • Published ${new Date((report.createdAt || 0) * 1000).toLocaleString()}</div>
+      <div class="admin-report-message">${esc(report.message)}</div>
+    `;
+  }
+
+  async function adminLoadSystemReport() {
+    if (!isCoreAdmin) return;
+    const box = $('admin-report-current');
+    if (box) box.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Loading active report...</div>';
+    const r = await api('GET', '/api/admin/system-report');
+    if (r.error) {
+      if (box) box.innerHTML = '<div style="font-size:12px;color:var(--red)">' + esc(r.error) + '</div>';
+      return;
+    }
+    renderAdminReportCurrent(r.report || null);
+  }
+
+  if ($('admin-report-category')) {
+    $('admin-report-category').addEventListener('change', () => {
+      const custom = $('admin-report-category').value === 'custom';
+      $('admin-report-title-wrap').style.display = custom ? 'block' : 'none';
+    });
+  }
+
+  if ($('admin-publish-report-btn')) {
+    $('admin-publish-report-btn').addEventListener('click', async () => {
+      showError('admin-report-error', '');
+      const payload = {
+        category: $('admin-report-category').value,
+        title: $('admin-report-title').value,
+        message: $('admin-report-message').value
+      };
+      const btn = $('admin-publish-report-btn');
+      btn.disabled = true;
+      btn.textContent = 'Publishing...';
+      const r = await api('POST', '/api/admin/system-report', payload);
+      btn.disabled = false;
+      btn.textContent = 'Publish Report';
+      if (r.error) return showError('admin-report-error', r.error);
+      $('admin-report-message').value = '';
+      $('admin-report-title').value = '';
+      renderAdminReportCurrent(r.report);
+      toast('System report published', 'success');
+    });
+  }
+
+  if ($('admin-clear-report-btn')) {
+    $('admin-clear-report-btn').addEventListener('click', async () => {
+      showError('admin-report-error', '');
+      const r = await api('DELETE', '/api/admin/system-report');
+      if (r.error) return showError('admin-report-error', r.error);
+      renderAdminReportCurrent(null);
+      toast('Active report cleared', 'info');
     });
   }
 
