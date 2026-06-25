@@ -2737,6 +2737,10 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   background: rgba(255,255,255,0.08);
 }
 .mention-role:hover { background: rgba(255,255,255,0.15); }
+.mention-special {
+  color: var(--yellow);
+  background: rgba(245,200,66,0.14);
+}
 
 /* Mentioned message highlight */
 .message.mentioned-me {
@@ -2761,7 +2765,13 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 }
 .mention-item {
   display: flex; align-items: center; gap: 8px;
+  width: 100%;
   padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  font: inherit;
   cursor: pointer;
   transition: var(--transition);
 }
@@ -2777,6 +2787,10 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 }
 .mention-item-role-icon {
   font-size: 14px; font-weight: 800;
+}
+.mention-item-special-icon {
+  background: rgba(245,200,66,0.16);
+  color: var(--yellow);
 }
 .mention-item-name { font-size: 13px; font-weight: 700; }
 .mention-item-sub { font-size: 11px; color: var(--text-muted); }

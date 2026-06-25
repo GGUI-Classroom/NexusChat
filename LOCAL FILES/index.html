@@ -250,7 +250,11 @@
               </div>
             </div>
             <div class="messages-wrap" id="messages-wrap"><div id="messages-list" class="messages-list"></div><div class="typing-indicator" id="typing-indicator" style="display:none"><span id="typing-name">Someone</span> is typing<span class="typing-dots"><span></span><span></span><span></span></span></div></div>
-            <div class="message-input-wrap"><textarea id="message-input" placeholder="Message…" rows="1" maxlength="4000"></textarea><button class="send-btn" id="send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div>
+            <div class="message-input-wrap" style="position:relative">
+              <div class="mention-autocomplete" id="dm-mention-autocomplete" style="display:none"></div>
+              <textarea id="message-input" placeholder="Message…" rows="1" maxlength="4000"></textarea>
+              <button class="send-btn" id="send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+            </div>
           </div>
         </div>
 

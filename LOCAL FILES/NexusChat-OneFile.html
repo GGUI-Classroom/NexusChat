@@ -2655,6 +2655,10 @@ html, body {
   background: rgba(255,255,255,0.08);
 }
 .mention-role:hover { background: rgba(255,255,255,0.15); }
+.mention-special {
+  color: var(--yellow);
+  background: rgba(245,200,66,0.14);
+}
 
 /* Mentioned message highlight */
 .message.mentioned-me {
@@ -2679,7 +2683,13 @@ html, body {
 }
 .mention-item {
   display: flex; align-items: center; gap: 8px;
+  width: 100%;
   padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  font: inherit;
   cursor: pointer;
   transition: var(--transition);
 }
@@ -2695,6 +2705,10 @@ html, body {
 }
 .mention-item-role-icon {
   font-size: 14px; font-weight: 800;
+}
+.mention-item-special-icon {
+  background: rgba(245,200,66,0.16);
+  color: var(--yellow);
 }
 .mention-item-name { font-size: 13px; font-weight: 700; }
 .mention-item-sub { font-size: 11px; color: var(--text-muted); }
@@ -6036,7 +6050,11 @@ html, body {
               </div>
             </div>
             <div class="messages-wrap" id="messages-wrap"><div id="messages-list" class="messages-list"></div><div class="typing-indicator" id="typing-indicator" style="display:none"><span id="typing-name">Someone</span> is typing<span class="typing-dots"><span></span><span></span><span></span></span></div></div>
-            <div class="message-input-wrap"><textarea id="message-input" placeholder="Message…" rows="1" maxlength="4000"></textarea><button class="send-btn" id="send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div>
+            <div class="message-input-wrap" style="position:relative">
+              <div class="mention-autocomplete" id="dm-mention-autocomplete" style="display:none"></div>
+              <textarea id="message-input" placeholder="Message…" rows="1" maxlength="4000"></textarea>
+              <button class="send-btn" id="send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+            </div>
           </div>
         </div>
 
@@ -8919,111 +8937,130 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   }
 
   // ---- Mention Autocomplete ----
-  let mentionQuery = null;
-  let mentionStart = -1;
-  let selectedMentionIdx = 0;
-  let mentionItems = [];
+  const mentionState = { inputId: null, acId: null, start: -1, items: [] };
 
-  $('channel-message-input').addEventListener('input', function() {
-    checkMentionTrigger(this);
-  });
+  function setupMentionAutocomplete(inputId, acId, context) {
+    const input = $(inputId);
+    if (!input) return;
+    input.addEventListener('input', () => checkMentionTrigger(inputId, acId, context));
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && mentionState.inputId === inputId) closeMentionAC();
+    });
+  }
 
-  $('channel-message-input').addEventListener('keydown', function(e) {
-    const ac = $('channel-mention-autocomplete');
-    if (ac.style.display !== 'none') {
-      if (e.key === 'ArrowDown') { e.preventDefault(); selectedMentionIdx = Math.min(selectedMentionIdx+1, mentionItems.length-1); renderMentionList(); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); selectedMentionIdx = Math.max(selectedMentionIdx-1, 0); renderMentionList(); }
-      else if (e.key === 'Enter' || e.key === 'Tab') {
-        if (mentionItems.length) { e.preventDefault(); insertMention(mentionItems[selectedMentionIdx]); }
-      }
-      else if (e.key === 'Escape') { closeMentionAC(); }
-    }
-  });
+  setupMentionAutocomplete('channel-message-input', 'channel-mention-autocomplete', 'channel');
+  setupMentionAutocomplete('message-input', 'dm-mention-autocomplete', 'dm');
 
-  function checkMentionTrigger(textarea) {
+  function checkMentionTrigger(inputId, acId, context) {
+    const textarea = $(inputId);
     const val = textarea.value;
     const pos = textarea.selectionStart;
-    // Find the last @ before cursor
     const before = val.slice(0, pos);
     const atIdx = before.lastIndexOf('@');
     if (atIdx === -1) { closeMentionAC(); return; }
-    // Only trigger if @ is at start or preceded by space
-    const charBefore = before[atIdx-1];
-    if (charBefore && charBefore !== ' ' && charBefore !== '\n') { closeMentionAC(); return; }
-    const query = before.slice(atIdx+1);
-    if (query.includes(' ')) { closeMentionAC(); return; }
-    mentionStart = atIdx;
-    mentionQuery = query.toLowerCase();
-    buildMentionItems();
+    const charBefore = before[atIdx - 1];
+    if (charBefore && !/\s/.test(charBefore)) { closeMentionAC(); return; }
+    const query = before.slice(atIdx + 1);
+    if (!/^[\w-]{0,32}$/.test(query)) { closeMentionAC(); return; }
+    mentionState.inputId = inputId;
+    mentionState.acId = acId;
+    mentionState.start = atIdx;
+    mentionState.items = buildMentionItems(context, query.toLowerCase());
+    if (!mentionState.items.length) { closeMentionAC(); return; }
+    renderMentionList();
+    $(acId).style.display = 'block';
   }
 
-  function buildMentionItems() {
-    if (!activeServerData) return;
-    const q = mentionQuery;
-    const roles = (activeServerData.roles || []).filter(r => r.name.toLowerCase().startsWith(q));
-    const members = (activeServerData.members || []).filter(m =>
-      m.displayName.toLowerCase().includes(q) || m.username.toLowerCase().includes(q)
-    ).slice(0, 8);
-
-    mentionItems = [
-      ...roles.map(r => ({ type: 'role', id: r.id, name: r.name, color: r.color })),
-      ...members.map(m => ({ type: 'user', id: m.id, name: m.displayName, username: m.username, avatarDataUrl: m.avatarDataUrl }))
-    ];
-
-    if (!mentionItems.length) { closeMentionAC(); return; }
-    selectedMentionIdx = 0;
-    renderMentionList();
-    $('channel-mention-autocomplete').style.display = 'block';
+  function buildMentionItems(context, q) {
+    if (context === 'dm') {
+      const people = [activeDmUser, currentUser].filter(Boolean);
+      const seen = new Set();
+      return people
+        .filter(person => {
+          if (!person.id || seen.has(person.id)) return false;
+          seen.add(person.id);
+          const haystack = `${person.displayName || ''} ${person.username || ''}`.toLowerCase();
+          return haystack.includes(q);
+        })
+        .slice(0, 6)
+        .map(person => ({ type: 'user', id: person.id, name: person.displayName || person.username, username: person.username, avatarDataUrl: person.avatarDataUrl }));
+    }
+    if (!activeServerData) return [];
+    const special = [
+      { type: 'special', id: 'everyone', name: 'everyone', sub: 'Notify everyone in this server' },
+      { type: 'special', id: 'here', name: 'here', sub: 'Notify people currently online here' }
+    ].filter(item => item.name.startsWith(q));
+    const roles = (activeServerData.roles || [])
+      .filter(r => r.name.toLowerCase().includes(q))
+      .slice(0, 6)
+      .map(r => ({ type: 'role', id: r.id, name: r.name, color: r.color }));
+    const members = (activeServerData.members || [])
+      .filter(m => `${m.displayName || ''} ${m.username || ''}`.toLowerCase().includes(q))
+      .slice(0, 8)
+      .map(m => ({ type: 'user', id: m.id, name: m.displayName, username: m.username, avatarDataUrl: m.avatarDataUrl }));
+    return [...special, ...roles, ...members].slice(0, 12);
   }
 
   function renderMentionList() {
-    const ac = $('channel-mention-autocomplete');
-    ac.innerHTML = mentionItems.map((item, i) => {
+    const ac = $(mentionState.acId);
+    ac.innerHTML = mentionState.items.map((item, i) => {
+      if (item.type === 'special') {
+        return `<button type="button" class="mention-item" data-mention-idx="${i}">
+          <div class="mention-item-icon mention-item-special-icon">@</div>
+          <div><div class="mention-item-name">@${esc(item.name)}</div><div class="mention-item-sub">${esc(item.sub)}</div></div>
+        </button>`;
+      }
       if (item.type === 'role') {
-        return `<div class="mention-item ${i===selectedMentionIdx?'selected':''}" onclick="insertMention(mentionItems[${i}])">
+        return `<button type="button" class="mention-item" data-mention-idx="${i}">
           <div class="mention-item-icon mention-item-role-icon" style="background:${item.color}22;color:${item.color}">@</div>
           <div><div class="mention-item-name" style="color:${item.color}">${esc(item.name)}</div><div class="mention-item-sub">Role</div></div>
-        </div>`;
-      } else {
-        return `<div class="mention-item ${i===selectedMentionIdx?'selected':''}" onclick="insertMention(mentionItems[${i}])">
-          <div class="mention-item-icon" id="miac-${item.id}" style="background:var(--bg-hover)">
-            ${item.avatarDataUrl ? `<img src="${item.avatarDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : esc((item.name||'?')[0].toUpperCase())}
-          </div>
-          <div><div class="mention-item-name">${esc(item.name)}</div><div class="mention-item-sub">@${esc(item.username||'')}</div></div>
-        </div>`;
+        </button>`;
       }
+      return `<button type="button" class="mention-item" data-mention-idx="${i}">
+        <div class="mention-item-icon" style="background:var(--bg-hover)">
+          ${item.avatarDataUrl ? `<img src="${item.avatarDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : esc((item.name || '?')[0].toUpperCase())}
+        </div>
+        <div><div class="mention-item-name">${esc(item.name)}</div><div class="mention-item-sub">@${esc(item.username || '')}</div></div>
+      </button>`;
     }).join('');
+    ac.querySelectorAll('[data-mention-idx]').forEach(btn => {
+      btn.addEventListener('mousedown', e => e.preventDefault());
+      btn.addEventListener('click', () => insertMention(mentionState.items[Number(btn.dataset.mentionIdx)]));
+    });
   }
 
-  window.insertMention = function(item) {
-    const ta = $('channel-message-input');
+  function insertMention(item) {
+    const ta = $(mentionState.inputId);
+    if (!ta || !item) return;
     const val = ta.value;
     const token = item.type === 'role'
       ? `<@role:${item.id}>`
-      : `<@user:${item.id}>`;
-    // Replace @query with token
-    const before = val.slice(0, mentionStart);
+      : item.type === 'special'
+        ? `<@${item.id}>`
+        : `<@user:${item.id}>`;
+    const before = val.slice(0, mentionState.start);
     const after = val.slice(ta.selectionStart);
     ta.value = before + token + ' ' + after;
-    // Move cursor after token
     const newPos = before.length + token.length + 1;
     ta.setSelectionRange(newPos, newPos);
     ta.focus();
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
     closeMentionAC();
-  };
-
-  function closeMentionAC() {
-    $('channel-mention-autocomplete').style.display = 'none';
-    mentionQuery = null;
-    mentionStart = -1;
-    mentionItems = [];
   }
 
-  // Close autocomplete on outside click
+  function closeMentionAC() {
+    if (mentionState.acId && $(mentionState.acId)) $(mentionState.acId).style.display = 'none';
+    ['channel-mention-autocomplete', 'dm-mention-autocomplete'].forEach(id => { if ($(id)) $(id).style.display = 'none'; });
+    mentionState.inputId = null;
+    mentionState.acId = null;
+    mentionState.start = -1;
+    mentionState.items = [];
+  }
+
   document.addEventListener('click', e => {
-    if (!$('channel-mention-autocomplete').contains(e.target) && e.target !== $('channel-message-input')) {
-      closeMentionAC();
-    }
+    const activeAc = mentionState.acId && $(mentionState.acId);
+    const activeInput = mentionState.inputId && $(mentionState.inputId);
+    if (activeAc && !activeAc.contains(e.target) && e.target !== activeInput) closeMentionAC();
   });
 
   function stopChannelTyping() {
@@ -9808,6 +9845,8 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     const grouped = prevFrom === msg.fromId && (msg.createdAt - prevTs) < 300;
     const isMentioned = msg.content && currentUser && (
       msg.content.includes('<@user:' + currentUser.id + '>') ||
+      msg.content.includes('<@everyone>') ||
+      msg.content.includes('<@here>') ||
       (msg.mentions && activeServerData && msg.content.match(/<@role:[a-f0-9-]+>/) &&
        activeServerData.members && (() => {
          const me = activeServerData.members.find(m => m.id === currentUser.id);
@@ -10279,9 +10318,14 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       }
     });
 
-    socket.on('mentioned', ({ type, serverId: sid, channelId: cid, fromUser, preview }) => {
+    socket.on('mentioned', ({ type, serverId: sid, fromUser, preview, special }) => {
+      if (type === 'dm') {
+        toast(`DM mention from ${fromUser.displayName}: ${preview}`, 'info', 6000);
+        return;
+      }
       const serverName = servers.find(s => s.id === sid)?.name || 'a server';
-      toast(`@mention from ${fromUser.displayName} in ${serverName}: ${preview}`, 'info', 6000);
+      const label = special ? `@${special}` : '@mention';
+      toast(`${label} from ${fromUser.displayName} in ${serverName}: ${preview}`, 'info', 6000);
     });
 
     socket.on('screenshare_stopped', () => {
@@ -13009,6 +13053,9 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   // ---- Render message content with mentions ----
   function renderContent(rawContent, mentions, authorColor) {
     let html = esc(rawContent);
+    html = html.replace(/&lt;@(everyone|here)&gt;/g, (match, name) => {
+      return `<span class="mention-role mention-special">@${name}</span>`;
+    });
     if (!mentions) {
       return authorColor ? `<span class="msg-color-${authorColor}">${html}</span>` : html;
     }

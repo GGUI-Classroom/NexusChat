@@ -7,6 +7,28 @@ const router = express.Router();
 router.use(requireAuth);
 const NEXUS_GUARD_ID = '00000000-0000-0000-0000-000000000001';
 
+async function resolveMessageMentions(messages, allowedUserIds) {
+  const allowed = new Set(allowedUserIds.filter(Boolean));
+  const ids = [...new Set(messages.flatMap(message =>
+    [...String(message.content || '').matchAll(/<@user:([a-f0-9-]+)>/g)]
+      .map(match => match[1])
+      .filter(id => allowed.has(id))
+  ))];
+  if (!ids.length) return new Map();
+  const users = await pool.query('SELECT id, username, display_name FROM users WHERE id = ANY($1)', [ids]);
+  const byId = new Map(users.rows.map(user => [user.id, { username: user.username, displayName: user.display_name }]));
+  const mentionByMessage = new Map();
+  messages.forEach(message => {
+    const messageMentions = { users: {}, roles: {} };
+    [...String(message.content || '').matchAll(/<@user:([a-f0-9-]+)>/g)].forEach(match => {
+      const user = byId.get(match[1]);
+      if (user) messageMentions.users[match[1]] = user;
+    });
+    if (Object.keys(messageMentions.users).length) mentionByMessage.set(message.id, messageMentions);
+  });
+  return mentionByMessage;
+}
+
 router.get('/:userId', async (req, res) => {
   const { userId } = req.params;
   const { before } = req.query;
@@ -33,6 +55,7 @@ router.get('/:userId', async (req, res) => {
 
   const r = await pool.query(query, params);
   const msgs = r.rows.reverse();
+  const mentionByMessage = await resolveMessageMentions(msgs, [req.session.userId, userId]);
   const authors = {};
   msgs.forEach(m => {
     if (!authors[m.from_id]) {
@@ -48,6 +71,7 @@ router.get('/:userId', async (req, res) => {
   res.json({ authors, messages: msgs.map(m => ({
     id: m.id, fromId: m.from_id, toId: m.to_id,
     content: m.content, createdAt: parseInt(m.created_at),
+    mentions: mentionByMessage.get(m.id) || undefined,
     authorId: m.from_id
   }))});
 });

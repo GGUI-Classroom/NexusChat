@@ -817,9 +817,37 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
       };
     }
   });
-  res.json({ authors, messages: messages.map(m => ({
+  const allMentionedUserIds = [...new Set(messages.flatMap(m =>
+    [...String(m.content || '').matchAll(/<@user:([a-f0-9-]+)>/g)].map(match => match[1])
+  ))];
+  const allMentionedRoleIds = [...new Set(messages.flatMap(m =>
+    [...String(m.content || '').matchAll(/<@role:([a-f0-9-]+)>/g)].map(match => match[1])
+  ))];
+  const mentionUsers = {};
+  const mentionRoles = {};
+  if (allMentionedUserIds.length) {
+    const mentionedUsers = await pool.query('SELECT id, username, display_name FROM users WHERE id = ANY($1)', [allMentionedUserIds]);
+    mentionedUsers.rows.forEach(u => { mentionUsers[u.id] = { username: u.username, displayName: u.display_name }; });
+  }
+  if (allMentionedRoleIds.length) {
+    const mentionedRoles = await pool.query('SELECT id, name, color FROM server_roles WHERE id = ANY($1) AND server_id = $2', [allMentionedRoleIds, id]);
+    mentionedRoles.rows.forEach(r => { mentionRoles[r.id] = { name: r.name, color: r.color }; });
+  }
+  function mentionsForContent(content) {
+    if (!String(content || '').includes('<@')) return undefined;
+    const data = { users: {}, roles: {} };
+    [...String(content || '').matchAll(/<@user:([a-f0-9-]+)>/g)].forEach(match => {
+      if (mentionUsers[match[1]]) data.users[match[1]] = mentionUsers[match[1]];
+    });
+    [...String(content || '').matchAll(/<@role:([a-f0-9-]+)>/g)].forEach(match => {
+      if (mentionRoles[match[1]]) data.roles[match[1]] = mentionRoles[match[1]];
+    });
+    return Object.keys(data.users).length || Object.keys(data.roles).length ? data : undefined;
+  }
+  const messagesForClient = messages.map(m => ({
     id: m.id, channelId: m.channel_id, fromId: m.from_id,
     content: m.content, createdAt: parseInt(m.created_at),
+    mentions: mentionsForContent(m.content),
     isPinned: !!m.is_pinned,
     reactions: Array.isArray(m.reactions) ? m.reactions : [],
     replyTo: m.reply_to_id ? {
@@ -829,7 +857,8 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
       content: m.reply_content || '[Original message unavailable]'
     } : null,
     authorId: m.from_id
-  }))});
+  }));
+  res.json({ authors, messages: messagesForClient });
 });
 
 // Get pinned messages for a channel

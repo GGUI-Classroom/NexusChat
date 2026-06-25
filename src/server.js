@@ -39,6 +39,40 @@ function isAllowedClientOrigin(origin) {
   return STATIC_CLIENT_ORIGINS.has(origin);
 }
 
+async function resolveDirectMentions(content, allowedUserIds) {
+  const matches = [...String(content || '').matchAll(/<@user:([a-f0-9-]+)>/g)];
+  const allowed = new Set(allowedUserIds.filter(Boolean));
+  const ids = [...new Set(matches.map(match => match[1]).filter(id => allowed.has(id)))];
+  const mentionData = { users: {}, roles: {} };
+  if (!ids.length) return mentionData;
+  const result = await pool.query('SELECT id, username, display_name FROM users WHERE id = ANY($1)', [ids]);
+  result.rows.forEach(user => {
+    mentionData.users[user.id] = { username: user.username, displayName: user.display_name };
+  });
+  return mentionData;
+}
+
+async function resolveChannelMentions(content, serverId) {
+  const userMentions = [...String(content || '').matchAll(/<@user:([a-f0-9-]+)>/g)];
+  const roleMentions = [...String(content || '').matchAll(/<@role:([a-f0-9-]+)>/g)];
+  const mentionData = { users: {}, roles: {} };
+  if (userMentions.length) {
+    const ids = [...new Set(userMentions.map(match => match[1]))];
+    const result = await pool.query('SELECT id, username, display_name FROM users WHERE id = ANY($1)', [ids]);
+    result.rows.forEach(user => {
+      mentionData.users[user.id] = { username: user.username, displayName: user.display_name };
+    });
+  }
+  if (roleMentions.length) {
+    const ids = [...new Set(roleMentions.map(match => match[1]))];
+    const result = await pool.query('SELECT id, name, color FROM server_roles WHERE id = ANY($1) AND server_id = $2', [ids, serverId]);
+    result.rows.forEach(role => {
+      mentionData.roles[role.id] = { name: role.name, color: role.color };
+    });
+  }
+  return mentionData;
+}
+
 const io = new Server(server, {
   cors: {
     origin(origin, callback) {
@@ -1124,9 +1158,11 @@ io.on('connection', (socket) => {
     const s = check.rows[0];
     const msgId = uuidv4();
     const now = Math.floor(Date.now() / 1000);
+    const mentions = await resolveDirectMentions(trimmed, [userId, toId]);
     // Build message object immediately — emit to sender first for instant feedback
     const msg = {
       id: msgId, fromId: userId, toId, content: trimmed, createdAt: now,
+      mentions,
       author: {
         username: s.username, displayName: s.display_name,
         avatarDataUrl: avatarUrl(userId, !!s.avatar_data),
@@ -1140,6 +1176,13 @@ io.on('connection', (socket) => {
     socket.emit('new_message', msg);
     // Emit to recipient
     io.to(`user:${toId}`).emit('new_message', msg);
+    if (trimmed.includes(`<@user:${toId}>`)) {
+      io.to(`user:${toId}`).emit('mentioned', {
+        type: 'dm',
+        fromUser: { displayName: s.display_name, username: s.username },
+        preview: trimmed.replace(/<@user:[a-f0-9-]+>/g, '@...').slice(0, 80)
+      });
+    }
     // Emit to sender's other tabs
     socket.to(`user:${userId}`).emit('new_message', msg);
     // Persist to DB (non-blocking for perceived speed)
@@ -1338,11 +1381,13 @@ io.on('connection', (socket) => {
 
     const msgId = uuidv4();
     const now = Math.floor(Date.now() / 1000);
+    const mentions = await resolveChannelMentions(trimmed, serverId);
     const msg = {
       id: msgId, channelId, serverId, fromId: userId,
       content: trimmed, createdAt: now,
       isPinned: false,
       replyTo,
+      mentions,
       author: {
         username: row.username, displayName: row.display_name,
         avatarDataUrl: avatarUrl(userId, !!row.avatar_data),
@@ -1356,6 +1401,7 @@ io.on('connection', (socket) => {
     // Resolve mentions for notification
     const userMentionMatches = [...trimmed.matchAll(/<@user:([a-f0-9-]+)>/g)];
     const roleMentionMatches = [...trimmed.matchAll(/<@role:([a-f0-9-]+)>/g)];
+    const specialMentionMatches = [...new Set([...trimmed.matchAll(/<@(everyone|here)>/g)].map(m => m[1]))];
 
     // Notify mentioned users
     userMentionMatches.forEach(m => {
@@ -1385,6 +1431,15 @@ io.on('connection', (socket) => {
             });
           }
         });
+      });
+    }
+
+    if (specialMentionMatches.length) {
+      socket.to(`server:${serverId}`).emit('mentioned', {
+        type: 'channel', serverId, channelId,
+        special: specialMentionMatches.includes('everyone') ? 'everyone' : 'here',
+        fromUser: { displayName: row.display_name, username: row.username },
+        preview: trimmed.replace(/<@(user|role):[a-f0-9-]+>/g, '@...').replace(/<@(everyone|here)>/g, '@$1').slice(0, 80)
       });
     }
 
