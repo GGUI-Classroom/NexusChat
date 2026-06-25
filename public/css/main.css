@@ -5921,3 +5921,106 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   color: var(--text-primary);
   padding: 4px 0;
 }
+
+/* ===== AUCTION / ECONOMY ===== */
+.profile-hover-target { cursor: pointer; }
+.auction-content {
+  padding: 20px;
+}
+.auction-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.auction-panel,
+.economy-header-card,
+.economy-create {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+.auction-sell-row,
+.economy-create {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 140px auto;
+  gap: 10px;
+  align-items: center;
+}
+.auction-sell-row select,
+.auction-sell-row input,
+.economy-create input,
+.blackjack-buyin-panel input {
+  background: var(--bg-void);
+  border: 1px solid var(--border-bright);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font: inherit;
+}
+.auction-grid,
+.economy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.auction-card,
+.economy-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.auction-preview {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 4px;
+}
+.auction-card h3,
+.economy-card h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.auction-card p,
+.economy-card p,
+.auction-seller {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.economy-header-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.economy-card.disabled {
+  opacity: 0.6;
+}
+.blackjack-buyin-panel {
+  margin: 0 20px 16px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.blackjack-buyin-panel label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+.blackjack-buyin-panel span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}

@@ -183,6 +183,19 @@ async function initDb() {
   // Pack drops are inventory entries, so a user may hold duplicate decorations.
   await runSql(`ALTER TABLE user_decorations DROP CONSTRAINT IF EXISTS user_decorations_user_id_decoration_id_key`, 'drop_deco_unique');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_user_decorations_user_deco ON user_decorations(user_id, decoration_id)`, 'idx_user_decorations_user_deco');
+  await runSql(`CREATE TABLE IF NOT EXISTS decoration_auctions (
+    id TEXT PRIMARY KEY,
+    seller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    decoration_row_id TEXT NOT NULL REFERENCES user_decorations(id) ON DELETE CASCADE,
+    decoration_id TEXT NOT NULL,
+    price INTEGER NOT NULL CHECK (price > 0),
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    sold_at BIGINT DEFAULT NULL,
+    buyer_id TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL
+  )`, 'decoration_auctions');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_decoration_auctions_active ON decoration_auctions(status, created_at DESC)`, 'idx_decoration_auctions_active');
+  await runSql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_decoration_auction_one_active_row ON decoration_auctions(decoration_row_id) WHERE status='active'`, 'idx_decoration_auction_one_active_row');
   await runSql(`CREATE TABLE IF NOT EXISTS user_pack_stats (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     openings INTEGER NOT NULL DEFAULT 0
@@ -226,6 +239,26 @@ async function initDb() {
     created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
     UNIQUE(server_id, feature)
   )`, 'server_boost_allocations');
+  await runSql(`CREATE TABLE IF NOT EXISTS server_economy_items (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    price INTEGER NOT NULL CHECK (price > 0),
+    active BOOLEAN DEFAULT TRUE,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'server_economy_items');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_economy_items_server ON server_economy_items(server_id, active, created_at DESC)`, 'idx_server_economy_items_server');
+  await runSql(`CREATE TABLE IF NOT EXISTS server_economy_purchases (
+    id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL REFERENCES server_economy_items(id) ON DELETE CASCADE,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    buyer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    price INTEGER NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'server_economy_purchases');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS tag_background TEXT DEFAULT '#5865f2'`, 'alter_servers_tag_background');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_description TEXT DEFAULT NULL`, 'alter_servers_invite_description');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_tags TEXT DEFAULT ''`, 'alter_servers_invite_tags');

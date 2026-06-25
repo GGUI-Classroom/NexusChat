@@ -1797,7 +1797,7 @@
         roleName: m.roleName || null, roleColor: m.roleColor || null
       }));
       return `
-        <div class="server-member-item" onclick="showProfilePopup(event, '${popupData}')">
+        <div class="server-member-item profile-hover-target" data-profile="${popupData}" onclick="showProfilePopup(event, '${popupData}')">
           <div class="avatar-wrap" style="flex-shrink:0">
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${normalizedStatus(visibleStatus(m))}${usesDiscordStatus(m) ? ' discord-status' : ''}" style="border-color:var(--bg-surface)"></div>
@@ -2468,6 +2468,7 @@
     await loadNexusGuardSettings();
     renderRolesList(activeServerData.roles || []);
     renderBoostSettings(s);
+    await loadServerEconomy();
     loadBansList();
     $('server-settings-modal').classList.add('active');
   });
@@ -2480,6 +2481,74 @@
     const features = new Set(server.boostFeatures || []);
     $('boosts-settings-content').innerHTML = `<div class="shop-card"><div class="shop-card-name">${server.boostCount || 0} active boosts</div><div class="shop-card-desc">Allocate two boosts per server feature. Expired boosts automatically disable the feature they funded.</div></div><div class="shop-grid" style="margin-top:12px"><div class="shop-card"><div class="shop-card-name">Server Tag</div><div class="shop-card-desc">A clickable tag card shown beside members across DMs and servers.</div><button class="shop-card-btn ${features.has('tag') ? 'equip' : 'buy'}" onclick="spendBoosts('tag')">${features.has('tag') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Role Gradients</div><div class="shop-card-desc">Unlock animated gradient colors in the role editor.</div><button class="shop-card-btn ${features.has('gradients') ? 'equip' : 'buy'}" onclick="spendBoosts('gradients')">${features.has('gradients') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Invite Banners</div><div class="shop-card-desc">Unlock a gradient or secure image banner for rich server invites.</div><button class="shop-card-btn ${features.has('invite_banner') ? 'equip' : 'buy'}" onclick="spendBoosts('invite_banner')">${features.has('invite_banner') ? 'Allocated' : 'Spend 2 Boosts'}</button></div></div>`;
   }
+
+  let serverEconomyData = null;
+  async function loadServerEconomy() {
+    const host = $('server-economy-content');
+    if (!host || !activeServerId) return;
+    const r = await api('GET', `/api/servers/${activeServerId}/economy`);
+    if (r.error) { host.innerHTML = `<div class="form-error">${esc(r.error)}</div>`; return; }
+    serverEconomyData = r;
+    renderServerEconomy(r);
+  }
+
+  function renderServerEconomy(data) {
+    const host = $('server-economy-content');
+    const items = data.items || [];
+    host.innerHTML = `
+      <div class="economy-header-card">
+        <div><div class="section-label">SERVER ECONOMY</div><p class="field-hint">Members buy server perks with Nexals. The server owner receives every purchase.</p></div>
+        <div class="nexal-balance"><span>✦</span>${(data.nexals || 0).toLocaleString()} Nexals</div>
+      </div>
+      ${data.canManage ? `
+        <div class="economy-create">
+          <input id="economy-name-input" maxlength="40" placeholder="Item name, e.g. VIP Shoutout" />
+          <input id="economy-price-input" type="number" min="1" max="100000000" placeholder="Price" />
+          <input id="economy-desc-input" maxlength="160" placeholder="Description" />
+          <button class="btn-primary" onclick="createServerEconomyItem()">Create Item</button>
+        </div>` : ''}
+      <div class="economy-grid">
+        ${items.length ? items.map(item => `
+          <div class="economy-card ${item.active ? '' : 'disabled'}">
+            <div>
+              <h3>${esc(item.name)}</h3>
+              <p>${esc(item.description || 'Server perk')}</p>
+              <span>${item.sold.toLocaleString()} sold</span>
+            </div>
+            <strong>${item.price.toLocaleString()} Nexals</strong>
+            <button class="shop-card-btn buy" onclick="buyServerEconomyItem('${item.id}')" ${item.active ? '' : 'disabled'}>Buy</button>
+            ${data.canManage ? `<button class="shop-card-btn" onclick="toggleServerEconomyItem('${item.id}',${item.active ? 'false' : 'true'})">${item.active ? 'Disable' : 'Enable'}</button>` : ''}
+          </div>`).join('') : '<div class="empty-state">No server economy items yet.</div>'}
+      </div>`;
+  }
+
+  window.createServerEconomyItem = async function() {
+    const payload = {
+      name: $('economy-name-input').value,
+      price: parseInt($('economy-price-input').value, 10),
+      description: $('economy-desc-input').value
+    };
+    const r = await api('POST', `/api/servers/${activeServerId}/economy/items`, payload);
+    if (r.error) return toast(r.error, 'error');
+    toast('Economy item created', 'success');
+    await loadServerEconomy();
+  };
+
+  window.buyServerEconomyItem = async function(itemId) {
+    const item = serverEconomyData && (serverEconomyData.items || []).find(x => x.id === itemId);
+    if (item && !confirm(`Buy ${item.name} for ${item.price.toLocaleString()} Nexals?`)) return;
+    const r = await api('POST', `/api/servers/${activeServerId}/economy/items/${itemId}/buy`);
+    if (r.error) return toast(r.error, 'error');
+    updateNexalDisplay(r.nexals);
+    toast('Purchased. The server owner received the Nexals.', 'success');
+    await loadServerEconomy();
+  };
+
+  window.toggleServerEconomyItem = async function(itemId, active) {
+    const r = await api('PATCH', `/api/servers/${activeServerId}/economy/items/${itemId}`, { active });
+    if (r.error) return toast(r.error, 'error');
+    await loadServerEconomy();
+  };
 
   function identityTagHtml(user) {
     if (!user || !user.activeServerTag || !user.activeServerTagServerId) return '';
@@ -2536,6 +2605,7 @@
       p.style.display = p.id === 'settings-tab-' + tab ? 'block' : 'none';
       p.classList.toggle('active', p.id === 'settings-tab-' + tab);
     });
+    if (tab === 'economy') loadServerEconomy();
   };
 
   async function loadNexusGuardSettings() {
@@ -2773,6 +2843,7 @@
     if (view === 'stats') loadCollectionStats();
     if (view === 'quests') loadQuests();
     if (view === 'games') loadGamesHub();
+    if (view === 'auction') loadAuctionHouse();
     if (view === 'pro') loadPro();
   }
 
@@ -3190,6 +3261,14 @@
     const roleStyle = roleGradient ? `style="--role-gradient-start:${author.roleGradientStart};--role-gradient-end:${author.roleGradientEnd}"` : proGradient ? `style="--pro-name-start:${author.proGradientStart};--pro-name-end:${author.proGradientEnd}"` : (roleColor ? `style="color:${roleColor}"` : '');
     const roleClass = roleGradient ? 'msg-author has-role role-gradient-text' : proGradient ? 'msg-author has-role pro-name-effect' : roleColor ? 'msg-author has-role' : 'msg-author';
     const roleTip = author.roleName ? `title="${esc(author.roleName)}"` : '';
+    const profilePayload = encodeURIComponent(JSON.stringify({
+      id: author.id || msg.fromId,
+      displayName: author.displayName,
+      username: author.username,
+      avatarDataUrl: author.avatarDataUrl || null,
+      status: author.status || 'online',
+      activeDecoration: author.activeDecoration || null
+    })).replace(/'/g, '%27');
 
     // Check if current user can delete this message
     const isOwnMsg = msg.fromId === currentUser.id;
@@ -3217,10 +3296,10 @@
       : '';
 
     el.innerHTML = `
-      <div class="avatar-wrap" style="flex-shrink:0;align-self:flex-start;margin-top:2px"><div class="avatar" id="mav-${msg.id}"></div></div>
+      <div class="avatar-wrap profile-hover-target" data-profile="${profilePayload}" style="flex-shrink:0;align-self:flex-start;margin-top:2px"><div class="avatar" id="mav-${msg.id}"></div></div>
       <div class="msg-body">
         <div class="msg-header">
-          <span class="${roleClass}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>${identityTagHtml(author)}
+          <span class="${roleClass} profile-hover-target" data-profile="${profilePayload}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>${identityTagHtml(author)}
           <span class="msg-time">${formatTime(msg.createdAt)}</span>
           ${pinBadge}
         </div>
@@ -5142,9 +5221,89 @@
     const fmt = nexals.toLocaleString();
     const el1 = $('shop-nexal-count');
     const el2 = $('ach-nexal-count');
+    const el3 = $('auction-nexal-count');
     if (el1) el1.textContent = fmt;
     if (el2) el2.textContent = fmt;
+    if (el3) el3.textContent = fmt;
   }
+
+  let auctionData = null;
+  async function loadAuctionHouse() {
+    const host = $('auction-content');
+    if (!host) return;
+    host.innerHTML = '<div class="loading">Loading auction house...</div>';
+    const r = await api('GET', '/api/auction');
+    if (r.error) { host.innerHTML = `<div class="empty-state">${esc(r.error)}</div>`; return; }
+    auctionData = r;
+    updateNexalDisplay(r.nexals || 0);
+    renderAuctionHouse(r);
+  }
+
+  function renderAuctionHouse(data) {
+    const host = $('auction-content');
+    const inventory = data.inventory || [];
+    const auctions = data.auctions || [];
+    host.innerHTML = `
+      <div class="auction-layout">
+        <section class="auction-panel">
+          <div class="section-label">SELL A DECORATION</div>
+          <p class="field-hint">List one available copy. When it sells, you get the Nexals directly.</p>
+          <div class="auction-sell-row">
+            <select id="auction-decoration-select">
+              ${inventory.length ? inventory.map(item => `<option value="${esc(item.id)}">${esc(item.name)} (${esc(item.rarity)}) x${item.quantity}</option>`).join('') : '<option value="">No available decorations</option>'}
+            </select>
+            <input id="auction-price-input" type="number" min="1" max="100000000" placeholder="Price" />
+            <button class="btn-primary" onclick="createAuctionListing()">List</button>
+          </div>
+        </section>
+        <section class="auction-panel">
+          <div class="section-label">LIVE LISTINGS</div>
+          <div class="auction-grid">
+            ${auctions.length ? auctions.map(a => `
+              <article class="auction-card" id="auction-${a.id}">
+                <div class="avatar-wrap auction-preview" data-deco-id="${esc(a.decoration.id)}"><div class="avatar">N</div></div>
+                <span class="shop-rarity rarity-${esc(String(a.decoration.rarity || 'common').toLowerCase())}">${esc(a.decoration.rarity)}</span>
+                <h3>${esc(a.decoration.name)}</h3>
+                <p>${esc(a.decoration.description || '')}</p>
+                <div class="auction-seller">Seller: @${esc(a.sellerUsername || a.sellerName || 'user')}</div>
+                <strong>${a.price.toLocaleString()} Nexals</strong>
+                ${a.isMine
+                  ? `<button class="shop-card-btn" onclick="cancelAuction('${a.id}')">Cancel Listing</button>`
+                  : `<button class="shop-card-btn buy" onclick="buyAuction('${a.id}')">Buy</button>`}
+              </article>`).join('') : '<div class="empty-state">No active listings yet.</div>'}
+          </div>
+        </section>
+      </div>`;
+    host.querySelectorAll('.avatar-wrap[data-deco-id]').forEach(wrap => applyDecorationToWrap(wrap, wrap.dataset.decoId));
+  }
+
+  window.createAuctionListing = async function() {
+    const decorationId = $('auction-decoration-select')?.value;
+    const price = parseInt($('auction-price-input')?.value, 10);
+    if (!decorationId) return toast('Choose a decoration to list', 'error');
+    if (!price || price < 1) return toast('Enter a valid price', 'error');
+    const r = await api('POST', '/api/auction/list', { decorationId, price });
+    if (r.error) return toast(r.error, 'error');
+    toast('Auction listed', 'success');
+    await loadAuctionHouse();
+  };
+
+  window.buyAuction = async function(auctionId) {
+    const listing = auctionData && (auctionData.auctions || []).find(a => a.id === auctionId);
+    if (listing && !confirm(`Buy ${listing.decoration.name} for ${listing.price.toLocaleString()} Nexals?`)) return;
+    const r = await api('POST', `/api/auction/${auctionId}/buy`);
+    if (r.error) return toast(r.error, 'error');
+    updateNexalDisplay(r.nexals);
+    toast('Decoration bought', 'success');
+    await loadAuctionHouse();
+  };
+
+  window.cancelAuction = async function(auctionId) {
+    const r = await api('POST', `/api/auction/${auctionId}/cancel`);
+    if (r.error) return toast(r.error, 'error');
+    toast('Listing cancelled', 'info');
+    await loadAuctionHouse();
+  };
 
   function renderShop(decorations, active) {
     const grid = $('shop-grid');
@@ -5594,7 +5753,7 @@
     const target = $('games-blackjack-table');
     if (!target) return;
     const canCashout = table.handsSinceCashout >= 15 && table.chips >= 1000;
-    target.innerHTML = `<div class="blackjack-window" id="blackjack-window"><div class="blackjack-window-bar" id="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Blackjack Table</b><small>vs Nexus Dealer</small></div><div><button class="blackjack-window-btn" id="blackjack-minimize" title="Minimize">_</button></div></div><div class="blackjack-window-body"><div class="blackjack-table-felt"><div class="blackjack-head"><b>Dealer${table.dealerScore !== null ? ' - ' + table.dealerScore : ''}</b><span>${table.chips} table chips</span></div>${blackjackCards(table.dealerHand)}<div class="blackjack-seat"><span>YOUR HAND</span><b>${table.playerScore}</b></div>${blackjackCards(table.playerHand)}${table.result ? `<p class="blackjack-result">${esc(table.result)}</p>` : ''}<div class="blackjack-cashout"><span>${table.handsSinceCashout}/15 hands until cashout</span><button class="btn-secondary" onclick="cashoutBlackjack()" ${canCashout ? '' : 'disabled'}>Cash Out ${Math.floor(table.chips / 1000) * 900} Nexals</button></div><div class="game-actions">${table.status === 'playing' ? '<button class="btn-secondary" onclick="statsBlackjackAction(\'hit\')">Hit</button><button class="btn-primary" onclick="statsBlackjackAction(\'stand\')">Stand</button>' : '<button class="btn-primary" onclick="openStatsBlackjack()">New Hand</button>'}</div></div></div></div>`;
+    target.innerHTML = `<div class="blackjack-window" id="blackjack-window"><div class="blackjack-window-bar" id="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Blackjack Table</b><small>vs Nexus Dealer</small></div><div><button class="blackjack-window-btn" id="blackjack-minimize" title="Minimize">_</button></div></div><div class="blackjack-window-body"><div class="blackjack-table-felt"><div class="blackjack-head"><b>Dealer${table.dealerScore !== null ? ' - ' + table.dealerScore : ''}</b><span>${table.chips} table chips${table.buyIn ? ' | ' + table.buyIn.toLocaleString() + ' Nexal buy-in' : ''}</span></div>${blackjackCards(table.dealerHand)}<div class="blackjack-seat"><span>YOUR HAND</span><b>${table.playerScore}</b></div>${blackjackCards(table.playerHand)}${table.result ? `<p class="blackjack-result">${esc(table.result)}</p>` : ''}<div class="blackjack-cashout"><span>${table.handsSinceCashout}/15 hands until cashout</span><button class="btn-secondary" onclick="cashoutBlackjack()" ${canCashout ? '' : 'disabled'}>Cash Out ${Math.floor(table.chips / 1000) * 900} Nexals</button></div><div class="game-actions">${table.status === 'playing' ? '<button class="btn-secondary" onclick="statsBlackjackAction(\'hit\')">Hit</button><button class="btn-primary" onclick="statsBlackjackAction(\'stand\')">Stand</button>' : '<button class="btn-primary" onclick="openStatsBlackjack()">New Hand</button>'}</div></div></div></div>`;
     enableBlackjackWindow();
   }
   function enableBlackjackWindow() {
@@ -5607,9 +5766,9 @@
     bar.addEventListener('pointerup', () => { drag = null; });
   }
   async function loadGamesHub() {
-    $('games-content').innerHTML = `<div class="games-grid"><button class="game-hub-card blackjack" onclick="openStatsBlackjack()"><span class="game-hub-icon">21</span><strong>Blackjack</strong><small>Beat the dealer</small><p>Free table chips, a hidden dealer card, and classic Hit or Stand.</p><b>Play Solo</b></button><button class="game-hub-card poker" onclick="openCallGamesFromHub()"><span class="game-hub-icon">&#9824;</span><strong>Texas Hold'em</strong><small>Call table</small><p>Private cards, community cards, and a shared pot with up to six players.</p><b>Play In A Call</b></button></div><div id="games-blackjack-table"></div>`;
+    $('games-content').innerHTML = `<div class="games-grid"><button class="game-hub-card blackjack" onclick="openStatsBlackjack()"><span class="game-hub-icon">21</span><strong>Blackjack</strong><small>Beat the dealer</small><p>Start free or stake Nexals into extra table chips. Cash out after 15 hands.</p><b>Play Solo</b></button><button class="game-hub-card poker" onclick="openCallGamesFromHub()"><span class="game-hub-icon">&#9824;</span><strong>Texas Hold'em</strong><small>Call table</small><p>Private cards, community cards, and a shared pot with up to six players.</p><b>Play In A Call</b></button></div><div class="blackjack-buyin-panel"><label>Solo blackjack buy-in <input id="blackjack-buyin-input" type="number" min="0" max="100000" step="100" value="0"></label><span>0 is free. Buy-in adds table chips 1:1.</span></div><div id="games-blackjack-table"></div>`;
   }
-  window.openStatsBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/start'); if (r.error) return toast(r.error, 'error'); renderStatsBlackjack(r.table); };
+  window.openStatsBlackjack = async function() { const buyIn = parseInt($('blackjack-buyin-input')?.value, 10) || 0; const r = await api('POST', '/api/games/blackjack/start', { buyIn }); if (r.error) return toast(r.error, 'error'); if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals); renderStatsBlackjack(r.table); };
   window.openCallGamesFromHub = function() { if (!activeGameRoomId()) return toast('Start or join a call to open the Poker table', 'info'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); };
   window.statsBlackjackAction = async function(action) { const r = await api('POST', '/api/games/blackjack/action', { action }); if (r.error) return toast(r.error, 'error'); renderStatsBlackjack(r.table); };
   window.cashoutBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/cashout'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); renderStatsBlackjack(r.table); toast(`Cashed out ${r.earned} Nexals`, 'success'); };
@@ -6380,6 +6539,24 @@
       } else { tag.style.display = 'none'; $('popup-tag-invite').style.display = 'none'; }
     } catch(err) {}
   };
+
+  let profileHoverTimer = null;
+  document.addEventListener('mouseover', e => {
+    const target = e.target.closest('.profile-hover-target[data-profile]');
+    if (!target) return;
+    clearTimeout(profileHoverTimer);
+    profileHoverTimer = setTimeout(() => {
+      showProfilePopup({
+        stopPropagation() {},
+        clientX: target.getBoundingClientRect().right,
+        clientY: target.getBoundingClientRect().top
+      }, target.dataset.profile);
+    }, 420);
+  });
+  document.addEventListener('mouseout', e => {
+    if (!e.target.closest('.profile-hover-target[data-profile]')) return;
+    clearTimeout(profileHoverTimer);
+  });
 
   window.showIdentityTagInvite = function(e, tagData) {
     e.stopPropagation();

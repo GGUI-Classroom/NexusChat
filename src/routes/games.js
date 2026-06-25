@@ -32,15 +32,17 @@ function state(table) {
     dealerHand: revealDealer ? table.dealerHand : [table.dealerHand[0], { hidden: true }],
     dealerScore: revealDealer ? score(table.dealerHand) : null,
     chips: table.chips,
+    buyIn: table.buyIn || 0,
     handsSinceCashout: table.handsSinceCashout,
     status: table.status,
     result: table.result || null
   };
 }
 
-function newRound(userId, chips = 1000) {
+function newRound(userId, chips = 1000, buyIn = 0) {
   const deck = shuffle(ranks.flatMap(rank => suits.map(suit => ({ rank, suit }))));
-  const table = { deck, chips, playerHand: [deck.pop(), deck.pop()], dealerHand: [deck.pop(), deck.pop()], status: 'playing', result: null, handsSinceCashout: tables.get(userId)?.handsSinceCashout || 0 };
+  const previous = tables.get(userId);
+  const table = { deck, chips, buyIn: previous?.buyIn || buyIn, playerHand: [deck.pop(), deck.pop()], dealerHand: [deck.pop(), deck.pop()], status: 'playing', result: null, handsSinceCashout: previous?.handsSinceCashout || 0 };
   if (score(table.playerHand) === 21) finish(table);
   tables.set(userId, table);
   return table;
@@ -58,9 +60,27 @@ function finish(table) {
   else { table.result = 'Dealer wins this hand.'; table.chips = Math.max(0, table.chips - 50); }
 }
 
-router.post('/blackjack/start', (req, res) => {
+router.post('/blackjack/start', async (req, res) => {
+  const requestedBuyIn = Math.min(100000, Math.max(0, parseInt(req.body.buyIn, 10) || 0));
   const previous = tables.get(req.session.userId);
-  res.json({ table: state(newRound(req.session.userId, previous ? previous.chips : 1000)) });
+  if (previous) {
+    const balance = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
+    return res.json({ table: state(newRound(req.session.userId, previous.chips, previous.buyIn || 0)), nexals: balance.rows[0]?.nexals || 0 });
+  }
+  let startingChips = 1000;
+  let nexals = null;
+  if (requestedBuyIn > 0) {
+    const user = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
+    if (!user.rows[0] || user.rows[0].nexals < requestedBuyIn) return res.status(400).json({ error: 'Not enough Nexals for that buy-in.' });
+    const updated = await pool.query('UPDATE users SET nexals=nexals-$1 WHERE id=$2 RETURNING nexals', [requestedBuyIn, req.session.userId]);
+    nexals = updated.rows[0].nexals;
+    startingChips += requestedBuyIn;
+  }
+  if (nexals === null) {
+    const balance = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
+    nexals = balance.rows[0]?.nexals || 0;
+  }
+  res.json({ table: state(newRound(req.session.userId, startingChips, requestedBuyIn)), nexals });
 });
 
 router.post('/blackjack/action', (req, res) => {

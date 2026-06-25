@@ -131,6 +131,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/friends', require('./routes/friends'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/servers/:id/economy', require('./routes/economy'));
 app.use('/api/servers', require('./routes/servers'));
 app.use('/api/shop', require('./routes/shop'));
 app.use('/api/achievements', require('./routes/achievements'));
@@ -139,6 +140,7 @@ app.use('/api/colors', require('./routes/colors'));
 app.use('/api/perks', require('./routes/perks'));
 app.use('/api/ringtones', require('./routes/ringtones'));
 app.use('/api/games', require('./routes/games'));
+app.use('/api/auction', require('./routes/auction'));
 app.use('/api/nexus-link', require('./routes/nexus-link'));
 
 function validNexusLinkRequest(req) {

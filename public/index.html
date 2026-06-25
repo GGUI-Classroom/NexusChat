@@ -145,6 +145,10 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M8 12h4M10 10v4M16 11h.01M18 13h.01"/></svg>
               <span>Games</span>
             </button>
+            <button class="nav-btn" data-view="auction">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M6 3h12l2 6-8 12L4 9z"/><path d="M8 9h8M10 3l-2 6 4 12 4-12-2-6"/></svg>
+              <span>Auction</span>
+            </button>
           </nav>
           <div class="sidebar-label" id="invites-section-label" style="display:none">SERVER INVITES <span id="invite-badge-count" style="background:var(--red);color:#fff;font-size:10px;padding:1px 5px;border-radius:99px;margin-left:4px"></span></div>
           <div id="server-invites-list" style="padding:0 8px"></div>
@@ -356,6 +360,13 @@
           <div class="view-header" style="padding:20px 20px 0"><h1>Games</h1></div>
           <div id="games-content" class="games-content"></div>
         </div>
+        <div class="view" id="view-auction" style="overflow-y:auto">
+          <div class="view-header" style="padding:20px 20px 0;justify-content:space-between">
+            <h1>Auction House</h1>
+            <div class="nexal-balance"><span>✦</span><span id="auction-nexal-count">0</span> Nexals</div>
+          </div>
+          <div id="auction-content" class="auction-content"></div>
+        </div>
 
         <div class="view" id="view-pro" style="overflow-y:auto">
           <div class="view-header" style="padding:20px 20px 0;justify-content:space-between"><h1>Nexus Pro</h1><div class="nexal-balance"><span id="pro-nexal-count">0</span> Nexals</div></div>
@@ -462,6 +473,7 @@
         <button class="settings-tab active" data-stab="overview" onclick="switchSettingsTab('overview')">Overview</button>
         <button class="settings-tab" data-stab="nexusguard" onclick="switchSettingsTab('nexusguard')">NexusGuard</button>
         <button class="settings-tab" data-stab="roles" onclick="switchSettingsTab('roles')">Roles</button>
+        <button class="settings-tab" data-stab="economy" onclick="switchSettingsTab('economy')">Economy</button>
         <button class="settings-tab" data-stab="boosts" onclick="switchSettingsTab('boosts')">Boosts</button>
         <button class="settings-tab" data-stab="bans" onclick="switchSettingsTab('bans')">Bans</button>
       </div>
@@ -568,6 +580,9 @@
         </div>
         <div class="settings-tab-panel" id="settings-tab-boosts" style="display:none">
           <div id="boosts-settings-content"></div>
+        </div>
+        <div class="settings-tab-panel" id="settings-tab-economy" style="display:none">
+          <div id="server-economy-content"></div>
         </div>
         <div class="settings-tab-panel" id="settings-tab-bans" style="display:none">
           <div id="bans-list"></div>
