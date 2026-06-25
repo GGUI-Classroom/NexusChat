@@ -5207,7 +5207,10 @@
                 `).join('')}
               </div>
               <div class="shop-pack-owned">${pack.ownedCount}/${pack.totalCount} discovered | duplicates can drop</div>
-              <button class="shop-card-btn ${btnClass}" onclick="buyDecorationPack('${pack.id}','${canBuy ? 'buy' : 'locked'}')">${btnText}</button>
+              <div class="pack-open-row">
+                <input type="number" id="pack-qty-${pack.id}" min="1" max="50" value="1" ${canBuy ? '' : 'disabled'} />
+                <button class="shop-card-btn ${btnClass}" onclick="buyDecorationPack('${pack.id}','${canBuy ? 'buy' : 'locked'}')">${btnText}</button>
+              </div>
             </div>`;
         }).join('')}
       </div>`;
@@ -5224,17 +5227,66 @@
       return;
     }
     if (!pack) return;
-    if (!confirm('Open "' + pack.name + '" for ' + pack.price.toLocaleString() + ' Nexals? You will receive one item.')) return;
-    const r = await api('POST', '/api/shop/packs/buy', { packId });
+    const quantity = Math.min(50, Math.max(1, parseInt($(`pack-qty-${pack.id}`)?.value, 10) || 1));
+    const total = pack.price * quantity;
+    if (!confirm('Open ' + quantity + ' "' + pack.name + '" pack' + (quantity === 1 ? '' : 's') + ' for ' + total.toLocaleString() + ' Nexals?')) return;
+    const r = await api('POST', '/api/shop/packs/buy', { packId, quantity });
     if (r.error) return toast(r.error, 'error');
     shopData.nexals = r.nexals;
     updateNexalDisplay(r.nexals);
-    const won = (r.granted || [])[0];
-    toast('Pack opened: ' + (won ? won.name : 'new decoration'), 'success', 6500);
-    const mythical = (r.granted || []).find(d => d.rarity === 'mythical');
-    if (mythical) await showClaimAnimation(mythical);
+    const granted = r.granted || [];
+    if (quantity > 1) showPackResults(pack, granted, r.totalPrice || total);
+    else {
+      const won = granted[0];
+      toast('Pack opened: ' + (won ? won.name : 'new decoration'), 'success', 6500);
+      const mythical = granted.find(d => d.rarity === 'mythical');
+      if (mythical) await showClaimAnimation(mythical);
+    }
     await loadShop();
   };
+
+  function showPackResults(pack, granted, totalPrice) {
+    let overlay = $('pack-results-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'pack-results-overlay';
+      overlay.className = 'modal-overlay active pack-results-overlay';
+      document.body.appendChild(overlay);
+    }
+    const counts = granted.reduce((map, item) => {
+      const key = item.id;
+      map[key] = map[key] || { item, count: 0 };
+      map[key].count += 1;
+      return map;
+    }, {});
+    const rarityCounts = granted.reduce((map, item) => {
+      map[item.rarity] = (map[item.rarity] || 0) + 1;
+      return map;
+    }, {});
+    overlay.innerHTML = `<div class="modal pack-results-modal">
+      <div class="modal-header"><h2>${esc(pack.name)} Results</h2><button class="modal-close" id="pack-results-close">&times;</button></div>
+      <div class="modal-body">
+        <div class="pack-results-summary">
+          <strong>${granted.length.toLocaleString()} opened</strong>
+          <span>${totalPrice.toLocaleString()} Nexals spent</span>
+          <span>${Object.entries(rarityCounts).map(([rarity, count]) => `${count} ${rarity}`).join(' | ')}</span>
+        </div>
+        <div class="pack-results-grid">
+          ${Object.values(counts).map(({ item, count }) => `<div class="pack-result-card rarity-${esc(String(item.rarity || 'common').toLowerCase())}">
+            <div class="avatar-wrap pack-result-preview" data-deco-id="${esc(item.id)}"><div class="avatar">N</div></div>
+            <span class="shop-rarity rarity-${esc(String(item.rarity || 'common').toLowerCase())}">${esc(item.rarity)}</span>
+            <b>${esc(item.name)}</b>
+            <small>x${count}</small>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+    overlay.style.display = 'flex';
+    overlay.classList.add('active');
+    overlay.querySelectorAll('.avatar-wrap[data-deco-id]').forEach(wrap => applyDecorationToWrap(wrap, wrap.dataset.decoId));
+    $('pack-results-close').onclick = () => { overlay.classList.remove('active'); overlay.style.display = 'none'; };
+    overlay.onclick = e => { if (e.target === overlay) { overlay.classList.remove('active'); overlay.style.display = 'none'; } };
+  }
 
   window.shopAction = async function(decoId, action) {
     if (action === 'locked') {

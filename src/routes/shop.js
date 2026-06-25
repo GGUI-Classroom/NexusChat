@@ -587,28 +587,32 @@ router.post('/buy', async (req, res) => {
 
 router.post('/packs/buy', async (req, res) => {
   const { packId } = req.body;
+  const quantity = Math.min(50, Math.max(1, parseInt(req.body.quantity, 10) || 1));
   const pack = DECORATION_PACKS.find(p => p.id === packId);
   if (!pack) return res.status(404).json({ error: 'Pack not found' });
 
-  const rolledDeco = rollPackItem(pack);
+  const rolledDecorations = Array.from({ length: quantity }, () => rollPackItem(pack));
+  const totalPrice = pack.price * quantity;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const user = await client.query('SELECT nexals FROM users WHERE id=$1 FOR UPDATE', [req.session.userId]);
     const balance = user.rows[0]?.nexals || 0;
-    if (balance < pack.price) {
+    if (balance < totalPrice) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: `Not enough Nexals (need ${pack.price.toLocaleString()}, have ${balance.toLocaleString()})` });
+      return res.status(400).json({ error: `Not enough Nexals (need ${totalPrice.toLocaleString()}, have ${balance.toLocaleString()})` });
     }
-    await client.query('UPDATE users SET nexals = nexals - $1 WHERE id=$2', [pack.price, req.session.userId]);
-    await client.query(
-      'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3)',
-      [uuidv4(), req.session.userId, rolledDeco.id]
-    );
+    await client.query('UPDATE users SET nexals = nexals - $1 WHERE id=$2', [totalPrice, req.session.userId]);
+    for (const rolledDeco of rolledDecorations) {
+      await client.query(
+        'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3)',
+        [uuidv4(), req.session.userId, rolledDeco.id]
+      );
+    }
     await client.query(`
-      INSERT INTO user_pack_stats (user_id, openings) VALUES ($1, 1)
-      ON CONFLICT (user_id) DO UPDATE SET openings=user_pack_stats.openings+1
-    `, [req.session.userId]);
+      INSERT INTO user_pack_stats (user_id, openings) VALUES ($1, $2)
+      ON CONFLICT (user_id) DO UPDATE SET openings=user_pack_stats.openings+$2
+    `, [req.session.userId, quantity]);
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -623,7 +627,9 @@ router.post('/packs/buy', async (req, res) => {
   res.json({
     success: true,
     nexals: updated.rows[0].nexals,
-    granted: [toClientDecoration(rolledDeco, true)]
+    quantity,
+    totalPrice,
+    granted: rolledDecorations.map(deco => toClientDecoration(deco, true))
   });
 });
 

@@ -3424,6 +3424,81 @@ html, body {
   color: var(--text-muted);
 }
 
+.pack-open-row {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.pack-open-row input {
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+}
+
+.pack-results-modal {
+  max-width: 760px;
+}
+
+.pack-results-summary {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.pack-results-summary span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.pack-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  max-height: 52vh;
+  overflow: auto;
+}
+
+.pack-result-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.pack-result-preview {
+  width: 52px;
+  height: 52px;
+}
+
+.pack-result-card b {
+  font-size: 12px;
+}
+
+.pack-result-card small {
+  color: var(--yellow);
+  font-weight: 900;
+}
+
 .shop-pack-odds {
   position: absolute;
   top: calc(100% + 3px);
