@@ -6002,8 +6002,25 @@ html, body {
   color: var(--text-secondary);
   font-size: 12px;
 }
+.blackjack-setup-panel > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+.blackjack-setup-panel > div b {
+  color: var(--text-primary);
+  font-size: 16px;
+}
+.blackjack-setup-panel .btn-primary {
+  margin-left: auto;
+}
 @media (max-width: 640px) {
   .call-token-panel {
     grid-template-columns: 1fr;
+  }
+  .blackjack-setup-panel .btn-primary {
+    width: 100%;
+    margin-left: 0;
   }
 }

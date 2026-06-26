@@ -15,6 +15,10 @@ function nexalsToTokens(nexals) {
   return Math.floor((Math.max(0, parseInt(nexals, 10) || 0) * TOKEN_NUMERATOR) / TOKEN_DENOMINATOR);
 }
 
+function tokensToNexals(tokens) {
+  return Math.floor((Math.max(0, parseInt(tokens, 10) || 0) * TOKEN_DENOMINATOR) / TOKEN_NUMERATOR);
+}
+
 function shuffle(deck) {
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -122,5 +126,22 @@ router.post('/blackjack/cashout', async (req, res) => {
   const updated = await pool.query('UPDATE users SET nexals=nexals+$1 WHERE id=$2 RETURNING nexals', [nexals, req.session.userId]);
   res.json({ success: true, nexals: updated.rows[0].nexals, earned: nexals, table: state(table) });
 });
+
+async function settleBlackjackForUser(userId) {
+  const table = tables.get(userId);
+  if (!table) return { settled: false, nexals: null, earned: 0 };
+  tables.delete(userId);
+  const earned = tokensToNexals(table.chips || 0);
+  if (earned <= 0) return { settled: true, nexals: null, earned: 0 };
+  const updated = await pool.query('UPDATE users SET nexals=nexals+$1 WHERE id=$2 RETURNING nexals', [earned, userId]);
+  return { settled: true, nexals: updated.rows[0]?.nexals || 0, earned };
+}
+
+router.post('/blackjack/close', async (req, res) => {
+  const result = await settleBlackjackForUser(req.session.userId);
+  res.json({ success: true, ...result });
+});
+
+router.settleBlackjackForUser = settleBlackjackForUser;
 
 module.exports = router;

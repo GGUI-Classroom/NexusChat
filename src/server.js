@@ -139,7 +139,8 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/colors', require('./routes/colors'));
 app.use('/api/perks', require('./routes/perks'));
 app.use('/api/ringtones', require('./routes/ringtones'));
-app.use('/api/games', require('./routes/games'));
+const gamesRoutes = require('./routes/games');
+app.use('/api/games', gamesRoutes);
 app.use('/api/auction', require('./routes/auction'));
 app.use('/api/nexus-link', require('./routes/nexus-link'));
 
@@ -1941,6 +1942,12 @@ io.on('connection', (socket) => {
         userSockets.delete(userId);
         await pool.query("UPDATE users SET status='offline' WHERE id=$1", [userId]);
         broadcastStatusChange(userId, 'offline');
+        try {
+          const blackjackSettle = await gamesRoutes.settleBlackjackForUser(userId);
+          if (blackjackSettle?.settled && typeof blackjackSettle.nexals === 'number') io.to(`user:${userId}`).emit('nexals_updated', { nexals: blackjackSettle.nexals });
+        } catch (error) {
+          console.error('Blackjack auto-cashout error:', error);
+        }
         const roomId = await getUserCallRoom(userId);
         if (roomId) {
           const room = await getRoomParticipants(roomId);
