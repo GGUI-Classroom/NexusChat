@@ -234,6 +234,10 @@ async function initDb() {
     UPDATE users SET active_decoration=NULL WHERE active_decoration='singularity';
     DELETE FROM user_decorations WHERE decoration_id='singularity';
   `, 'remove_existing_singularity_decorations');
+  await runOnceMigration('remove_existing_apex_storm_decorations_v1', `
+    UPDATE users SET active_decoration=NULL WHERE active_decoration='apex_storm';
+    DELETE FROM user_decorations WHERE decoration_id='apex_storm';
+  `, 'remove_existing_apex_storm_decorations');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_color TEXT DEFAULT NULL`, 'alter_users_color');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_font TEXT DEFAULT NULL`, 'alter_users_font');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at BIGINT DEFAULT 0`, 'alter_users_pro_expires');

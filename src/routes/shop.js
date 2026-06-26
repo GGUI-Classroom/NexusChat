@@ -195,7 +195,7 @@ const DECORATIONS = [
   { id: 'zero_gravity', nexalPrice: null, name: 'Zero Gravity', description: 'Small orbiting shards float in low gravity.', rarity: 'mythical', preview: 'zero_gravity', packOnly: true },
   { id: 'singularity', nexalPrice: null, name: 'Singularity', description: 'A tiny black-hole ring pulls light inward.', rarity: 'ascendent', preview: 'singularity', packOnly: true },
   { id: 'celestial_wings', nexalPrice: null, name: 'Celestial Wings', description: 'Bright wing flares open with golden starlight.', rarity: 'mythical', preview: 'celestial_wings', packOnly: true },
-  { id: 'apex_storm', nexalPrice: null, name: 'Apex Storm', description: 'A premium storm ring surges with blue-white strikes.', rarity: 'mythical', preview: 'apex_storm', packOnly: true },
+  { id: 'apex_storm', nexalPrice: null, name: 'Apex Storm', description: 'A premium storm ring surges with blue-white strikes.', rarity: 'ascendent', preview: 'apex_storm', packOnly: true },
   { id: 'prism_overdrive', nexalPrice: null, name: 'Prism Overdrive', description: 'Prismatic light races around in overdrive.', rarity: 'mythical', preview: 'prism_overdrive', packOnly: true },
   { id: 'eternal_flame', nexalPrice: null, name: 'Eternal Flame', description: 'An everlasting flame crown rolls over the border.', rarity: 'mythical', preview: 'eternal_flame', packOnly: true },
   { id: 'magic_mists', nexalPrice: null, name: 'Magic Mists', description: 'Iridescent violet and cyan mist wraps your avatar in a glossy arcane sphere.', rarity: 'mythical', preview: 'magic_mists', packOnly: true },
@@ -302,12 +302,12 @@ const DECORATION_PACKS = [
     rarity: 'ascendent',
     description: 'Open for one apex decoration. Premium mythical odds with a nearly impossible Ascendent hit.',
     items: [
-      { decorationId: 'zero_gravity', chance: 34.55 },
+      { decorationId: 'zero_gravity', chance: 52.05 },
       { decorationId: 'celestial_wings', chance: 22 },
-      { decorationId: 'apex_storm', chance: 18 },
       { decorationId: 'prism_overdrive', chance: 12 },
       { decorationId: 'eternal_flame', chance: 8 },
       { decorationId: 'magic_mists', chance: 5 },
+      { decorationId: 'apex_storm', chance: 0.5 },
       { decorationId: 'event_horizon', chance: 0.25 },
       { decorationId: 'singularity', chance: 0.2 }
     ]
