@@ -31,6 +31,22 @@
     return LOCAL_API_ORIGIN ? LOCAL_API_ORIGIN + path : path;
   }
 
+  function getDeviceId() {
+    const key = 'nexus.deviceId';
+    let id = localStorage.getItem(key);
+    if (!id) {
+      id = window.crypto && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+      localStorage.setItem(key, id);
+    }
+    return id;
+  }
+
+  function deviceHeaders(extra = {}) {
+    return { ...extra, 'X-Nexus-Device-Id': getDeviceId() };
+  }
+
   function rememberAuthors(authors) {
     Object.entries(authors || {}).forEach(([id, author]) => {
       authorCache[id] = { ...(authorCache[id] || {}), ...author, id };
@@ -1424,7 +1440,7 @@
   // ---- Auth ----
   async function api(method, path, data) {
     try {
-      return await requestJson(method, path, data ? JSON.stringify(data) : null, { 'Content-Type': 'application/json' });
+      return await requestJson(method, path, data ? JSON.stringify(data) : null, deviceHeaders({ 'Content-Type': 'application/json' }));
     } catch (e) {
       console.error('Network error:', e);
       return { error: 'Network error: ' + e.message };
@@ -2407,7 +2423,7 @@
     if (iconFile) fd.append('icon', iconFile);
     let r;
     try {
-      const res = await requestText('POST', '/api/servers', fd);
+      const res = await requestText('POST', '/api/servers', fd, deviceHeaders());
       const text = res.text;
       try { r = JSON.parse(text); } catch(e) {
         return showError('create-server-error', 'Server error: ' + text.slice(0, 120));
@@ -2713,7 +2729,7 @@
     if (iconFile) fd.append('icon', iconFile);
     let r;
     try {
-      const res = await requestText('PATCH', `/api/servers/${activeServerId}`, fd);
+      const res = await requestText('PATCH', `/api/servers/${activeServerId}`, fd, deviceHeaders());
       const text = res.text;
       try { r = JSON.parse(text); } catch(e) {
         return showError('settings-server-error', 'Server error: ' + text.slice(0, 120));
@@ -3358,7 +3374,7 @@
       }
     }
 
-    socket = io(LOCAL_API_ORIGIN || undefined, { transports: ['websocket', 'polling'], withCredentials: true });
+    socket = io(LOCAL_API_ORIGIN || undefined, { transports: ['websocket', 'polling'], withCredentials: true, auth: { deviceId: getDeviceId() } });
     socket.on('call_game_state', ({ roomId, game }) => {
       if (roomId !== activeGameRoomId()) return;
       activeCallGame = game;
@@ -4349,7 +4365,7 @@
     if (!file) return;
     const fd = new FormData();
     fd.append('avatar', file);
-    const r = await requestJson('POST', '/api/users/avatar', fd);
+    const r = await requestJson('POST', '/api/users/avatar', fd, deviceHeaders());
     if (r.error) return toast(r.error, 'error');
     currentUser.avatarDataUrl = r.avatarDataUrl;
     $('profile-avatar-preview').innerHTML = `<img src="${r.avatarDataUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
@@ -4452,6 +4468,7 @@
     if (tab === 'admins') adminLoadAdmins();
     if (tab === 'reports') adminLoadSystemReport();
     if (tab === 'userreports') adminLoadUserReports();
+    if (tab === 'suspend') adminLoadIpBans();
     if (tab === 'userinfo') { $('admin-userinfo-result').innerHTML = ''; }
   }
 
@@ -4494,14 +4511,50 @@
       const reason = ($('admin-ipban-reason').value || '').trim();
       showError('admin-ipban-error', '');
       if (!username) return showError('admin-ipban-error', 'Enter a username');
-      if (!confirm('IP ban @' + username + '? This blocks their last recorded network.')) return;
+      if (!confirm('Device ban @' + username + '? This blocks only their last recorded browser/device, not the whole network.')) return;
       const r = await api('POST', '/api/admin/ip-ban', { username, reason });
       if (r.error) return showError('admin-ipban-error', r.error);
       $('admin-ipban-username').value = '';
       $('admin-ipban-reason').value = '';
-      toast(`IP banned @${r.username} (${r.ip})`, 'success');
+      toast(`Device banned @${r.username}`, 'success');
+      adminLoadIpBans();
     });
   }
+
+  window.adminLoadIpBans = async function() {
+    const list = $('admin-ipban-list');
+    if (!list) return;
+    list.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:12px">Loading active device bans...</div>';
+    const r = await api('GET', '/api/admin/ip-bans');
+    if (r.error) {
+      list.innerHTML = '<div style="padding:10px;color:var(--red);font-size:12px">' + esc(r.error) + '</div>';
+      return;
+    }
+    if (!r.bans || !r.bans.length) {
+      list.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:12px;border:1px solid var(--border);border-radius:8px">No active device bans.</div>';
+      return;
+    }
+    list.innerHTML = r.bans.map(b => {
+      const when = b.createdAt ? new Date(b.createdAt * 1000).toLocaleString() : 'Unknown time';
+      const device = b.deviceId ? b.deviceId.slice(0, 8) + '...' + b.deviceId.slice(-6) : 'unknown device';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:8px;padding:10px;background:rgba(255,255,255,0.03)">
+        <div style="min-width:0">
+          <div style="font-weight:800;color:var(--text-primary)">@${esc(b.username || 'unknown')}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Device ${esc(device)} · IP record ${esc(b.ip || 'unknown')} · ${esc(when)}</div>
+          ${b.reason ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:5px">${esc(b.reason)}</div>` : ''}
+        </div>
+        <button class="btn-secondary" style="flex-shrink:0;font-size:11px;padding:7px 10px" onclick="adminRemoveIpBan('${esc(b.id)}')">Remove</button>
+      </div>`;
+    }).join('');
+  };
+
+  window.adminRemoveIpBan = async function(banId) {
+    if (!confirm('Remove this device ban?')) return;
+    const r = await api('DELETE', '/api/admin/ip-bans/' + encodeURIComponent(banId));
+    if (r.error) return toast(r.error, 'error');
+    toast('Device ban removed', 'success');
+    adminLoadIpBans();
+  };
 
   window.adminLoadServers = async function() {
     const list = $('admin-servers-list');

@@ -250,6 +250,7 @@ async function initDb() {
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_status TEXT DEFAULT 'offline'`, 'alter_users_discord_status');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_activity TEXT DEFAULT NULL`, 'alter_users_discord_activity');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip TEXT DEFAULT NULL`, 'alter_users_last_ip');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_device_id TEXT DEFAULT NULL`, 'alter_users_last_device_id');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS mod_log_channel_id TEXT DEFAULT NULL`, 'alter_servers_mod_log_channel');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_name TEXT DEFAULT 'NexusBot'`, 'alter_servers_bot_name');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_prefix TEXT DEFAULT '/'`, 'alter_servers_bot_prefix');
@@ -340,6 +341,7 @@ async function initDb() {
   await runSql(`CREATE TABLE IF NOT EXISTS ip_bans (
     id TEXT PRIMARY KEY,
     ip_address TEXT NOT NULL,
+    device_id TEXT DEFAULT NULL,
     username TEXT DEFAULT NULL,
     user_id TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
     banned_by TEXT NOT NULL REFERENCES users(id),
@@ -347,7 +349,9 @@ async function initDb() {
     active BOOLEAN DEFAULT TRUE,
     created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
   )`, 'ip_bans');
+  await runSql(`ALTER TABLE ip_bans ADD COLUMN IF NOT EXISTS device_id TEXT DEFAULT NULL`, 'alter_ip_bans_device_id');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_ip_bans_active_ip ON ip_bans(ip_address, active)`, 'idx_ip_bans_active_ip');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_ip_bans_active_device ON ip_bans(device_id, active)`, 'idx_ip_bans_active_device');
 
   await runSql(`CREATE TABLE IF NOT EXISTS code_redemptions (
     id TEXT PRIMARY KEY,

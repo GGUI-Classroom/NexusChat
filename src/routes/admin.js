@@ -200,18 +200,48 @@ router.post('/ip-ban', async (req, res) => {
   const username = String(req.body.username || '').trim();
   const reason = String(req.body.reason || '').trim().slice(0, 400) || null;
   if (!username) return res.status(400).json({ error: 'Username is required' });
-  const user = await pool.query('SELECT id, username, last_ip FROM users WHERE LOWER(username)=LOWER($1)', [username]);
+  const user = await pool.query('SELECT id, username, last_ip, last_device_id FROM users WHERE LOWER(username)=LOWER($1)', [username]);
   if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
   const row = user.rows[0];
-  if (ADMIN_IDS.has(row.id)) return res.status(403).json({ error: 'Cannot IP ban a core admin' });
-  if (!row.last_ip) return res.status(400).json({ error: 'That user has no recorded IP yet. Have them log in first.' });
+  if (ADMIN_IDS.has(row.id)) return res.status(403).json({ error: 'Cannot device ban a core admin' });
+  if (!row.last_device_id) return res.status(400).json({ error: 'That user has no recorded device yet. Have them log in with the updated client first.' });
+  await pool.query('UPDATE ip_bans SET active=FALSE WHERE device_id=$1 AND active=TRUE', [row.last_device_id]);
+  const banId = uuidv4();
   await pool.query(
-    `INSERT INTO ip_bans (id, ip_address, username, user_id, banned_by, reason)
-     VALUES ($1,$2,$3,$4,$5,$6)`,
-    [uuidv4(), row.last_ip, row.username, row.id, req.session.userId, reason]
+    `INSERT INTO ip_bans (id, ip_address, device_id, username, user_id, banned_by, reason)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [banId, row.last_ip || 'unknown', row.last_device_id, row.username, row.id, req.session.userId, reason]
   );
-  if (req.io) req.io.to(`user:${row.id}`).emit('force_logout', { reason: 'This network was banned from Nexus.' });
-  res.json({ success: true, username: row.username, ip: row.last_ip });
+  if (req.io) req.io.to(`user:${row.id}`).emit('force_logout', { reason: 'This device was banned from Nexus.' });
+  res.json({ success: true, id: banId, username: row.username, ip: row.last_ip || null, deviceId: row.last_device_id });
+});
+
+router.get('/ip-bans', async (req, res) => {
+  const r = await pool.query(`
+    SELECT b.id, b.ip_address, b.device_id, b.username, b.user_id, b.reason, b.created_at,
+      a.username AS admin_username
+    FROM ip_bans b
+    JOIN users a ON a.id=b.banned_by
+    WHERE b.active=TRUE
+    ORDER BY b.created_at DESC
+    LIMIT 100
+  `);
+  res.json({ bans: r.rows.map(b => ({
+    id: b.id,
+    ip: b.ip_address || null,
+    deviceId: b.device_id || null,
+    username: b.username || 'unknown',
+    userId: b.user_id || null,
+    reason: b.reason || null,
+    createdAt: parseInt(b.created_at, 10),
+    adminUsername: b.admin_username || null
+  })) });
+});
+
+router.delete('/ip-bans/:banId', async (req, res) => {
+  const r = await pool.query('UPDATE ip_bans SET active=FALSE WHERE id=$1 AND active=TRUE RETURNING id', [req.params.banId]);
+  if (!r.rows.length) return res.status(404).json({ error: 'Active device ban not found' });
+  res.json({ success: true });
 });
 
 // Get all servers

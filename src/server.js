@@ -11,7 +11,7 @@ const { v4: uuidv4 } = require('uuid');
 const { envFlag } = require('./config/env');
 const { pool, initDb } = require('./models/db');
 const { avatarUrl } = require('./utils/avatar');
-const { requestIp } = require('./utils/ip');
+const { requestIp, requestDeviceId, socketDeviceId } = require('./utils/ip');
 
 const app = express();
 const server = http.createServer(app);
@@ -110,7 +110,7 @@ app.use((req, res, next) => {
     res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Nexus-Device-Id');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -129,14 +129,14 @@ app.use(async (req, res, next) => {
   if (!req.path.startsWith('/api')) return next();
   if (req.path === '/api/auth/logout') return next();
   try {
-    const ip = requestIp(req);
-    if (!ip) return next();
-    const banned = await pool.query('SELECT reason FROM ip_bans WHERE ip_address=$1 AND active=TRUE LIMIT 1', [ip]);
+    const deviceId = requestDeviceId(req);
+    if (!deviceId) return next();
+    const banned = await pool.query('SELECT reason FROM ip_bans WHERE device_id=$1 AND active=TRUE LIMIT 1', [deviceId]);
     if (banned.rows.length) {
-      return res.status(403).json({ error: 'This network is banned from Nexus' });
+      return res.status(403).json({ error: 'This device is banned from Nexus' });
     }
   } catch (error) {
-    console.error('IP ban check failed:', error.message);
+    console.error('Device ban check failed:', error.message);
   }
   next();
 });
@@ -599,13 +599,14 @@ io.use(async (socket, next) => {
   if (!sess || !sess.userId) return next(new Error('Unauthorized'));
   try {
     const ip = requestIp(socket.request);
-    if (ip) {
-      const banned = await pool.query('SELECT reason FROM ip_bans WHERE ip_address=$1 AND active=TRUE LIMIT 1', [ip]);
-      if (banned.rows.length) return next(new Error('This network is banned from Nexus'));
-      await pool.query('UPDATE users SET last_ip=$1 WHERE id=$2', [ip, sess.userId]);
+    const deviceId = socketDeviceId(socket);
+    if (deviceId) {
+      const banned = await pool.query('SELECT reason FROM ip_bans WHERE device_id=$1 AND active=TRUE LIMIT 1', [deviceId]);
+      if (banned.rows.length) return next(new Error('This device is banned from Nexus'));
     }
+    await pool.query('UPDATE users SET last_ip=$1, last_device_id=$2 WHERE id=$3', [ip || null, deviceId || null, sess.userId]);
   } catch (error) {
-    console.error('Socket IP ban check failed:', error.message);
+    console.error('Socket device ban check failed:', error.message);
   }
   socket.userId = sess.userId;
   next();
