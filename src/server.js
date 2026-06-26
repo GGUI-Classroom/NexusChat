@@ -350,6 +350,16 @@ const NEXUS_BOT_ID = '00000000-0000-0000-0000-000000000001';
 const NEXUS_BOT_NAME = 'NexusGuard';
 const NEXUS_BOT_AVATAR_DATA_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmNTllMGIiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmOTczMTYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgY3k9IjQ4IiByPSI0NiIgZmlsbD0idXJsKCNnKSIvPjxwYXRoIGQ9Ik00OCAxNmwyNCA4djIyYzAgMTgtMTAgMzAtMjQgMzYtMTQtNi0yNC0xOC0yNC0zNlYyNHoiIGZpbGw9InVybCgjYSkiLz48cGF0aCBkPSJNNDggMjZsMTQgNXYxNWMwIDExLTYgMTktMTQgMjMtOC00LTE0LTEyLTE0LTIzVjMxeiIgZmlsbD0iIzExMTgyNyIgb3BhY2l0eT0iLjY1Ii8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0NSIgcj0iNyIgZmlsbD0iI2ZkZTY4YSIvPjxwYXRoIGQ9Ik0zNiA1OWgyNHY1SDM2eiIgZmlsbD0iI2ZkZTY4YSIvPjwvc3ZnPg==';
 const spamTracker = new Map();
+const TABLE_TOKEN_NUMERATOR = 1000;
+const TABLE_TOKEN_DENOMINATOR = 900;
+
+function nexalsToTableTokens(nexals) {
+  return Math.floor((Math.max(0, parseInt(nexals, 10) || 0) * TABLE_TOKEN_NUMERATOR) / TABLE_TOKEN_DENOMINATOR);
+}
+
+function tableTokensToNexals(tokens) {
+  return Math.floor((Math.max(0, parseInt(tokens, 10) || 0) * TABLE_TOKEN_DENOMINATOR) / TABLE_TOKEN_NUMERATOR);
+}
 
 function gameDeck() {
   return ['A','2','3','4','5','6','7','8','9','10','J','Q','K'].flatMap(rank => ['S','H','D','C'].map(suit => ({ rank, suit })));
@@ -357,10 +367,10 @@ function gameDeck() {
 function shuffle(cards) { for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cards[i], cards[j]] = [cards[j], cards[i]]; } return cards; }
 function blackjackScore(cards) { let total = cards.reduce((sum, c) => sum + (c.rank === 'A' ? 11 : ['J','Q','K'].includes(c.rank) ? 10 : Number(c.rank)), 0); let aces = cards.filter(c => c.rank === 'A').length; while (total > 21 && aces--) total -= 10; return total; }
 function gameStateFor(game, viewerId) {
-  const revealDealer = game.type !== 'blackjack' || game.phase === 'complete';
+  const revealDealer = game.type !== 'blackjack' || game.phase === 'round_complete' || game.phase === 'complete';
   return { type: game.type, phase: game.phase, hostId: game.hostId, roundsTotal: game.roundsTotal || 1, roundNumber: game.roundNumber || 0, turnId: game.turnId || null, community: game.community || [], pot: game.pot || 0,
     dealer: game.type === 'blackjack' ? { hand: revealDealer ? game.dealer.hand : [game.dealer.hand[0], { hidden: true }], score: revealDealer ? blackjackScore(game.dealer.hand) : null } : null,
-    players: game.players.map(p => ({ id: p.id, displayName: p.displayName, chips: p.chips, bet: p.bet || 0, folded: !!p.folded, standing: !!p.standing, hand: p.id === viewerId || game.phase === 'complete' ? p.hand : p.hand.map(() => ({ hidden: true })), score: game.type === 'blackjack' ? blackjackScore(p.hand) : null })), winnerId: game.winnerId || null, message: game.message || '' };
+    players: game.players.map(p => ({ id: p.id, displayName: p.displayName, chips: p.chips, buyIn: p.buyIn || 0, bet: p.bet || 0, folded: !!p.folded, standing: !!p.standing, hand: p.id === viewerId || game.phase === 'complete' ? p.hand : p.hand.map(() => ({ hidden: true })), score: game.type === 'blackjack' ? blackjackScore(p.hand) : null })), winnerId: game.winnerId || null, message: game.message || '' };
 }
 function beginCallGameRound(game) {
   game.deck = shuffle(gameDeck());
@@ -370,7 +380,7 @@ function beginCallGameRound(game) {
     player.hand = [game.deck.pop(), game.deck.pop()];
     player.standing = false;
     player.folded = false;
-    player.bet = 0;
+    if (game.type !== 'blackjack') player.bet = 0;
   });
   if (game.type === 'blackjack') {
     game.dealer.hand = [game.deck.pop(), game.deck.pop()];
@@ -381,9 +391,38 @@ function beginCallGameRound(game) {
   }
 }
 function emitGame(roomId) { const game = callGames.get(roomId); if (!game) return; for (const player of game.players) io.to(`user:${player.id}`).emit('call_game_state', { roomId, game: gameStateFor(game, player.id) }); }
+async function settleCallGame(roomId, reason = 'Activity ended') {
+  const game = callGames.get(roomId);
+  if (!game || game.settled) return [];
+  game.settled = true;
+  const payouts = [];
+  for (const player of game.players || []) {
+    const payout = tableTokensToNexals(player.chips || 0);
+    payouts.push({ userId: player.id, displayName: player.displayName, payout });
+    if (payout > 0) {
+      const updated = await pool.query('UPDATE users SET nexals=nexals+$1 WHERE id=$2 RETURNING nexals', [payout, player.id]);
+      io.to(`user:${player.id}`).emit('nexals_updated', { nexals: updated.rows[0]?.nexals || 0 });
+    }
+  }
+  const summary = payouts.map(p => `${p.displayName}: ${p.payout.toLocaleString()} Nexals`).join(' | ');
+  game.message = `${reason}. Table tokens settled: ${summary || 'no payouts'}.`;
+  return payouts;
+}
 async function isInGameRoom(userId, roomId) {
   if (userGroupCallRoom.get(userId) === roomId || groupCallRooms.get(roomId)?.has(userId)) return true;
   return (await getUserCallRoom(userId)) === roomId;
+}
+async function buyCallTableTokens(userId, buyInNexals) {
+  const buyIn = Math.min(100000, Math.max(0, parseInt(buyInNexals, 10) || 0));
+  if (buyIn <= 0) throw new Error('Choose a Nexal buy-in first.');
+  const tokens = nexalsToTableTokens(buyIn);
+  if (tokens <= 0) throw new Error('Buy-in is too small for table tokens.');
+  const updated = await pool.query(
+    'UPDATE users SET nexals=nexals-$1 WHERE id=$2 AND nexals >= $1 RETURNING nexals',
+    [buyIn, userId]
+  );
+  if (!updated.rows.length) throw new Error('Not enough Nexals for that buy-in.');
+  return { buyIn, tokens, nexals: updated.rows[0].nexals };
 }
 const NEXUS_BOT_AUTHOR = {
   username: 'nexusguard',
@@ -1748,14 +1787,19 @@ io.on('connection', (socket) => {
     io.to(`user:${toId}`).emit('group_webrtc_ice', { roomId, fromId: userId, candidate });
   });
 
-  socket.on('call_game_open', async ({ roomId, type }, ack = () => {}) => {
+  socket.on('call_game_open', async ({ roomId, type, buyIn, bet }, ack = () => {}) => {
     if (!roomId || !['blackjack', 'poker'].includes(type)) return ack({ error: 'Choose a valid game.' });
     if (!await isInGameRoom(userId, roomId)) return ack({ error: 'Join the call before starting a game.' });
     let game = callGames.get(roomId);
     if (!game || game.phase === 'complete') {
       const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
-      game = { type, phase: 'lobby', hostId: userId, roundsTotal: 3, roundNumber: 0, players: [{ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: 1000, hand: [] }], dealer: { hand: [] }, deck: [], community: [], pot: 0 };
+      let purchase;
+      try { purchase = await buyCallTableTokens(userId, buyIn); }
+      catch (error) { return ack({ error: error.message }); }
+      const openingBet = Math.min(1000000, Math.max(0, parseInt(bet, 10) || 0));
+      game = { type, phase: 'lobby', hostId: userId, roundsTotal: 3, roundNumber: 0, players: [{ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: purchase.tokens, buyIn: purchase.buyIn, bet: openingBet, hand: [] }], dealer: { hand: [] }, deck: [], community: [], pot: 0 };
       callGames.set(roomId, game);
+      socket.emit('nexals_updated', { nexals: purchase.nexals });
       const host = { id: userId, displayName: me.rows[0]?.display_name || 'Player' };
       socket.to(`call:${roomId}`).emit('call_game_invite', { roomId, type, host });
       socket.to(`groupcall:${roomId}`).emit('call_game_invite', { roomId, type, host });
@@ -1768,11 +1812,16 @@ io.on('connection', (socket) => {
     ack({ success: true });
   });
 
-  socket.on('call_game_join', async ({ roomId }) => {
+  socket.on('call_game_join', async ({ roomId, buyIn, bet }) => {
     const game = callGames.get(roomId);
     if (!game || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId) || game.players.some(p => p.id === userId) || game.players.length >= 6) return;
     const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
-    game.players.push({ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: 1000, hand: [] });
+    let purchase;
+    try { purchase = await buyCallTableTokens(userId, buyIn); }
+    catch (error) { socket.emit('call_game_error', { message: error.message }); return; }
+    const openingBet = Math.min(1000000, Math.max(0, parseInt(bet, 10) || 0));
+    game.players.push({ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: purchase.tokens, buyIn: purchase.buyIn, bet: openingBet, hand: [] });
+    socket.emit('nexals_updated', { nexals: purchase.nexals });
     emitGame(roomId);
   });
 
@@ -1783,8 +1832,15 @@ io.on('connection', (socket) => {
       socket.emit('call_game_error', { message: 'A call game needs the other person to join first.' });
       return;
     }
-    game.roundsTotal = Math.max(1, Math.min(10, parseInt(rounds, 10) || game.roundsTotal || 3));
+    game.roundsTotal = Math.max(1, Math.min(15, parseInt(rounds, 10) || game.roundsTotal || 3));
     game.roundNumber = 1;
+    if (game.type === 'blackjack') {
+      const invalid = game.players.find(p => !p.bet || p.bet <= 0 || p.bet > p.chips);
+      if (invalid) {
+        socket.emit('call_game_error', { message: `${invalid.displayName} needs a valid token bet before starting.` });
+        return;
+      }
+    }
     beginCallGameRound(game);
     emitGame(roomId);
   });
@@ -1792,6 +1848,7 @@ io.on('connection', (socket) => {
   socket.on('call_game_close', async ({ roomId }) => {
     const game = callGames.get(roomId);
     if (!game || game.hostId !== userId || !await isInGameRoom(userId, roomId)) return;
+    await settleCallGame(roomId, 'Activity ended');
     callGames.delete(roomId);
     io.to(`call:${roomId}`).emit('call_game_closed', { roomId });
     io.to(`groupcall:${roomId}`).emit('call_game_closed', { roomId });
@@ -1800,6 +1857,7 @@ io.on('connection', (socket) => {
   socket.on('call_game_leave', async ({ roomId }) => {
     const game = callGames.get(roomId);
     if (!game || !game.players.some(player => player.id === userId) || !await isInGameRoom(userId, roomId)) return;
+    await settleCallGame(roomId, 'A participant left the activity');
     callGames.delete(roomId);
     io.to(`call:${roomId}`).emit('call_game_closed', { roomId, reason: 'A participant left the activity.' });
     io.to(`groupcall:${roomId}`).emit('call_game_closed', { roomId, reason: 'A participant left the activity.' });
@@ -1808,6 +1866,13 @@ io.on('connection', (socket) => {
   socket.on('call_game_next_round', async ({ roomId }) => {
     const game = callGames.get(roomId);
     if (!game || game.hostId !== userId || game.phase !== 'round_complete' || !await isInGameRoom(userId, roomId)) return;
+    if (game.type === 'blackjack') {
+      const invalid = game.players.find(p => !p.bet || p.bet <= 0 || p.bet > p.chips);
+      if (invalid) {
+        socket.emit('call_game_error', { message: `${invalid.displayName} needs enough tokens for the next bet.` });
+        return;
+      }
+    }
     game.roundNumber += 1;
     beginCallGameRound(game);
     emitGame(roomId);
@@ -1826,13 +1891,34 @@ io.on('connection', (socket) => {
       if (game.players.every(p => p.standing || blackjackScore(p.hand) > 21)) {
         while (blackjackScore(game.dealer.hand) < 17) game.dealer.hand.push(game.deck.pop());
         const dealerScore = blackjackScore(game.dealer.hand);
-        game.players.forEach(p => { const score = blackjackScore(p.hand); if (score <= 21 && (dealerScore > 21 || score > dealerScore)) p.chips += 100; else if (score > 21 || score < dealerScore) p.chips -= 50; });
+        const results = [];
+        game.players.forEach(p => {
+          const score = blackjackScore(p.hand);
+          const wager = Math.max(0, p.bet || 0);
+          if (score > 21) {
+            p.chips = Math.max(0, p.chips - wager);
+            results.push(`${p.displayName} bust -${wager.toLocaleString()}`);
+          } else if (score === 21 && p.hand.length === 2 && !(dealerScore === 21 && game.dealer.hand.length === 2)) {
+            const win = Math.floor(wager * 1.5);
+            p.chips += win;
+            results.push(`${p.displayName} blackjack +${win.toLocaleString()}`);
+          } else if (dealerScore > 21 || score > dealerScore) {
+            p.chips += wager;
+            results.push(`${p.displayName} wins +${wager.toLocaleString()}`);
+          } else if (score === dealerScore) {
+            results.push(`${p.displayName} pushes`);
+          } else {
+            p.chips = Math.max(0, p.chips - wager);
+            results.push(`${p.displayName} loses -${wager.toLocaleString()}`);
+          }
+        });
         if (game.roundNumber >= game.roundsTotal) {
           game.phase = 'complete';
-          game.message = dealerScore > 21 ? 'Match complete: dealer busts.' : 'Match complete.';
+          game.message = `Match complete. ${results.join(' | ')}`;
+          await settleCallGame(roomId, game.message);
         } else {
           game.phase = 'round_complete';
-          game.message = `Round ${game.roundNumber} complete. ${game.roundsTotal - game.roundNumber} round${game.roundsTotal - game.roundNumber === 1 ? '' : 's'} remaining.`;
+          game.message = `Round ${game.roundNumber} complete. ${results.join(' | ')}. ${game.roundsTotal - game.roundNumber} round${game.roundsTotal - game.roundNumber === 1 ? '' : 's'} remaining.`;
         }
       }
     } else {
@@ -1840,8 +1926,8 @@ io.on('connection', (socket) => {
       if (action === 'fold') player.folded = true; else { player.bet += 20; player.chips -= 20; game.pot += 20; }
       const active = game.players.filter(p => !p.folded);
       const index = active.findIndex(p => p.id === userId);
-      if (active.length === 1) { game.winnerId = active[0].id; active[0].chips += game.pot; game.phase = game.roundNumber >= game.roundsTotal ? 'complete' : 'round_complete'; game.message = game.phase === 'complete' ? 'Match complete: everyone else folded.' : `Round ${game.roundNumber} complete. Host can start the next round.`; }
-      else if (index === active.length - 1) { game.community.push(game.deck.pop(), game.deck.pop()); const winner = active[Math.floor(Math.random() * active.length)]; winner.chips += game.pot; game.winnerId = winner.id; game.phase = game.roundNumber >= game.roundsTotal ? 'complete' : 'round_complete'; game.message = game.phase === 'complete' ? 'Match complete: showdown complete.' : `Round ${game.roundNumber} complete. Host can start the next round.`; }
+      if (active.length === 1) { game.winnerId = active[0].id; active[0].chips += game.pot; game.phase = game.roundNumber >= game.roundsTotal ? 'complete' : 'round_complete'; game.message = game.phase === 'complete' ? 'Match complete: everyone else folded.' : `Round ${game.roundNumber} complete. Host can start the next round.`; if (game.phase === 'complete') await settleCallGame(roomId, game.message); }
+      else if (index === active.length - 1) { game.community.push(game.deck.pop(), game.deck.pop()); const winner = active[Math.floor(Math.random() * active.length)]; winner.chips += game.pot; game.winnerId = winner.id; game.phase = game.roundNumber >= game.roundsTotal ? 'complete' : 'round_complete'; game.message = game.phase === 'complete' ? 'Match complete: showdown complete.' : `Round ${game.roundNumber} complete. Host can start the next round.`; if (game.phase === 'complete') await settleCallGame(roomId, game.message); }
       else game.turnId = active[index + 1].id;
     }
     emitGame(roomId);

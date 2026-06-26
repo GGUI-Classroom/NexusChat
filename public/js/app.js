@@ -3351,6 +3351,7 @@
   let activeCallGame = null;
   let availableCallGame = null;
   let pendingActivityInvite = null;
+  function nexalsToTableTokens(nexals) { return Math.floor(((parseInt(nexals, 10) || 0) * 1000) / 900); }
   function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
   function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
   function renderCallGame(game) {
@@ -3358,12 +3359,14 @@
     const content = $('call-games-content');
     if (!game) {
       const openRoom = availableCallGame ? `<button class="game-choice open" onclick="joinAvailableCallGame()"><strong>${availableCallGame.type === 'poker' ? "Texas Hold'em" : 'Blackjack'} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span></button>` : '';
-      content.innerHTML = `<div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Shared dealer table. Hit or stand as a group.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Private cards, community cards, turns, folds and a shared pot.</span></button></div>`;
+      content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">900 Nexals = 1,000 table tokens</span></div><div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button></div>`;
+      const buyInput = $('call-buyin-input');
+      if (buyInput) buyInput.addEventListener('input', () => { const tokens = nexalsToTableTokens(buyInput.value); $('call-token-preview').textContent = `${(parseInt(buyInput.value, 10) || 0).toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens`; });
       return;
     }
     const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
     const joined = game.players.some(player => player.id === currentUser.id);
-    const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for the other call participant to join.' : 'Both players joined. Start when ready.'}</p>${!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : ''}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,7,10].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${game.type === 'poker' ? 'Poker' : 'Blackjack'}</button>` : ''}`;
+    const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for the other call participant to join.' : 'Both players joined. Start when ready.'}</p>${!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : ''}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,10,15].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${game.type === 'poker' ? 'Poker' : 'Blackjack'}</button>` : ''}`;
     const end = game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : '';
     const leave = joined ? '<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>' : '';
     if (game.type === 'blackjack' && game.phase !== 'lobby') {
@@ -3371,7 +3374,7 @@
         ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>'
         : game.phase === 'complete' ? `<button class="btn-primary" onclick="openCallGame('blackjack')">New Match</button>` : '';
       const nextRound = game.phase === 'round_complete' && game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Start Next Round</button>' : '';
-      content.innerHTML = `<div class="call-blackjack-table blackjack-window"><div class="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Blackjack Table</b><small>Call activity</small></div><span>Round ${game.roundNumber || 1} / ${game.roundsTotal || 1}</span></div><div class="blackjack-window-body"><div class="blackjack-table-felt"><div class="call-blackjack-dealer"><div class="blackjack-head"><b>Dealer${game.dealer?.score !== null && game.dealer?.score !== undefined ? ' - ' + game.dealer.score : ''}</b><span>Round ${game.roundNumber || 1} of ${game.roundsTotal || 1}</span></div>${blackjackCards(game.dealer?.hand || [])}</div><div class="call-blackjack-players">${game.players.map(player => `<div class="call-blackjack-seat"><div class="blackjack-seat"><span>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''}</span><b>${player.score || 0}</b></div>${blackjackCards(player.hand || [])}</div>`).join('')}</div>${game.message ? `<p class="blackjack-result">${esc(game.message)}</p>` : ''}<div class="game-actions">${actionButtons}${nextRound}${leave}${end}</div></div></div></div>`;
+      content.innerHTML = `<div class="call-blackjack-table blackjack-window"><div class="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Blackjack Table</b><small>Call activity</small></div><span>Round ${game.roundNumber || 1} / ${game.roundsTotal || 1}</span></div><div class="blackjack-window-body"><div class="blackjack-table-felt"><div class="call-blackjack-dealer"><div class="blackjack-head"><b>Dealer${game.dealer?.score !== null && game.dealer?.score !== undefined ? ' - ' + game.dealer.score : ''}</b><span>Round ${game.roundNumber || 1} of ${game.roundsTotal || 1}</span></div>${blackjackCards(game.dealer?.hand || [])}</div><div class="call-blackjack-players">${game.players.map(player => `<div class="call-blackjack-seat"><div class="blackjack-seat"><span>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''} | Bet ${(player.bet || 0).toLocaleString()}</span><b>${player.score || 0}</b><small>${(player.chips || 0).toLocaleString()} tokens</small></div>${blackjackCards(player.hand || [])}</div>`).join('')}</div>${game.message ? `<p class="blackjack-result">${esc(game.message)}</p>` : ''}<div class="game-actions">${actionButtons}${nextRound}${leave}${end}</div></div></div></div>`;
       return;
     }
     if (game.type === 'poker' && game.phase !== 'lobby') {
@@ -3384,11 +3387,13 @@
   window.openCallGame = function(type) {
     const roomId = activeGameRoomId();
     if (!roomId || !socket) return toast('Join a call first', 'error');
-    renderCallGame({ type, phase: 'lobby', hostId: currentUser.id, players: [{ id: currentUser.id, displayName: currentUser.displayName, chips: 1000, hand: [] }], dealer: type === 'blackjack' ? { hand: [], score: null } : null, community: [], pot: 0, message: 'Opening table...' });
-    socket.emit('call_game_open', { roomId, type }, result => { if (result && result.error) { activeCallGame = null; renderCallGame(null); toast(result.error, 'error'); } });
+    const buyIn = parseInt($('call-buyin-input')?.value, 10) || 0;
+    const bet = parseInt($('call-bet-input')?.value, 10) || 0;
+    renderCallGame({ type, phase: 'lobby', hostId: currentUser.id, players: [{ id: currentUser.id, displayName: currentUser.displayName, chips: nexalsToTableTokens(buyIn), buyIn, bet, hand: [] }], dealer: type === 'blackjack' ? { hand: [], score: null } : null, community: [], pot: 0, message: 'Opening table...' });
+    socket.emit('call_game_open', { roomId, type, buyIn, bet }, result => { if (result && result.error) { activeCallGame = null; renderCallGame(null); toast(result.error, 'error'); } });
   };
-  window.joinCallGame = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_join', { roomId }); };
-  window.joinAvailableCallGame = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_join', { roomId }); };
+  window.joinCallGame = function() { const roomId = activeGameRoomId(); const buyIn = parseInt($('call-buyin-input')?.value, 10) || 0; const bet = parseInt($('call-bet-input')?.value, 10) || 0; if (roomId && socket) socket.emit('call_game_join', { roomId, buyIn, bet }); };
+  window.joinAvailableCallGame = function() { window.joinCallGame(); };
   window.startCallGame = function() { const roomId = activeGameRoomId(); const rounds = parseInt($('call-round-count')?.value, 10) || 3; if (roomId && socket) socket.emit('call_game_start', { roomId, rounds }); };
   window.nextCallGameRound = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_next_round', { roomId }); };
   window.callGameAction = function(action) { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
@@ -3400,7 +3405,7 @@
   $('call-games-content').addEventListener('click', e => { const choice = e.target.closest('[data-game-type]'); if (choice) window.openCallGame(choice.dataset.gameType); });
   $('activity-invite-join').addEventListener('click', () => {
     if (!pendingActivityInvite || !socket) return;
-    socket.emit('call_game_join', { roomId: pendingActivityInvite.roomId });
+    socket.emit('call_game_join', { roomId: pendingActivityInvite.roomId, buyIn: 900, bet: 100 });
     $('activity-invite-modal').classList.remove('active');
     $('call-games-modal').classList.add('active');
     pendingActivityInvite = null;
@@ -3492,6 +3497,9 @@
       $('activity-invite-modal').classList.remove('active');
       if ($('call-games-modal').classList.contains('active')) renderCallGame(null);
       toast(reason || 'Activity ended', 'info');
+    });
+    socket.on('nexals_updated', ({ nexals }) => {
+      if (typeof nexals === 'number') updateNexalDisplay(nexals);
     });
 
     socket.on('connect', () => {
@@ -5810,11 +5818,17 @@
       return `<span class="playing-card${suit.red ? ' red' : ''}" aria-label="${esc(card.rank)} of ${suit.name}"><b>${esc(card.rank)}</b><em>${suit.icon}</em><small>${esc(card.rank)} ${suit.icon}</small></span>`;
     }).join('')}</div>`;
   }
+  function updateBlackjackTokenPreview() {
+    const buyIn = parseInt($('blackjack-buyin-input')?.value, 10) || 0;
+    const tokens = nexalsToTableTokens(buyIn);
+    const preview = $('blackjack-token-preview');
+    if (preview) preview.textContent = `${buyIn.toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens. 1,000 tokens cash out for 900 Nexals.`;
+  }
   function renderStatsBlackjack(table) {
     const target = $('games-blackjack-table');
     if (!target) return;
     const canCashout = table.handsSinceCashout >= 15 && table.chips >= 1000;
-    target.innerHTML = `<div class="blackjack-window" id="blackjack-window"><div class="blackjack-window-bar" id="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Blackjack Table</b><small>vs Nexus Dealer</small></div><div><button class="blackjack-window-btn" id="blackjack-minimize" title="Minimize">_</button></div></div><div class="blackjack-window-body"><div class="blackjack-table-felt"><div class="blackjack-head"><b>Dealer${table.dealerScore !== null ? ' - ' + table.dealerScore : ''}</b><span>${table.chips} table chips${table.buyIn ? ' | ' + table.buyIn.toLocaleString() + ' Nexal buy-in' : ''}</span></div>${blackjackCards(table.dealerHand)}<div class="blackjack-seat"><span>YOUR HAND</span><b>${table.playerScore}</b></div>${blackjackCards(table.playerHand)}${table.result ? `<p class="blackjack-result">${esc(table.result)}</p>` : ''}<div class="blackjack-cashout"><span>${table.handsSinceCashout}/15 hands until cashout</span><button class="btn-secondary" onclick="cashoutBlackjack()" ${canCashout ? '' : 'disabled'}>Cash Out ${Math.floor(table.chips / 1000) * 900} Nexals</button></div><div class="game-actions">${table.status === 'playing' ? '<button class="btn-secondary" onclick="statsBlackjackAction(\'hit\')">Hit</button><button class="btn-primary" onclick="statsBlackjackAction(\'stand\')">Stand</button>' : '<button class="btn-primary" onclick="openStatsBlackjack()">New Hand</button>'}</div></div></div></div>`;
+    target.innerHTML = `<div class="blackjack-window" id="blackjack-window"><div class="blackjack-window-bar" id="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Blackjack Table</b><small>vs Nexus Dealer</small></div><div><button class="blackjack-window-btn" id="blackjack-minimize" title="Minimize">_</button></div></div><div class="blackjack-window-body"><div class="blackjack-table-felt"><div class="blackjack-head"><b>Dealer${table.dealerScore !== null ? ' - ' + table.dealerScore : ''}</b><span>${(table.chips || 0).toLocaleString()} tokens | Bet ${(table.bet || 0).toLocaleString()}${table.buyIn ? ' | ' + table.buyIn.toLocaleString() + ' Nexal buy-in' : ''}</span></div>${blackjackCards(table.dealerHand)}<div class="blackjack-seat"><span>YOUR HAND</span><b>${table.playerScore}</b></div>${blackjackCards(table.playerHand)}${table.result ? `<p class="blackjack-result">${esc(table.result)}</p>` : ''}<div class="blackjack-cashout"><span>${table.handsSinceCashout}/15 hands until cashout</span><button class="btn-secondary" onclick="cashoutBlackjack()" ${canCashout ? '' : 'disabled'}>Cash Out ${Math.floor(table.chips / 1000) * 900} Nexals</button></div><div class="game-actions">${table.status === 'playing' ? '<button class="btn-secondary" onclick="statsBlackjackAction(\'hit\')">Hit</button><button class="btn-primary" onclick="statsBlackjackAction(\'stand\')">Stand</button>' : '<button class="btn-primary" onclick="openStatsBlackjack()">New Hand</button>'}</div></div></div></div>`;
     enableBlackjackWindow();
   }
   function enableBlackjackWindow() {
@@ -5827,9 +5841,10 @@
     bar.addEventListener('pointerup', () => { drag = null; });
   }
   async function loadGamesHub() {
-    $('games-content').innerHTML = `<div class="games-grid"><button class="game-hub-card blackjack" onclick="openStatsBlackjack()"><span class="game-hub-icon">21</span><strong>Blackjack</strong><small>Beat the dealer</small><p>Start free or stake Nexals into extra table chips. Cash out after 15 hands.</p><b>Play Solo</b></button><button class="game-hub-card poker" onclick="openCallGamesFromHub()"><span class="game-hub-icon">&#9824;</span><strong>Texas Hold'em</strong><small>Call table</small><p>Private cards, community cards, and a shared pot with up to six players.</p><b>Play In A Call</b></button></div><div class="blackjack-buyin-panel"><label>Solo blackjack buy-in <input id="blackjack-buyin-input" type="number" min="0" max="100000" step="100" value="0"></label><span>0 is free. Buy-in adds table chips 1:1.</span></div><div id="games-blackjack-table"></div>`;
+    $('games-content').innerHTML = `<div class="games-grid"><button class="game-hub-card blackjack" onclick="openStatsBlackjack()"><span class="game-hub-icon">21</span><strong>Blackjack</strong><small>Beat the dealer</small><p>Buy table tokens with Nexals, set your hand bet, and cash out after 15 hands.</p><b>Play Solo</b></button><button class="game-hub-card poker" onclick="openCallGamesFromHub()"><span class="game-hub-icon">&#9824;</span><strong>Texas Hold'em</strong><small>Call table</small><p>Private cards, community cards, and a shared pot with up to six players.</p><b>Play In A Call</b></button></div><div class="blackjack-buyin-panel"><label>Solo blackjack buy-in <input id="blackjack-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="blackjack-bet-input" type="number" min="1" step="50" value="100"></label><span id="blackjack-token-preview">900 Nexals = 1,000 table tokens. 1,000 tokens cash out for 900 Nexals.</span></div><div id="games-blackjack-table"></div>`;
+    $('blackjack-buyin-input')?.addEventListener('input', updateBlackjackTokenPreview);
   }
-  window.openStatsBlackjack = async function() { const buyIn = parseInt($('blackjack-buyin-input')?.value, 10) || 0; const r = await api('POST', '/api/games/blackjack/start', { buyIn }); if (r.error) return toast(r.error, 'error'); if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals); renderStatsBlackjack(r.table); };
+  window.openStatsBlackjack = async function() { const buyIn = parseInt($('blackjack-buyin-input')?.value, 10) || 0; const bet = parseInt($('blackjack-bet-input')?.value, 10) || 0; const r = await api('POST', '/api/games/blackjack/start', { buyIn, bet }); if (r.error) return toast(r.error, 'error'); if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals); renderStatsBlackjack(r.table); };
   window.openCallGamesFromHub = function() { if (!activeGameRoomId()) return toast('Start or join a call to open the Poker table', 'info'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); };
   window.statsBlackjackAction = async function(action) { const r = await api('POST', '/api/games/blackjack/action', { action }); if (r.error) return toast(r.error, 'error'); renderStatsBlackjack(r.table); };
   window.cashoutBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/cashout'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); renderStatsBlackjack(r.table); toast(`Cashed out ${r.earned} Nexals`, 'success'); };

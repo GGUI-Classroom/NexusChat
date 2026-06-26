@@ -6028,6 +6028,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .auction-sell-row select,
 .auction-sell-row input,
 .economy-create input,
+.call-token-panel input,
 .blackjack-buyin-panel input {
   background: var(--bg-void);
   border: 1px solid var(--border-bright);
@@ -6081,6 +6082,30 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .economy-card.disabled {
   opacity: 0.6;
 }
+.call-token-panel {
+  margin-bottom: 14px;
+  padding: 12px;
+  background: rgba(10, 15, 30, 0.55);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 10px;
+}
+.call-token-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+.call-token-panel span {
+  grid-column: 1 / -1;
+  color: var(--accent-yellow);
+  font-size: 12px;
+  font-weight: 800;
+}
 .blackjack-buyin-panel {
   margin: 0 20px 16px;
   padding: 12px 14px;
@@ -6101,4 +6126,9 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .blackjack-buyin-panel span {
   color: var(--text-secondary);
   font-size: 12px;
+}
+@media (max-width: 640px) {
+  .call-token-panel {
+    grid-template-columns: 1fr;
+  }
 }
