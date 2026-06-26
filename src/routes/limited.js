@@ -234,15 +234,15 @@ router.post('/redeem', async (req, res) => {
     await client.query('BEGIN');
     const result = await client.query(
       `SELECT * FROM limited_redemption_codes
-       WHERE code_hash=$1 AND user_id=$2
+       WHERE code_hash=$1
        FOR UPDATE`,
-      [hash(code), req.session.userId]
+      [hash(code)]
     );
     const redemption = result.rows[0];
     const now = nowSeconds();
     if (!redemption) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Limited-edition code not found for this account' });
+      return res.status(404).json({ error: 'Limited-edition code not found' });
     }
     if (redemption.redeemed_at) {
       await client.query('ROLLBACK');
@@ -279,8 +279,8 @@ router.post('/redeem', async (req, res) => {
     }
 
     await client.query(
-      'UPDATE limited_redemption_codes SET redeemed_at=$1 WHERE id=$2',
-      [now, redemption.id]
+      'UPDATE limited_redemption_codes SET redeemed_at=$1, redeemed_by=$2 WHERE id=$3',
+      [now, req.session.userId, redemption.id]
     );
     await client.query('COMMIT');
     res.json({ success: true, reward: responseReward });

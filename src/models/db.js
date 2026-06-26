@@ -401,8 +401,10 @@ async function initDb() {
     reward_data JSONB NOT NULL DEFAULT '{}'::jsonb,
     expires_at BIGINT NOT NULL,
     redeemed_at BIGINT DEFAULT NULL,
+    redeemed_by TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
   )`, 'limited_redemption_codes');
+  await runSql(`ALTER TABLE limited_redemption_codes ADD COLUMN IF NOT EXISTS redeemed_by TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL`, 'alter_limited_redemption_redeemed_by');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_limited_redemption_user ON limited_redemption_codes(user_id, expires_at)`, 'idx_limited_redemption_user');
 
   await runSql(`CREATE TABLE IF NOT EXISTS user_achievements (
