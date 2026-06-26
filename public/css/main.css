@@ -1839,6 +1839,17 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .profile-popup-tag img { width:18px;height:18px;border-radius:50%;object-fit:cover; }
 .profile-popup-tag-invite { margin:2px 0 10px;padding:10px;border:1px solid var(--border-bright);background:var(--bg-surface);font-size:12px;color:var(--text-secondary); }.profile-popup-tag-invite strong { display:block;color:var(--text-primary);margin-bottom:3px; }.profile-popup-tag-invite button { margin-top:8px;width:100%;padding:7px;border:0;background:var(--accent);color:#fff;font-weight:800;cursor:pointer; }
 .profile-popup-discord-activity { margin:8px 0 2px; padding:7px 9px; border-left:3px solid #5865f2; background:rgba(88,101,242,.12); color:var(--text-secondary); font-size:12px; line-height:1.35; }
+#popup-gift-actions { display:flex; }
+.tutorial-modal { max-width:620px; }
+.tutorial-progress { display:flex; gap:7px; justify-content:center; margin:2px 0 8px; }
+.tutorial-progress span { width:8px; height:8px; border-radius:50%; background:var(--border-bright); opacity:.65; }
+.tutorial-progress span.active { width:28px; border-radius:999px; background:linear-gradient(90deg,var(--accent),#22d3ee); opacity:1; }
+.tutorial-card { border:1px solid var(--border-bright); background:linear-gradient(145deg,rgba(88,101,242,.16),rgba(34,211,238,.08)); border-radius:12px; padding:24px; text-align:center; }
+.tutorial-icon { width:54px; height:54px; margin:0 auto 14px; border-radius:16px; display:grid; place-items:center; font-weight:900; color:#fff; background:linear-gradient(135deg,var(--accent),#a855f7); box-shadow:0 16px 40px rgba(88,101,242,.28); }
+.tutorial-card h3 { margin:0 0 10px; font-size:24px; }
+.tutorial-card p { margin:0 auto; max-width:470px; color:var(--text-secondary); line-height:1.55; }
+.tutorial-actions { display:flex; gap:10px; justify-content:flex-end; align-items:center; }
+.tutorial-actions #tutorial-skip-btn { margin-right:auto; }
 .profile-tag-choices { display:flex; flex-wrap:wrap; gap:7px; }
 .tag-choice { border:1px solid var(--border); background:var(--bg-input); color:var(--text-secondary); padding:7px 9px; border-radius:5px; cursor:pointer; font:inherit; font-size:12px; font-weight:700; }
 .tag-choice:hover,.tag-choice.selected { border-color:var(--accent); color:var(--text-primary); background:color-mix(in srgb, var(--tag-bg, var(--accent)) 22%, var(--bg-input)); }

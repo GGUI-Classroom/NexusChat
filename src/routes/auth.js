@@ -30,7 +30,7 @@ router.post('/register', async (req, res) => {
     if (exists.rows.length) return res.status(409).json({ error: 'Username already taken' });
     const hash = await bcrypt.hash(password, 12);
     const id = uuidv4();
-    await pool.query('INSERT INTO users (id, username, display_name, password_hash, last_ip, last_device_id) VALUES ($1,$2,$3,$4,$5,$6)',
+    await pool.query('INSERT INTO users (id, username, display_name, password_hash, last_ip, last_device_id, tutorial_completed) VALUES ($1,$2,$3,$4,$5,$6,FALSE)',
       [id, username.toLowerCase(), displayName, hash, ip || null, deviceId || null]);
     const defaultServer = await pool.query(
       'SELECT id FROM servers WHERE UPPER(invite_code)=UPPER($1) LIMIT 1',
@@ -45,7 +45,7 @@ router.post('/register', async (req, res) => {
     }
     req.session.userId = id;
     const systemReport = await getActiveReportForUser(pool, id);
-    return res.json({ success: true, systemReport, user: { id, username: username.toLowerCase(), displayName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null } });
+    return res.json({ success: true, systemReport, user: { id, username: username.toLowerCase(), displayName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null, tutorialCompleted: false } });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'Server error' });
@@ -65,7 +65,7 @@ router.post('/login', async (req, res) => {
     const r = await pool.query(
       `SELECT id, username, display_name, password_hash, bio, (avatar_data IS NOT NULL) AS has_avatar,
         active_decoration, active_color, active_font, active_ringtone, pro_expires_at,
-        profile_gradient_start, profile_gradient_end, profile_name_effect
+        profile_gradient_start, profile_gradient_end, profile_name_effect, tutorial_completed
        FROM users WHERE LOWER(username)=LOWER($1)`,
       [username]
     );
@@ -99,7 +99,7 @@ router.post('/login', async (req, res) => {
       activeColor: user.active_color || null,
         activeFont: user.active_font || null,
       activeRingtone: user.active_ringtone || null,
-      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none'
+      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', tutorialCompleted: user.tutorial_completed !== false
     }});
   } catch (e) {
     console.error(e);
@@ -130,7 +130,7 @@ router.get('/me', async (req, res) => {
     }
 
     const r = await pool.query(
-      'SELECT u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.bio, u.active_decoration, u.active_color, u.active_font, u.active_ringtone, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, s.id AS tag_server_id, s.name AS tag_server_name, s.invite_code AS tag_invite_code, s.server_tag, s.tag_background FROM users u LEFT JOIN servers s ON s.id=u.active_server_tag_id WHERE u.id=$1',
+      'SELECT u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.bio, u.active_decoration, u.active_color, u.active_font, u.active_ringtone, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, u.tutorial_completed, s.id AS tag_server_id, s.name AS tag_server_name, s.invite_code AS tag_invite_code, s.server_tag, s.tag_background FROM users u LEFT JOIN servers s ON s.id=u.active_server_tag_id WHERE u.id=$1',
       [req.session.userId]
     );
     const user = r.rows[0];
@@ -145,7 +145,7 @@ router.get('/me', async (req, res) => {
       activeColor: user.active_color || null,
         activeFont: user.active_font || null,
       activeRingtone: user.active_ringtone || null,
-      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_server_name || null, activeServerTagInviteCode: user.tag_invite_code || null
+      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_server_name || null, activeServerTagInviteCode: user.tag_invite_code || null, tutorialCompleted: user.tutorial_completed !== false
     }});
   } catch (e) {
     return res.status(500).json({ error: 'Server error' });

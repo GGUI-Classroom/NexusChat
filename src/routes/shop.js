@@ -563,6 +563,120 @@ router.post('/equip', async (req, res) => {
   res.json({ success: true, active: decorationId || null });
 });
 
+router.post('/gift/nexals', async (req, res) => {
+  const toUserId = String(req.body.toUserId || '').trim();
+  const amount = Math.floor(parseInt(req.body.amount, 10) || 0);
+  if (!toUserId || toUserId === req.session.userId) return res.status(400).json({ error: 'Choose a valid recipient' });
+  if (amount < 1 || amount > 1000000) return res.status(400).json({ error: 'Enter a gift amount from 1 to 1,000,000 Nexals' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const friendship = await client.query(
+      `SELECT id FROM friendships
+       WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)
+       LIMIT 1`,
+      [req.session.userId, toUserId]
+    );
+    if (!friendship.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'You can only gift Nexals to friends' });
+    }
+    const sender = await client.query('SELECT nexals FROM users WHERE id=$1 FOR UPDATE', [req.session.userId]);
+    const recipient = await client.query('SELECT id, username, display_name FROM users WHERE id=$1 FOR UPDATE', [toUserId]);
+    if (!recipient.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Recipient not found' });
+    }
+    if ((sender.rows[0]?.nexals || 0) < amount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Not enough Nexals for that gift' });
+    }
+    const updatedSender = await client.query('UPDATE users SET nexals=nexals-$1 WHERE id=$2 RETURNING nexals', [amount, req.session.userId]);
+    const updatedRecipient = await client.query('UPDATE users SET nexals=nexals+$1 WHERE id=$2 RETURNING nexals', [amount, toUserId]);
+    await client.query('COMMIT');
+    if (req.io) {
+      req.io.to(`user:${req.session.userId}`).emit('nexals_updated', { nexals: updatedSender.rows[0].nexals });
+      req.io.to(`user:${toUserId}`).emit('nexals_updated', { nexals: updatedRecipient.rows[0].nexals });
+      req.io.to(`user:${toUserId}`).emit('gift_received', {
+        type: 'nexals',
+        amount,
+        fromUserId: req.session.userId
+      });
+    }
+    res.json({ success: true, nexals: updatedSender.rows[0].nexals, recipient: { id: toUserId, username: recipient.rows[0].username, displayName: recipient.rows[0].display_name } });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Nexal gift failed:', error.message);
+    res.status(500).json({ error: 'Could not send Nexal gift' });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/gift/decoration', async (req, res) => {
+  const toUserId = String(req.body.toUserId || '').trim();
+  const decorationId = String(req.body.decorationId || '').trim();
+  if (!toUserId || toUserId === req.session.userId) return res.status(400).json({ error: 'Choose a valid recipient' });
+  const deco = DECORATIONS.find(d => d.id === decorationId);
+  if (!deco) return res.status(404).json({ error: 'Decoration not found' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const friendship = await client.query(
+      `SELECT id FROM friendships
+       WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)
+       LIMIT 1`,
+      [req.session.userId, toUserId]
+    );
+    if (!friendship.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'You can only gift decorations to friends' });
+    }
+    const recipient = await client.query('SELECT id, username, display_name FROM users WHERE id=$1', [toUserId]);
+    if (!recipient.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Recipient not found' });
+    }
+    const copy = await client.query(
+      `SELECT ud.id
+       FROM user_decorations ud
+       LEFT JOIN decoration_auctions da ON da.decoration_row_id=ud.id AND da.status='active'
+       WHERE ud.user_id=$1 AND ud.decoration_id=$2 AND da.id IS NULL
+       ORDER BY ud.unlocked_at DESC, ud.id DESC
+       LIMIT 1
+       FOR UPDATE OF ud`,
+      [req.session.userId, decorationId]
+    );
+    if (!copy.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'You do not have an available copy to gift' });
+    }
+    await client.query('UPDATE user_decorations SET user_id=$1 WHERE id=$2', [toUserId, copy.rows[0].id]);
+    const remaining = await client.query('SELECT 1 FROM user_decorations WHERE user_id=$1 AND decoration_id=$2 LIMIT 1', [req.session.userId, decorationId]);
+    if (!remaining.rows.length) {
+      await client.query('UPDATE users SET active_decoration=NULL WHERE id=$1 AND active_decoration=$2', [req.session.userId, decorationId]);
+    }
+    await client.query('COMMIT');
+    if (req.io) {
+      req.io.to(`user:${toUserId}`).emit('gift_received', {
+        type: 'decoration',
+        decoration: toClientDecoration(deco, 1),
+        fromUserId: req.session.userId
+      });
+    }
+    await syncAchievementFields(toUserId, ['decos_owned']);
+    res.json({ success: true, decoration: toClientDecoration(deco, 1), recipient: { id: toUserId, username: recipient.rows[0].username, displayName: recipient.rows[0].display_name } });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Decoration gift failed:', error.message);
+    res.status(500).json({ error: 'Could not send decoration gift' });
+  } finally {
+    client.release();
+  }
+});
+
 // Buy a decoration with nexals
 router.post('/buy', async (req, res) => {
   const { decorationId } = req.body;

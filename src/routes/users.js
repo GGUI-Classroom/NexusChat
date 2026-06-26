@@ -98,6 +98,11 @@ router.get('/client-state', requireAuth, async (req, res) => {
   });
 });
 
+router.post('/tutorial/complete', requireAuth, async (req, res) => {
+  await pool.query('UPDATE users SET tutorial_completed=TRUE WHERE id=$1', [req.session.userId]);
+  res.json({ success: true });
+});
+
 router.post('/system-report/:reportId/ack', requireAuth, async (req, res) => {
   const reportId = String(req.params.reportId || '').trim();
   if (!reportId) return res.status(400).json({ error: 'Report id required' });

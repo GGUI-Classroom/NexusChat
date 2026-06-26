@@ -1552,6 +1552,9 @@
         pendingSystemReport = null;
         setTimeout(() => showSystemReport(report), 350);
       }
+      if (currentUser && currentUser.tutorialCompleted === false) {
+        setTimeout(() => showTutorial(), 650);
+      }
     } catch(e) {
       console.error('enterApp crash:', e);
       alert('Login succeeded but app failed to load: ' + e.message);
@@ -1569,6 +1572,52 @@
       $('nexus-report-overlay').style.display = 'none';
     });
   }
+
+  const tutorialSteps = [
+    { icon: 'N', title: 'Welcome to Nexus', body: 'Nexus works like a chat hub: friends and DMs live on the left, servers live on the far rail, and your profile controls are at the bottom.' },
+    { icon: '+', title: 'Create or Join Servers', body: 'Use the plus button on the server rail to create a server or join one with an invite code. Server owners and admins can add channels, reorder them, set roles, and manage boosts.' },
+    { icon: '@', title: 'Add Friends and Chat', body: 'Open Friends, search a username, and send a request. After they accept, you can DM, call, send pings, gift Nexals, and gift decorations from their profile.' },
+    { icon: '$', title: 'Earn and Spend Nexals', body: 'Nexals buy packs, Pro, boosts, ringtones, and game chips. You can earn them through quests, achievements, games, selling decorations, and auction sales.' },
+    { icon: '*', title: 'Decorations and Packs', body: 'Open packs in the Shop to unlock avatar decorations. Duplicates are allowed, and you can equip, sell, auction, or gift available copies.' },
+    { icon: 'A', title: 'Auction House and Stats', body: 'Stats shows collection value and duplicate selling. Auction lets you list decorations at your own price so other users can buy them.' },
+    { icon: '!', title: 'Safety Tools', body: 'Report messages or users from chat/profile popups. Admins review reports, publish alerts, suspend accounts, and manage device bans.' }
+  ];
+  let tutorialIndex = 0;
+
+  function renderTutorial() {
+    const step = tutorialSteps[tutorialIndex];
+    $('tutorial-title').textContent = `Nexus Tutorial ${tutorialIndex + 1}/${tutorialSteps.length}`;
+    $('tutorial-icon').textContent = step.icon;
+    $('tutorial-step-title').textContent = step.title;
+    $('tutorial-step-body').textContent = step.body;
+    $('tutorial-progress').innerHTML = tutorialSteps.map((_, i) => `<span class="${i === tutorialIndex ? 'active' : ''}"></span>`).join('');
+    $('tutorial-prev-btn').disabled = tutorialIndex === 0;
+    $('tutorial-next-btn').textContent = tutorialIndex === tutorialSteps.length - 1 ? 'Finish' : 'Next';
+  }
+
+  function showTutorial() {
+    tutorialIndex = 0;
+    renderTutorial();
+    $('tutorial-overlay').classList.add('active');
+  }
+
+  async function finishTutorial() {
+    $('tutorial-overlay').classList.remove('active');
+    if (currentUser) currentUser.tutorialCompleted = true;
+    await api('POST', '/api/users/tutorial/complete').catch(() => {});
+  }
+
+  if ($('tutorial-next-btn')) $('tutorial-next-btn').addEventListener('click', () => {
+    if (tutorialIndex >= tutorialSteps.length - 1) return finishTutorial();
+    tutorialIndex += 1;
+    renderTutorial();
+  });
+  if ($('tutorial-prev-btn')) $('tutorial-prev-btn').addEventListener('click', () => {
+    tutorialIndex = Math.max(0, tutorialIndex - 1);
+    renderTutorial();
+  });
+  if ($('tutorial-skip-btn')) $('tutorial-skip-btn').addEventListener('click', finishTutorial);
+  if ($('tutorial-skip-x')) $('tutorial-skip-x').addEventListener('click', finishTutorial);
 
   async function loadPersistedClientState() {
     const r = await api('GET', '/api/users/client-state');
@@ -3552,6 +3601,13 @@
     });
     socket.on('nexals_updated', ({ nexals }) => {
       if (typeof nexals === 'number') updateNexalDisplay(nexals);
+    });
+    socket.on('gift_received', gift => {
+      if (!gift) return;
+      if (gift.type === 'nexals') toast(`Gift received: ${(gift.amount || 0).toLocaleString()} Nexals`, 'success');
+      if (gift.type === 'decoration') toast(`Gift received: ${gift.decoration?.name || 'Decoration'}`, 'success');
+      if (activeView === 'shop') loadShop();
+      if (activeView === 'stats') loadCollectionStats();
     });
 
     socket.on('connect', () => {
@@ -6758,6 +6814,55 @@
     });
   }
 
+  let giftTarget = null;
+  let giftMode = 'nexals';
+
+  async function openGiftModal(mode, target) {
+    giftTarget = target;
+    giftMode = mode;
+    showError('gift-error', '');
+    $('gift-modal-title').textContent = mode === 'nexals' ? 'Gift Nexals' : 'Gift Decoration';
+    $('gift-recipient').textContent = `Sending to ${target.displayName || target.username} (@${target.username})`;
+    $('gift-nexal-fields').style.display = mode === 'nexals' ? 'block' : 'none';
+    $('gift-decoration-fields').style.display = mode === 'decoration' ? 'block' : 'none';
+    $('gift-nexal-amount').value = '';
+    if (mode === 'decoration') {
+      const r = await api('GET', '/api/shop');
+      if (r.error) return toast(r.error, 'error');
+      const owned = (r.decorations || []).filter(d => d.owned && (d.quantity || 0) > 0);
+      $('gift-decoration-select').innerHTML = owned.length
+        ? owned.map(d => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(d.rarity)}) x${d.quantity || 1}</option>`).join('')
+        : '<option value="">No decorations available</option>';
+    }
+    $('gift-modal').classList.add('active');
+  }
+
+  async function sendGift() {
+    if (!giftTarget) return;
+    const btn = $('gift-send-btn');
+    btn.disabled = true;
+    showError('gift-error', '');
+    const payload = { toUserId: giftTarget.id };
+    const path = giftMode === 'nexals' ? '/api/shop/gift/nexals' : '/api/shop/gift/decoration';
+    if (giftMode === 'nexals') {
+      payload.amount = parseInt($('gift-nexal-amount').value, 10) || 0;
+    } else {
+      payload.decorationId = $('gift-decoration-select').value;
+    }
+    const r = await api('POST', path, payload);
+    btn.disabled = false;
+    if (r.error) return showError('gift-error', r.error);
+    $('gift-modal').classList.remove('active');
+    if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals);
+    if (activeView === 'shop') await loadShop();
+    if (activeView === 'stats') await loadCollectionStats();
+    toast(giftMode === 'nexals' ? `Sent Nexals to @${r.recipient.username}` : `Sent ${r.decoration.name} to @${r.recipient.username}`, 'success');
+  }
+
+  if ($('gift-modal-close')) $('gift-modal-close').addEventListener('click', () => $('gift-modal').classList.remove('active'));
+  if ($('gift-modal')) $('gift-modal').addEventListener('click', e => { if (e.target === $('gift-modal')) $('gift-modal').classList.remove('active'); });
+  if ($('gift-send-btn')) $('gift-send-btn').addEventListener('click', sendGift);
+
   // ---- Profile Popup ----
   window.showProfilePopup = async function(e, encodedData) {
     e.stopPropagation();
@@ -6782,11 +6887,18 @@
       reportBtn.style.display = canReport ? 'block' : 'none';
       reportBtn.onclick = canReport ? () => window.reportUser(data.id, data.displayName || data.username) : null;
     }
+    const giftActions = $('popup-gift-actions');
+    if (giftActions) {
+      const canGift = currentUser && data.id && data.id !== currentUser.id;
+      giftActions.style.display = canGift ? 'flex' : 'none';
+      $('popup-gift-nexals').onclick = canGift ? () => openGiftModal('nexals', data) : null;
+      $('popup-gift-decoration').onclick = canGift ? () => openGiftModal('decoration', data) : null;
+    }
 
     // Position popup near the click
     popup.style.display = 'block';
     const x = e.clientX, y = e.clientY;
-    const pw = 280, ph = 260;
+    const pw = 280, ph = 340;
     const left = Math.min(x + 10, window.innerWidth - pw - 10);
     const top = Math.min(y, window.innerHeight - ph - 10);
     popup.style.left = left + 'px';
