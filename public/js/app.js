@@ -5282,7 +5282,9 @@
           </div>
         </section>
       </div>`;
-    host.querySelectorAll('.avatar-wrap[data-deco-id]').forEach(wrap => applyDecorationToWrap(wrap, wrap.dataset.decoId));
+    requestAnimationFrame(() => {
+      host.querySelectorAll('.auction-preview[data-deco-id]').forEach(wrap => applyDecorationToWrap(wrap, wrap.dataset.decoId));
+    });
   }
 
   window.createAuctionListing = async function() {

@@ -5941,9 +5941,27 @@ html, body {
   gap: 8px;
 }
 .auction-preview {
-  width: 54px;
-  height: 54px;
-  margin: 0 auto 4px;
+  width: 72px;
+  height: 72px;
+  margin: 2px auto 8px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  contain: layout;
+}
+.auction-preview .avatar {
+  width: 56px !important;
+  height: 56px !important;
+  font-size: 20px !important;
+  flex-shrink: 0;
+}
+.auction-preview .premium-deco {
+  inset: 1px;
+}
+.auction-preview .storm-canvas {
+  inset: 0;
 }
 .auction-card h3,
 .economy-card h3 {
@@ -12029,7 +12047,9 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
           </div>
         </section>
       </div>`;
-    host.querySelectorAll('.avatar-wrap[data-deco-id]').forEach(wrap => applyDecorationToWrap(wrap, wrap.dataset.decoId));
+    requestAnimationFrame(() => {
+      host.querySelectorAll('.auction-preview[data-deco-id]').forEach(wrap => applyDecorationToWrap(wrap, wrap.dataset.decoId));
+    });
   }
 
   window.createAuctionListing = async function() {
