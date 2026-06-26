@@ -151,6 +151,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/servers/:id/economy', require('./routes/economy'));
 app.use('/api/servers', require('./routes/servers'));
 app.use('/api/shop', require('./routes/shop'));
+app.use('/api/limited', require('./routes/limited'));
 app.use('/api/achievements', require('./routes/achievements'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/colors', require('./routes/colors'));
@@ -345,6 +346,10 @@ app.post('/api/nexus-link/calls/:roomId/decline', (req, res) => {
 
 app.get('/health', (req, res) => {
   res.json({ ok: true });
+});
+
+app.get('/limited', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/limited.html'));
 });
 
 app.get('*', (req, res) => {

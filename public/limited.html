@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#070a11">
+  <title>Nexus Limited</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070a11;
+      --panel: #111722;
+      --panel-2: #171f2d;
+      --line: #2b3648;
+      --text: #f4f7fb;
+      --muted: #93a1b5;
+      --accent: #5c72ff;
+      --cyan: #38d9d0;
+      --gold: #ffcc4d;
+      --danger: #ff5964;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 50% -20%, rgba(92,114,255,.22), transparent 42%),
+        var(--bg);
+      color: var(--text);
+      font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { width: min(920px, calc(100% - 32px)); margin: 0 auto; padding: 42px 0 64px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: 0; }
+    .mark {
+      display: grid; place-items: center; width: 38px; height: 38px;
+      border: 1px solid #7183ff; background: #101a42; color: #9eabff; clip-path: polygon(50% 0,94% 25%,94% 75%,50% 100%,6% 75%,6% 25%);
+    }
+    .back { color: var(--muted); text-decoration: none; }
+    .hero { max-width: 680px; margin-bottom: 28px; }
+    .eyebrow { color: var(--cyan); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
+    h1 { margin: 8px 0 10px; font-size: clamp(36px, 8vw, 68px); line-height: .98; letter-spacing: 0; }
+    .hero p { color: var(--muted); font-size: 17px; margin: 0; }
+    .panel { border: 1px solid var(--line); background: rgba(17,23,34,.94); border-radius: 8px; overflow: hidden; }
+    .stage { min-height: 360px; display: grid; place-items: center; padding: 34px; text-align: center; }
+    .nfc-glyph {
+      width: 116px; height: 116px; display: grid; place-items: center; margin: 0 auto 22px;
+      border-radius: 50%; border: 1px solid #4d5c78; background: #0d1320; position: relative;
+      box-shadow: 0 0 0 14px rgba(92,114,255,.05), 0 0 44px rgba(56,217,208,.12);
+    }
+    .nfc-glyph::before, .nfc-glyph::after { content: ""; position: absolute; border: 4px solid var(--cyan); border-left-color: transparent; border-bottom-color: transparent; border-radius: 50%; transform: rotate(45deg); }
+    .nfc-glyph::before { width: 38px; height: 38px; }
+    .nfc-glyph::after { width: 64px; height: 64px; opacity: .45; }
+    h2 { margin: 0 0 8px; font-size: 24px; }
+    .muted { color: var(--muted); }
+    .primary, .secondary {
+      min-height: 46px; border-radius: 6px; padding: 0 20px; font-weight: 750; border: 1px solid transparent;
+    }
+    .primary { background: var(--accent); color: white; box-shadow: 0 10px 28px rgba(92,114,255,.22); }
+    .secondary { background: var(--panel-2); color: var(--text); border-color: var(--line); }
+    .primary:disabled, .secondary:disabled { opacity: .5; cursor: not-allowed; }
+    .actions { display: flex; justify-content: center; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+    .error { color: #ff8088; min-height: 23px; margin-top: 12px; }
+    .reward-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: min(690px, 100%); margin: 22px auto; }
+    .reward-choice { border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 7px; padding: 18px 12px; }
+    .reward-choice.active { border-color: var(--cyan); box-shadow: inset 0 0 0 1px var(--cyan); }
+    .reward-icon { display: block; color: var(--gold); font-size: 24px; margin-bottom: 7px; }
+    .field { text-align: left; width: min(520px, 100%); margin: 14px auto 0; }
+    .field label { display: block; color: var(--muted); font-size: 12px; font-weight: 750; margin-bottom: 7px; text-transform: uppercase; letter-spacing: 1px; }
+    .field input, .field select { width: 100%; min-height: 48px; border: 1px solid var(--line); border-radius: 6px; background: #090d14; color: var(--text); padding: 0 13px; }
+    .code {
+      border: 1px solid #6e7fff; background: #090d18; border-radius: 7px; padding: 18px;
+      font: 800 clamp(15px, 4vw, 24px)/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+      color: #bdc6ff; word-break: break-all; margin: 22px 0 8px;
+    }
+    .admin { margin-top: 22px; padding: 22px; display: none; }
+    .admin.visible { display: block; }
+    .admin-head { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 18px; }
+    .admin-grid { display: grid; grid-template-columns: 1.2fr .8fr .8fr; gap: 10px; }
+    .admin .field { width: auto; margin: 0; }
+    .payload { margin-top: 16px; padding: 12px; background: #090d14; border: 1px solid var(--line); border-radius: 6px; color: var(--cyan); font-family: ui-monospace, monospace; word-break: break-all; }
+    [hidden] { display: none !important; }
+    @media (max-width: 680px) {
+      .shell { width: min(100% - 20px, 920px); padding-top: 22px; }
+      .stage { padding: 24px 16px; }
+      .reward-grid, .admin-grid { grid-template-columns: 1fr; }
+      .topbar { margin-bottom: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="mark">N</span><span>NEXUS LIMITED</span></div>
+      <a class="back" href="/">Back to Nexus</a>
+    </header>
+
+    <section class="hero">
+      <div class="eyebrow">Physical releases</div>
+      <h1>Tap into something rare.</h1>
+      <p>Scan an official Nexus NFC tag, choose its reward, then redeem the one-time code in the Decoration Shop.</p>
+    </section>
+
+    <section class="panel stage">
+      <div id="scan-stage">
+        <div class="nfc-glyph" aria-hidden="true"></div>
+        <h2>Ready to scan</h2>
+        <p class="muted" id="scan-help">Hold your Android phone near an official Nexus tag.</p>
+        <div class="actions"><button class="primary" id="scan-btn">Scan NFC Tag</button></div>
+        <div class="error" id="scan-error"></div>
+      </div>
+
+      <div id="choose-stage" hidden>
+        <div class="eyebrow">Tag verified</div>
+        <h2>Choose your reward</h2>
+        <p class="muted">This choice is final. Your generated code expires after 30 minutes.</p>
+        <div class="reward-grid">
+          <button class="reward-choice active" data-type="decoration"><span class="reward-icon">✦</span>Any Decoration</button>
+          <button class="reward-choice" data-type="nexals"><span class="reward-icon">N</span>Nexals</button>
+          <button class="reward-choice" data-type="pro"><span class="reward-icon">P</span>Nexus PRO</button>
+        </div>
+        <div class="field" id="decoration-field">
+          <label for="decoration-select">Decoration</label>
+          <select id="decoration-select"></select>
+        </div>
+        <div class="field" id="nexals-field" hidden>
+          <label for="nexals-input">Nexal amount</label>
+          <input id="nexals-input" type="number" min="1" value="10000">
+        </div>
+        <div class="field" id="pro-field" hidden>
+          <label for="pro-input">PRO duration in days</label>
+          <input id="pro-input" type="number" min="1" value="30">
+        </div>
+        <div class="actions"><button class="primary" id="choose-btn">Generate One-Time Code</button></div>
+        <div class="error" id="choose-error"></div>
+      </div>
+
+      <div id="code-stage" hidden>
+        <div class="eyebrow">Limited code generated</div>
+        <h2>Your reward is reserved</h2>
+        <p class="muted" id="reward-summary"></p>
+        <div class="code" id="result-code"></div>
+        <p class="muted">Only your Nexus account can redeem this code. It expires in 30 minutes.</p>
+        <div class="actions">
+          <button class="primary" id="copy-btn">Copy Code</button>
+          <a class="secondary" href="/#shop" style="display:inline-grid;place-items:center;text-decoration:none">Open Shop</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel admin" id="admin-panel">
+      <div class="admin-head">
+        <div><div class="eyebrow">Core admin</div><h2>Provision an NFC tag</h2></div>
+        <button class="primary" id="create-tag-btn">Create Tag</button>
+      </div>
+      <div class="admin-grid">
+        <div class="field"><label for="tag-label">Label</label><input id="tag-label" maxlength="80" placeholder="Convention drop #1"></div>
+        <div class="field"><label for="max-nexals">Maximum Nexals</label><input id="max-nexals" type="number" min="0" max="100000000" value="1000000"></div>
+        <div class="field"><label for="max-pro-days">Maximum PRO days</label><input id="max-pro-days" type="number" min="0" max="3650" value="365"></div>
+      </div>
+      <div id="tag-result" hidden>
+        <div class="payload" id="tag-payload"></div>
+        <div class="actions" style="justify-content:flex-start">
+          <button class="secondary" id="copy-payload-btn">Copy Payload</button>
+          <button class="primary" id="write-tag-btn">Write to NFC Tag</button>
+        </div>
+      </div>
+      <div class="error" id="admin-error"></div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const $ = id => document.getElementById(id);
+      let claimId = null;
+      let limits = {};
+      let rewardType = 'decoration';
+      let currentPayload = '';
+
+      async function api(method, path, body) {
+        const response = await fetch(path, {
+          method,
+          credentials: 'include',
+          headers: body ? { 'Content-Type': 'application/json' } : {},
+          body: body ? JSON.stringify(body) : undefined
+        });
+        let data;
+        try { data = await response.json(); } catch { data = { error: 'Server returned an invalid response' }; }
+        if (!response.ok && !data.error) data.error = `Request failed (${response.status})`;
+        return data;
+      }
+
+      function readNdefText(message) {
+        for (const record of message.records || []) {
+          try {
+            if (record.recordType === 'text') return new TextDecoder(record.encoding || 'utf-8').decode(record.data);
+            if (record.recordType === 'url' || record.recordType === 'absolute-url') return new TextDecoder().decode(record.data);
+          } catch {}
+        }
+        return '';
+      }
+
+      async function initialize() {
+        const me = await api('GET', '/api/auth/me');
+        if (!me.user) {
+          location.href = '/';
+          return;
+        }
+        const [status, options] = await Promise.all([
+          api('GET', '/api/limited/status'),
+          api('GET', '/api/limited/options')
+        ]);
+        if (status.isCoreAdmin) $('admin-panel').classList.add('visible');
+        (options.decorations || []).forEach(decoration => {
+          const option = document.createElement('option');
+          option.value = decoration.id;
+          option.textContent = `${decoration.name} — ${String(decoration.rarity).toUpperCase()}`;
+          $('decoration-select').appendChild(option);
+        });
+        if (!('NDEFReader' in window)) {
+          $('scan-btn').disabled = true;
+          $('scan-help').textContent = 'Web NFC requires Chrome on an NFC-capable Android phone.';
+        }
+      }
+
+      $('scan-btn').addEventListener('click', async () => {
+        $('scan-error').textContent = '';
+        $('scan-btn').disabled = true;
+        $('scan-btn').textContent = 'Waiting for tag...';
+        try {
+          const reader = new NDEFReader();
+          await reader.scan();
+          reader.addEventListener('readingerror', () => {
+            $('scan-error').textContent = 'The tag could not be read. Hold it still and try again.';
+          }, { once: true });
+          reader.addEventListener('reading', async event => {
+            const payload = readNdefText(event.message);
+            const result = await api('POST', '/api/limited/activate', { payload });
+            if (result.error) {
+              $('scan-error').textContent = result.error;
+              $('scan-btn').disabled = false;
+              $('scan-btn').textContent = 'Scan NFC Tag';
+              return;
+            }
+            claimId = result.claimId;
+            limits = result.limits || {};
+            $('nexals-input').max = limits.maxNexals || 1;
+            $('pro-input').max = limits.maxProDays || 1;
+            $('scan-stage').hidden = true;
+            $('choose-stage').hidden = false;
+          }, { once: true });
+        } catch (error) {
+          $('scan-error').textContent = error.name === 'NotAllowedError'
+            ? 'NFC permission was denied. Allow NFC access and try again.'
+            : `NFC scan could not start: ${error.message}`;
+          $('scan-btn').disabled = false;
+          $('scan-btn').textContent = 'Scan NFC Tag';
+        }
+      });
+
+      document.querySelectorAll('.reward-choice').forEach(button => {
+        button.addEventListener('click', () => {
+          rewardType = button.dataset.type;
+          document.querySelectorAll('.reward-choice').forEach(item => item.classList.toggle('active', item === button));
+          $('decoration-field').hidden = rewardType !== 'decoration';
+          $('nexals-field').hidden = rewardType !== 'nexals';
+          $('pro-field').hidden = rewardType !== 'pro';
+        });
+      });
+
+      $('choose-btn').addEventListener('click', async () => {
+        $('choose-error').textContent = '';
+        const body = { claimId, rewardType };
+        if (rewardType === 'decoration') body.decorationId = $('decoration-select').value;
+        if (rewardType === 'nexals') body.amount = Number.parseInt($('nexals-input').value, 10);
+        if (rewardType === 'pro') body.days = Number.parseInt($('pro-input').value, 10);
+        $('choose-btn').disabled = true;
+        const result = await api('POST', '/api/limited/choose', body);
+        $('choose-btn').disabled = false;
+        if (result.error) {
+          $('choose-error').textContent = result.error;
+          return;
+        }
+        $('result-code').textContent = result.code;
+        if (result.reward.type === 'decoration') $('reward-summary').textContent = result.reward.name;
+        if (result.reward.type === 'nexals') $('reward-summary').textContent = `${result.reward.amount.toLocaleString()} Nexals`;
+        if (result.reward.type === 'pro') $('reward-summary').textContent = `${result.reward.days} days of Nexus PRO`;
+        $('choose-stage').hidden = true;
+        $('code-stage').hidden = false;
+      });
+
+      $('copy-btn').addEventListener('click', async () => {
+        await navigator.clipboard.writeText($('result-code').textContent);
+        $('copy-btn').textContent = 'Copied';
+      });
+
+      $('create-tag-btn').addEventListener('click', async () => {
+        $('admin-error').textContent = '';
+        const result = await api('POST', '/api/limited/admin/tags', {
+          label: $('tag-label').value,
+          maxNexals: Number.parseInt($('max-nexals').value, 10),
+          maxProDays: Number.parseInt($('max-pro-days').value, 10)
+        });
+        if (result.error) {
+          $('admin-error').textContent = result.error;
+          return;
+        }
+        currentPayload = result.tag.payload;
+        $('tag-payload').textContent = currentPayload;
+        $('tag-result').hidden = false;
+      });
+
+      $('copy-payload-btn').addEventListener('click', async () => {
+        await navigator.clipboard.writeText(currentPayload);
+        $('copy-payload-btn').textContent = 'Copied';
+      });
+
+      $('write-tag-btn').addEventListener('click', async () => {
+        $('admin-error').textContent = '';
+        if (!('NDEFReader' in window)) {
+          $('admin-error').textContent = 'Writing NFC tags requires Chrome on Android.';
+          return;
+        }
+        try {
+          const writer = new NDEFReader();
+          await writer.write({ records: [{ recordType: 'text', data: currentPayload }] });
+          $('write-tag-btn').textContent = 'Tag Written';
+        } catch (error) {
+          $('admin-error').textContent = `Could not write tag: ${error.message}`;
+        }
+      });
+
+      initialize();
+    })();
+  </script>
+</body>
+</html>

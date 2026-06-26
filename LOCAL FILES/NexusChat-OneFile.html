@@ -2583,6 +2583,47 @@ html, body {
   padding: 8px 20px 0;
 }
 
+.limited-redeem {
+  margin: 18px 20px 8px;
+  padding: 14px;
+  border: 1px solid rgba(92, 114, 255, 0.55);
+  border-radius: 7px;
+  background: linear-gradient(110deg, rgba(92, 114, 255, 0.12), rgba(56, 217, 208, 0.05));
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(320px, 1.2fr);
+  gap: 12px 18px;
+  align-items: center;
+}
+.limited-redeem-copy { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.limited-redeem-copy strong { display: block; color: var(--text-primary); }
+.limited-redeem-copy span:not(.limited-redeem-mark) { display: block; color: var(--text-muted); font-size: 12px; }
+.limited-redeem-mark {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid #7687ff;
+  border-radius: 4px;
+  color: #aeb8ff;
+  font-size: 10px;
+  font-weight: 800;
+}
+.limited-redeem-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.limited-redeem-form input {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.limited-redeem .form-error { grid-column: 1 / -1; min-height: 0; }
+@media (max-width: 760px) {
+  .limited-redeem { grid-template-columns: 1fr; margin-inline: 12px; }
+  .limited-redeem-form { grid-template-columns: 1fr; }
+}
+
 .shop-secret-tabs {
   display: inline-flex;
   gap: 8px;
@@ -6538,6 +6579,17 @@ html, body {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
               <span id="shop-nexal-count">0</span> Nexals
             </div>
+          </div>
+          <div class="limited-redeem">
+            <div class="limited-redeem-copy">
+              <span class="limited-redeem-mark">LIMITED</span>
+              <div><strong>Limited Edition Code</strong><span>Codes generated from official Nexus NFC tags only.</span></div>
+            </div>
+            <div class="limited-redeem-form">
+              <input type="text" id="limited-code-input" placeholder="NX-XXXXXX-XXXXXX-XXXXXX-XXXXXX" maxlength="30" autocomplete="off">
+              <button class="btn-primary" id="limited-redeem-btn">Redeem</button>
+            </div>
+            <div class="form-error" id="limited-redeem-error"></div>
           </div>
           <div id="shop-dynamic-tabs"></div>
           <div id="shop-grid" class="shop-grid"></div>
@@ -12914,6 +12966,38 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       ringtonePreviewTimer = null;
     }, 1600);
   }
+
+  async function redeemLimitedCode() {
+    const input = $('limited-code-input');
+    const button = $('limited-redeem-btn');
+    const code = input.value.trim().toUpperCase();
+    if (!code) return showError('limited-redeem-error', 'Enter your limited-edition code');
+    showError('limited-redeem-error', '');
+    button.disabled = true;
+    button.textContent = 'Redeeming...';
+    const result = await api('POST', '/api/limited/redeem', { code });
+    button.disabled = false;
+    button.textContent = 'Redeem';
+    if (result.error) return showError('limited-redeem-error', result.error);
+    input.value = '';
+    const reward = result.reward || {};
+    if (reward.type === 'decoration') {
+      await showClaimAnimation(reward.decoration);
+      toast(`Limited decoration unlocked: ${reward.decoration.name}`, 'success', 5000);
+    } else if (reward.type === 'nexals') {
+      updateNexalDisplay(reward.nexals);
+      toast(`${Number(reward.amount).toLocaleString()} limited Nexals claimed`, 'success', 5000);
+    } else if (reward.type === 'pro') {
+      currentUser.proActive = true;
+      toast(`${reward.days} days of Nexus PRO claimed`, 'success', 5000);
+    }
+    await loadShop();
+  }
+
+  $('limited-redeem-btn').addEventListener('click', redeemLimitedCode);
+  $('limited-code-input').addEventListener('keydown', event => {
+    if (event.key === 'Enter') redeemLimitedCode();
+  });
 
   // ---- Achievements ----
   let achData = null;

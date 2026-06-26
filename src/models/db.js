@@ -367,6 +367,44 @@ async function initDb() {
   await runSql(`CREATE INDEX IF NOT EXISTS idx_ip_bans_active_ip ON ip_bans(ip_address, active)`, 'idx_ip_bans_active_ip');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_ip_bans_active_device ON ip_bans(device_id, active)`, 'idx_ip_bans_active_device');
 
+  await runSql(`CREATE TABLE IF NOT EXISTS limited_nfc_tags (
+    id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    label TEXT DEFAULT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    max_nexals INTEGER NOT NULL DEFAULT 1000000,
+    max_pro_days INTEGER NOT NULL DEFAULT 365,
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    reserved_by TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+    reserved_until BIGINT DEFAULT NULL,
+    consumed_by TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+    consumed_at BIGINT DEFAULT NULL
+  )`, 'limited_nfc_tags');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_limited_nfc_tags_hash ON limited_nfc_tags(token_hash)`, 'idx_limited_nfc_tags_hash');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS limited_claim_sessions (
+    id TEXT PRIMARY KEY,
+    tag_id TEXT NOT NULL REFERENCES limited_nfc_tags(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at BIGINT NOT NULL,
+    completed_at BIGINT DEFAULT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'limited_claim_sessions');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_limited_claim_sessions_user ON limited_claim_sessions(user_id, expires_at)`, 'idx_limited_claim_sessions_user');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS limited_redemption_codes (
+    id TEXT PRIMARY KEY,
+    code_hash TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reward_type TEXT NOT NULL,
+    reward_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    expires_at BIGINT NOT NULL,
+    redeemed_at BIGINT DEFAULT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'limited_redemption_codes');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_limited_redemption_user ON limited_redemption_codes(user_id, expires_at)`, 'idx_limited_redemption_user');
+
   await runSql(`CREATE TABLE IF NOT EXISTS user_achievements (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

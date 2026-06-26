@@ -5670,6 +5670,38 @@
     }, 1600);
   }
 
+  async function redeemLimitedCode() {
+    const input = $('limited-code-input');
+    const button = $('limited-redeem-btn');
+    const code = input.value.trim().toUpperCase();
+    if (!code) return showError('limited-redeem-error', 'Enter your limited-edition code');
+    showError('limited-redeem-error', '');
+    button.disabled = true;
+    button.textContent = 'Redeeming...';
+    const result = await api('POST', '/api/limited/redeem', { code });
+    button.disabled = false;
+    button.textContent = 'Redeem';
+    if (result.error) return showError('limited-redeem-error', result.error);
+    input.value = '';
+    const reward = result.reward || {};
+    if (reward.type === 'decoration') {
+      await showClaimAnimation(reward.decoration);
+      toast(`Limited decoration unlocked: ${reward.decoration.name}`, 'success', 5000);
+    } else if (reward.type === 'nexals') {
+      updateNexalDisplay(reward.nexals);
+      toast(`${Number(reward.amount).toLocaleString()} limited Nexals claimed`, 'success', 5000);
+    } else if (reward.type === 'pro') {
+      currentUser.proActive = true;
+      toast(`${reward.days} days of Nexus PRO claimed`, 'success', 5000);
+    }
+    await loadShop();
+  }
+
+  $('limited-redeem-btn').addEventListener('click', redeemLimitedCode);
+  $('limited-code-input').addEventListener('keydown', event => {
+    if (event.key === 'Enter') redeemLimitedCode();
+  });
+
   // ---- Achievements ----
   let achData = null;
 

@@ -2665,6 +2665,47 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   padding: 8px 20px 0;
 }
 
+.limited-redeem {
+  margin: 18px 20px 8px;
+  padding: 14px;
+  border: 1px solid rgba(92, 114, 255, 0.55);
+  border-radius: 7px;
+  background: linear-gradient(110deg, rgba(92, 114, 255, 0.12), rgba(56, 217, 208, 0.05));
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(320px, 1.2fr);
+  gap: 12px 18px;
+  align-items: center;
+}
+.limited-redeem-copy { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.limited-redeem-copy strong { display: block; color: var(--text-primary); }
+.limited-redeem-copy span:not(.limited-redeem-mark) { display: block; color: var(--text-muted); font-size: 12px; }
+.limited-redeem-mark {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid #7687ff;
+  border-radius: 4px;
+  color: #aeb8ff;
+  font-size: 10px;
+  font-weight: 800;
+}
+.limited-redeem-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.limited-redeem-form input {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.limited-redeem .form-error { grid-column: 1 / -1; min-height: 0; }
+@media (max-width: 760px) {
+  .limited-redeem { grid-template-columns: 1fr; margin-inline: 12px; }
+  .limited-redeem-form { grid-template-columns: 1fr; }
+}
+
 .shop-secret-tabs {
   display: inline-flex;
   gap: 8px;
