@@ -193,7 +193,7 @@ const DECORATIONS = [
   { id: 'phantom_blade', nexalPrice: null, name: 'Phantom Blade', description: 'Ghostly blade arcs cut around the avatar.', rarity: 'mythical', preview: 'phantom_blade', packOnly: true },
   { id: 'time_rift', nexalPrice: null, name: 'Time Rift', description: 'Clocklike rifts tick and warp around the edge.', rarity: 'mythical', preview: 'time_rift', packOnly: true },
   { id: 'zero_gravity', nexalPrice: null, name: 'Zero Gravity', description: 'Small orbiting shards float in low gravity.', rarity: 'mythical', preview: 'zero_gravity', packOnly: true },
-  { id: 'singularity', nexalPrice: null, name: 'Singularity', description: 'A tiny black-hole ring pulls light inward.', rarity: 'mythical', preview: 'singularity', packOnly: true },
+  { id: 'singularity', nexalPrice: null, name: 'Singularity', description: 'A tiny black-hole ring pulls light inward.', rarity: 'ascendent', preview: 'singularity', packOnly: true },
   { id: 'celestial_wings', nexalPrice: null, name: 'Celestial Wings', description: 'Bright wing flares open with golden starlight.', rarity: 'mythical', preview: 'celestial_wings', packOnly: true },
   { id: 'apex_storm', nexalPrice: null, name: 'Apex Storm', description: 'A premium storm ring surges with blue-white strikes.', rarity: 'mythical', preview: 'apex_storm', packOnly: true },
   { id: 'prism_overdrive', nexalPrice: null, name: 'Prism Overdrive', description: 'Prismatic light races around in overdrive.', rarity: 'mythical', preview: 'prism_overdrive', packOnly: true },
@@ -292,7 +292,7 @@ const DECORATION_PACKS = [
       { decorationId: 'cosmic_crown', chance: 20 },
       { decorationId: 'phantom_blade', chance: 16 },
       { decorationId: 'time_rift', chance: 12 },
-      { decorationId: 'singularity', chance: 7 }
+      { decorationId: 'eternal_flame', chance: 7 }
     ]
   },
   {
@@ -302,12 +302,13 @@ const DECORATION_PACKS = [
     rarity: 'ascendent',
     description: 'Open for one apex decoration. Premium mythical odds with a nearly impossible Ascendent hit.',
     items: [
-      { decorationId: 'zero_gravity', chance: 34.75 },
+      { decorationId: 'zero_gravity', chance: 34.55 },
       { decorationId: 'celestial_wings', chance: 22 },
       { decorationId: 'apex_storm', chance: 18 },
       { decorationId: 'prism_overdrive', chance: 12 },
       { decorationId: 'eternal_flame', chance: 8 },
       { decorationId: 'magic_mists', chance: 5 },
+      { decorationId: 'singularity', chance: 0.2 },
       { decorationId: 'event_horizon', chance: 0.25 }
     ]
   }

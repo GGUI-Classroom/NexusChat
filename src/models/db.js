@@ -18,6 +18,30 @@ async function runSql(sql, label) {
   catch(e) { console.error(`Migration failed [${label}]:`, e.message); }
 }
 
+async function runOnceMigration(id, sql, label = id) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const applied = await client.query('SELECT 1 FROM app_migrations WHERE id=$1 FOR UPDATE', [id]);
+    if (applied.rows.length) {
+      await client.query('COMMIT');
+      return;
+    }
+    await client.query(sql);
+    await client.query(
+      `INSERT INTO app_migrations (id, applied_at)
+       VALUES ($1, EXTRACT(EPOCH FROM NOW())::BIGINT)`,
+      [id]
+    );
+    await client.query('COMMIT');
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error(`Migration failed [${label}]:`, e.message);
+  } finally {
+    client.release();
+  }
+}
+
 async function initDb() {
   await runSql(`CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL,
@@ -200,8 +224,16 @@ async function initDb() {
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     openings INTEGER NOT NULL DEFAULT 0
   )`, 'user_pack_stats');
+  await runSql(`CREATE TABLE IF NOT EXISTS app_migrations (
+    id TEXT PRIMARY KEY,
+    applied_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'app_migrations');
 
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_decoration TEXT DEFAULT NULL`, 'alter_users_decoration');
+  await runOnceMigration('remove_existing_singularity_decorations_v1', `
+    UPDATE users SET active_decoration=NULL WHERE active_decoration='singularity';
+    DELETE FROM user_decorations WHERE decoration_id='singularity';
+  `, 'remove_existing_singularity_decorations');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_color TEXT DEFAULT NULL`, 'alter_users_color');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_font TEXT DEFAULT NULL`, 'alter_users_font');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at BIGINT DEFAULT 0`, 'alter_users_pro_expires');
