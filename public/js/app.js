@@ -271,6 +271,7 @@
     time_rift: ['time', '#76ffe0', '#7e5cff', '#ffffff', 'rift'],
     zero_gravity: ['gravity', '#96daff', '#d894ff', '#ffe678', 'float'],
     singularity: ['singularity', '#8e68ff', '#040210', '#c898ff', 'rift'],
+    event_horizon: ['event-horizon', '#f7d46a', '#05000f', '#7df7ff', 'singularity'],
     celestial_wings: ['wings', '#ffeeb8', '#70d2ff', '#ffffff', 'wings'],
     apex_storm: ['storm', '#76e2ff', '#5268ff', '#ffffff', 'storm'],
     prism_overdrive: ['prism', '#ff54d8', '#52e6ff', '#ffe252', 'prism'],
@@ -285,6 +286,7 @@
     'time_rift',
     'zero_gravity',
     'singularity',
+    'event_horizon',
     'celestial_wings',
     'apex_storm',
     'prism_overdrive',
@@ -4742,7 +4744,7 @@
       ? `<span style="color:var(--red)">Suspended until ${new Date(data.suspendedUntil*1000).toLocaleString()}</span>`
       : '<span style="color:var(--green)">Active</span>';
 
-    const rarityColor = {common:'#8a94a8',rare:'var(--accent)',epic:'#8b3cf7',legendary:'#ffd700',mythical:'#e040fb'};
+    const rarityColor = {common:'#8a94a8',rare:'var(--accent)',epic:'#8b3cf7',legendary:'#ffd700',mythical:'#e040fb',ascendent:'#7df7ff'};
     result.innerHTML = `
       <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;margin-top:4px;display:flex;flex-direction:column;gap:14px">
 
@@ -5485,8 +5487,8 @@
     else {
       const won = granted[0];
       toast('Pack opened: ' + (won ? won.name : 'new decoration'), 'success', 6500);
-      const mythical = granted.find(d => d.rarity === 'mythical');
-      if (mythical) await showClaimAnimation(mythical);
+      const premiumHit = granted.find(d => ['ascendent', 'mythical'].includes(d.rarity));
+      if (premiumHit) await showClaimAnimation(premiumHit);
     }
     await loadShop();
   };
@@ -5550,7 +5552,7 @@
       if (r.error) return toast(r.error, 'error');
       shopData.nexals = r.nexals;
       updateNexalDisplay(r.nexals);
-      if (d && d.rarity === 'mythical') {
+      if (d && ['mythical', 'ascendent'].includes(d.rarity)) {
         await showClaimAnimation(r.decoration);
       } else {
         toast('Purchased! ✨', 'success');
@@ -5699,7 +5701,7 @@
       await loadShop();
       return;
     }
-    if (r.decoration.rarity === 'mythical') {
+    if (['mythical', 'ascendent'].includes(r.decoration.rarity)) {
       await showClaimAnimation(r.decoration);
     } else {
       toast('🎉 Unlocked: ' + r.decoration.name + '!', 'success', 5000);

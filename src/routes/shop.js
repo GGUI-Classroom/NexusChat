@@ -15,7 +15,8 @@ const DECORATION_SELL_PRICES = {
   rare: 650,
   epic: 1200,
   legendary: 1800,
-  mythical: 2500
+  mythical: 2500,
+  ascendent: 6000
 };
 
 async function syncAchievementFields(userId, fields) {
@@ -198,6 +199,7 @@ const DECORATIONS = [
   { id: 'prism_overdrive', nexalPrice: null, name: 'Prism Overdrive', description: 'Prismatic light races around in overdrive.', rarity: 'mythical', preview: 'prism_overdrive', packOnly: true },
   { id: 'eternal_flame', nexalPrice: null, name: 'Eternal Flame', description: 'An everlasting flame crown rolls over the border.', rarity: 'mythical', preview: 'eternal_flame', packOnly: true },
   { id: 'magic_mists', nexalPrice: null, name: 'Magic Mists', description: 'Iridescent violet and cyan mist wraps your avatar in a glossy arcane sphere.', rarity: 'mythical', preview: 'magic_mists', packOnly: true },
+  { id: 'event_horizon', nexalPrice: null, name: 'Event Horizon', description: 'A collapsing black-star halo fractures reality with violet lenses, golden glyphs, and a gravitational core.', rarity: 'ascendent', preview: 'event_horizon', packOnly: true },
   {
     id: 'stormveil',
     nexalPrice: null,
@@ -297,15 +299,16 @@ const DECORATION_PACKS = [
     id: 'apex_pack',
     name: 'Apex Pack',
     price: 20000,
-    rarity: 'mythical',
-    description: 'Open for one apex decoration. Premium mythical odds, one item per opening.',
+    rarity: 'ascendent',
+    description: 'Open for one apex decoration. Premium mythical odds with a nearly impossible Ascendent hit.',
     items: [
-      { decorationId: 'zero_gravity', chance: 35 },
+      { decorationId: 'zero_gravity', chance: 34.75 },
       { decorationId: 'celestial_wings', chance: 22 },
       { decorationId: 'apex_storm', chance: 18 },
       { decorationId: 'prism_overdrive', chance: 12 },
       { decorationId: 'eternal_flame', chance: 8 },
-      { decorationId: 'magic_mists', chance: 5 }
+      { decorationId: 'magic_mists', chance: 5 },
+      { decorationId: 'event_horizon', chance: 0.25 }
     ]
   }
 ];
@@ -342,7 +345,7 @@ function toClientPack(pack, ownedQuantities) {
       if (!d) return null;
       return {
         ...toClientDecoration(d, ownedQuantities.get(d.id) || 0),
-        chance: Math.round((item.chance / totalChance) * 1000) / 10
+        chance: Math.round((item.chance / totalChance) * 10000) / 100
       };
     })
     .filter(Boolean);

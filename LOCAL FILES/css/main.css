@@ -2529,6 +2529,7 @@ html, body {
 .rarity-epic      { background: rgba(139,60,247,0.2);  color: #8b3cf7; }
 .rarity-legendary { background: rgba(245,200,66,0.2);  color: var(--yellow); }
 .rarity-mixed     { background: rgba(61,214,140,0.16); color: var(--green); }
+.rarity-ascendent { background: linear-gradient(90deg, rgba(255,224,94,0.32), rgba(125,247,255,0.24), rgba(196,104,255,0.28)); color: #fff3a8; border: 1px solid rgba(125,247,255,0.55); box-shadow: 0 0 14px rgba(125,247,255,0.18); }
 .rarity-secret    { background: rgba(97, 164, 245, 0.2); color: #d2ecff; border: 1px solid rgba(157, 213, 255, 0.5); }
 
 .shop-card-btn {
@@ -2848,9 +2849,17 @@ html, body {
   border: 1px solid rgba(255,200,50,0.4);
   animation: mythical-badge-shimmer 3s ease-in-out infinite;
 }
+.rarity-ascendent {
+  background-size: 220% 100%;
+  animation: ascendent-badge-shimmer 2.1s ease-in-out infinite;
+}
 @keyframes mythical-badge-shimmer {
   0%,100% { color: #ffd700; border-color: rgba(255,200,50,0.4); }
   50%      { color: #e040fb; border-color: rgba(180,80,255,0.5); }
+}
+@keyframes ascendent-badge-shimmer {
+  0%,100% { color: #fff3a8; border-color: rgba(125,247,255,0.55); filter: saturate(1.1); background-position: 0% 50%; }
+  50% { color: #7df7ff; border-color: rgba(255,224,94,0.8); filter: saturate(1.8) brightness(1.25); background-position: 100% 50%; }
 }
 
 /* ===== MYSTERY CARD (hidden mythical) ===== */
@@ -5361,6 +5370,69 @@ html, body {
     conic-gradient(from 70deg, transparent 0 34deg, var(--fx-a) 48deg, transparent 64deg, transparent 138deg, var(--fx-c) 154deg, transparent 174deg, transparent 245deg, var(--fx-b) 264deg, transparent 286deg);
 }
 
+.premium-event-horizon {
+  filter: saturate(1.38) contrast(1.18) drop-shadow(0 0 14px rgba(125,247,255,0.44));
+}
+.premium-event-horizon .premium-shell {
+  inset: -11px;
+  background:
+    radial-gradient(circle at 50% 50%, #020006 0 18%, rgba(255,244,180,0.95) 20%, rgba(5,0,15,0.92) 24%, transparent 38%),
+    conic-gradient(from 18deg, transparent 0 18deg, #fff4a3 26deg, #7df7ff 36deg, transparent 54deg, transparent 92deg, #b66cff 116deg, transparent 138deg, transparent 184deg, #fff08a 204deg, #7df7ff 218deg, transparent 240deg, transparent 306deg, #d284ff 326deg, transparent 360deg);
+  -webkit-mask: radial-gradient(circle, #000 0 42%, transparent 68%);
+          mask: radial-gradient(circle, #000 0 42%, transparent 68%);
+  animation: event-horizon-vortex 2.7s linear infinite, event-horizon-pulse 4.6s ease-in-out infinite;
+}
+.premium-event-horizon .premium-glass {
+  inset: -6px;
+  background:
+    repeating-conic-gradient(from 4deg, rgba(255,244,163,0.95) 0 2deg, transparent 3deg 15deg),
+    radial-gradient(circle, transparent 0 46%, rgba(125,247,255,0.58) 48% 50%, transparent 54% 60%, rgba(182,108,255,0.5) 62% 64%, transparent 70%);
+  -webkit-mask: radial-gradient(circle, transparent 0 39%, #000 42% 70%, transparent 78%);
+          mask: radial-gradient(circle, transparent 0 39%, #000 42% 70%, transparent 78%);
+  animation: pristine-spin 8s linear infinite reverse;
+}
+.premium-event-horizon .premium-rim-a,
+.premium-event-horizon .premium-rim-b {
+  inset: -9px;
+  filter: blur(0.25px) drop-shadow(0 0 8px #7df7ff) drop-shadow(0 0 10px #fff08a);
+}
+.premium-event-horizon .premium-wisp-a {
+  inset: -14px;
+  background:
+    linear-gradient(105deg, transparent 0 33%, rgba(125,247,255,0.0) 36%, rgba(125,247,255,0.9) 45%, rgba(255,244,163,0.86) 50%, transparent 61%),
+    linear-gradient(285deg, transparent 0 34%, rgba(182,108,255,0.72) 45%, transparent 58%);
+  -webkit-mask: radial-gradient(ellipse at 50% 50%, transparent 0 42%, #000 48% 55%, transparent 67%);
+          mask: radial-gradient(ellipse at 50% 50%, transparent 0 42%, #000 48% 55%, transparent 67%);
+  animation: event-horizon-lens 3.8s ease-in-out infinite;
+}
+.premium-event-horizon .premium-wisp-b {
+  inset: -7px;
+  background:
+    radial-gradient(circle at 24% 26%, rgba(255,244,163,0.98) 0 3%, transparent 7%),
+    radial-gradient(circle at 74% 30%, rgba(125,247,255,0.95) 0 3%, transparent 8%),
+    radial-gradient(circle at 68% 78%, rgba(198,112,255,0.9) 0 3%, transparent 8%),
+    radial-gradient(circle at 30% 72%, rgba(255,244,163,0.82) 0 2%, transparent 7%);
+  animation: event-horizon-glyphs 4.4s linear infinite;
+}
+.premium-event-horizon .premium-motif-singularity {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 0 17%, rgba(255,255,255,0.9) 19%, rgba(255,224,94,0.92) 21%, rgba(125,247,255,0.36) 26%, transparent 38%),
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 7px, rgba(255,244,163,0.5) 8px 9px, transparent 10px 17px);
+  animation: event-horizon-core 3.2s ease-in-out infinite;
+}
+.premium-event-horizon .premium-intrusion {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.98) 0 20%, rgba(255,244,163,0.88) 23%, rgba(125,247,255,0.4) 28%, transparent 42%),
+    conic-gradient(from 0deg, transparent 0 30deg, rgba(255,244,163,0.9) 44deg, transparent 58deg, transparent 122deg, rgba(125,247,255,0.78) 146deg, transparent 168deg, transparent 244deg, rgba(182,108,255,0.8) 266deg, transparent 286deg);
+  animation: event-horizon-intrude 7s ease-in-out infinite;
+}
+.premium-event-horizon .premium-strike {
+  background: linear-gradient(115deg, transparent 0 38%, rgba(255,244,163,0.0) 42%, #fff4a3 48%, #7df7ff 52%, transparent 60%);
+  -webkit-mask: linear-gradient(115deg, transparent 0 38%, #000 47% 53%, transparent 62%);
+          mask: linear-gradient(115deg, transparent 0 38%, #000 47% 53%, transparent 62%);
+  animation: event-horizon-strike 7s ease-in-out infinite;
+}
+
 .premium-time .premium-shell {
   background:
     repeating-conic-gradient(from 0deg, rgba(255,255,255,0.78) 0 2deg, transparent 3deg 15deg),
@@ -5578,6 +5650,34 @@ html, body {
   0% { opacity: 0.82; transform: rotate(0deg) scale(0.98); }
   50% { opacity: 1; transform: rotate(180deg) scale(1.05); }
   100% { opacity: 0.82; transform: rotate(360deg) scale(0.98); }
+}
+@keyframes event-horizon-vortex {
+  from { transform: rotate(0deg) scale(1.02); }
+  to { transform: rotate(360deg) scale(1.02); }
+}
+@keyframes event-horizon-pulse {
+  0%,100% { opacity: 0.86; filter: brightness(1); }
+  50% { opacity: 1; filter: brightness(1.28); }
+}
+@keyframes event-horizon-lens {
+  0%,100% { transform: rotate(-14deg) scale(0.96); opacity: 0.68; }
+  46% { transform: rotate(12deg) scale(1.12); opacity: 1; }
+}
+@keyframes event-horizon-glyphs {
+  from { transform: rotate(0deg); opacity: 0.74; }
+  to { transform: rotate(-360deg); opacity: 0.74; }
+}
+@keyframes event-horizon-core {
+  0%,100% { transform: scale(0.9); filter: brightness(1); }
+  45% { transform: scale(1.12); filter: brightness(1.4); }
+}
+@keyframes event-horizon-intrude {
+  0%,58%,100% { opacity: 0; transform: scale(0.55) rotate(0deg); }
+  68%,84% { opacity: 0.82; transform: scale(1.04) rotate(38deg); }
+}
+@keyframes event-horizon-strike {
+  0%,62%,100% { opacity: 0; transform: translateX(-26%) rotate(0deg); }
+  70%,78% { opacity: 0.9; transform: translateX(14%) rotate(8deg); }
 }
 @keyframes prism-sweep {
   0%,100% { opacity: 0.62; transform: translateX(-3px) rotate(-4deg); }
