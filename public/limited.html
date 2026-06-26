@@ -8,146 +8,349 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #070a11;
-      --panel: #111722;
-      --panel-2: #171f2d;
-      --line: #2b3648;
-      --text: #f4f7fb;
-      --muted: #93a1b5;
-      --accent: #5c72ff;
-      --cyan: #38d9d0;
-      --gold: #ffcc4d;
-      --danger: #ff5964;
+      --bg: #08090b;
+      --surface: #0e1014;
+      --surface-raised: #15181e;
+      --line: #292d35;
+      --line-strong: #3b414c;
+      --text: #f2f3f5;
+      --muted: #8f96a3;
+      --dim: #5f6672;
+      --accent: #6b7cff;
+      --signal: #c7f464;
+      --gold: #f5c451;
+      --danger: #ff6572;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      background:
-        radial-gradient(circle at 50% -20%, rgba(92,114,255,.22), transparent 42%),
-        var(--bg);
+      background: var(--bg);
       color: var(--text);
-      font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     button, input, select { font: inherit; }
     button { cursor: pointer; }
-    .shell { width: min(920px, calc(100% - 32px)); margin: 0 auto; padding: 42px 0 64px; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; }
-    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: 0; }
+    .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 0 0 56px; }
+    .topbar {
+      height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 11px; font-weight: 800; }
     .mark {
-      display: grid; place-items: center; width: 38px; height: 38px;
-      border: 1px solid #7183ff; background: #101a42; color: #9eabff; clip-path: polygon(50% 0,94% 25%,94% 75%,50% 100%,6% 75%,6% 25%);
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border: 1px solid #7484ff;
+      color: #aeb7ff;
+      clip-path: polygon(50% 0,94% 25%,94% 75%,50% 100%,6% 75%,6% 25%);
     }
-    .back { color: var(--muted); text-decoration: none; }
-    .hero { max-width: 680px; margin-bottom: 28px; }
-    .eyebrow { color: var(--cyan); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
-    h1 { margin: 8px 0 10px; font-size: clamp(36px, 8vw, 68px); line-height: .98; letter-spacing: 0; }
-    .hero p { color: var(--muted); font-size: 17px; margin: 0; }
-    .panel { border: 1px solid var(--line); background: rgba(17,23,34,.94); border-radius: 8px; overflow: hidden; }
-    .stage { min-height: 360px; display: grid; place-items: center; padding: 34px; text-align: center; }
+    .brand small {
+      margin-left: 7px;
+      color: var(--dim);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+    }
+    .back {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 650;
+    }
+    .back::before { content: "←"; color: var(--text); font-size: 17px; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+      padding: 44px 0 28px;
+    }
+    .eyebrow {
+      color: var(--signal);
+      font-size: 10px;
+      font-weight: 850;
+      text-transform: uppercase;
+      letter-spacing: 1.6px;
+    }
+    h1 { margin: 7px 0 7px; font-size: 34px; line-height: 1.08; letter-spacing: 0; }
+    .hero p { color: var(--muted); font-size: 15px; margin: 0; max-width: 620px; }
+    .hero-status {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .hero-status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--signal);
+      box-shadow: 0 0 0 4px rgba(199,244,100,.1);
+    }
+    .panel { border: 1px solid var(--line); background: var(--surface); border-radius: 4px; overflow: hidden; }
+    .stage {
+      min-height: 500px;
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr) 190px;
+      padding: 0;
+      text-align: center;
+    }
+    .stage-rail {
+      padding: 28px 22px;
+      border-right: 1px solid var(--line);
+      text-align: left;
+    }
+    .rail-label {
+      display: block;
+      margin-bottom: 24px;
+      color: var(--dim);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+    }
+    .step { position: relative; display: grid; grid-template-columns: 28px 1fr; gap: 9px; min-height: 70px; color: var(--dim); }
+    .step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      left: 13px;
+      top: 31px;
+      width: 1px;
+      height: 31px;
+      background: var(--line);
+    }
+    .step-num {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      font: 700 10px/1 ui-monospace, monospace;
+    }
+    .step.active { color: var(--text); }
+    .step.active .step-num { border-color: var(--signal); color: var(--signal); }
+    .step strong { display: block; margin-top: 3px; font-size: 12px; }
+    .step span:last-child { display: block; margin-top: 2px; font-size: 10px; color: var(--dim); }
+    .stage-main { display: grid; place-items: center; padding: 42px; min-width: 0; }
+    .stage-main > div { width: min(640px, 100%); }
+    .stage-meta {
+      padding: 28px 20px;
+      border-left: 1px solid var(--line);
+      text-align: left;
+    }
+    .meta-row { padding: 13px 0; border-bottom: 1px solid var(--line); }
+    .meta-row span { display: block; color: var(--dim); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+    .meta-row strong { display: block; margin-top: 5px; font: 650 11px/1.4 ui-monospace, monospace; color: var(--muted); }
+    .scan-target {
+      position: relative;
+      width: 186px;
+      height: 186px;
+      margin: 0 auto 27px;
+      display: grid;
+      place-items: center;
+    }
+    .scan-target::before,
+    .scan-target::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border: 1px solid var(--line-strong);
+      clip-path: polygon(0 0,28% 0,28% 2px,2px 2px,2px 28%,0 28%,0 0,100% 0,100% 28%,calc(100% - 2px) 28%,calc(100% - 2px) 2px,72% 2px,72% 0,100% 0,100% 100%,72% 100%,72% calc(100% - 2px),calc(100% - 2px) calc(100% - 2px),calc(100% - 2px) 72%,100% 72%,100% 100%,0 100%,0 72%,2px 72%,2px calc(100% - 2px),28% calc(100% - 2px),28% 100%,0 100%);
+    }
+    .scan-target::after { inset: 15px; border-color: rgba(107,124,255,.25); }
     .nfc-glyph {
-      width: 116px; height: 116px; display: grid; place-items: center; margin: 0 auto 22px;
-      border-radius: 50%; border: 1px solid #4d5c78; background: #0d1320; position: relative;
-      box-shadow: 0 0 0 14px rgba(92,114,255,.05), 0 0 44px rgba(56,217,208,.12);
+      width: 82px;
+      height: 112px;
+      margin: 0;
+      border: 1px solid #6f7fff;
+      border-radius: 4px;
+      background: #151923;
+      position: relative;
+      box-shadow: 8px 8px 0 #0a0c10;
     }
-    .nfc-glyph::before, .nfc-glyph::after { content: ""; position: absolute; border: 4px solid var(--cyan); border-left-color: transparent; border-bottom-color: transparent; border-radius: 50%; transform: rotate(45deg); }
-    .nfc-glyph::before { width: 38px; height: 38px; }
-    .nfc-glyph::after { width: 64px; height: 64px; opacity: .45; }
-    h2 { margin: 0 0 8px; font-size: 24px; }
+    .nfc-glyph::before {
+      content: "N";
+      position: absolute;
+      inset: 18px 16px auto;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      color: var(--signal);
+      font: 800 18px/1 ui-monospace, monospace;
+    }
+    .nfc-glyph::after {
+      content: "NFC / 01";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 12px;
+      color: var(--dim);
+      font: 700 8px/1 ui-monospace, monospace;
+    }
+    h2 { margin: 0 0 8px; font-size: 22px; }
     .muted { color: var(--muted); }
     .primary, .secondary {
-      min-height: 46px; border-radius: 6px; padding: 0 20px; font-weight: 750; border: 1px solid transparent;
+      min-height: 44px;
+      border-radius: 3px;
+      padding: 0 18px;
+      font-weight: 750;
+      border: 1px solid transparent;
     }
-    .primary { background: var(--accent); color: white; box-shadow: 0 10px 28px rgba(92,114,255,.22); }
-    .secondary { background: var(--panel-2); color: var(--text); border-color: var(--line); }
+    .primary { background: var(--accent); color: white; }
+    .primary:hover { background: #7a89ff; }
+    .secondary { background: var(--surface-raised); color: var(--text); border-color: var(--line-strong); }
     .primary:disabled, .secondary:disabled { opacity: .5; cursor: not-allowed; }
     .actions { display: flex; justify-content: center; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
-    .error { color: #ff8088; min-height: 23px; margin-top: 12px; }
+    .error { color: var(--danger); min-height: 23px; margin-top: 12px; }
     .reward-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: min(690px, 100%); margin: 22px auto; }
-    .reward-choice { border: 1px solid var(--line); background: var(--panel-2); color: var(--text); border-radius: 7px; padding: 18px 12px; }
-    .reward-choice.active { border-color: var(--cyan); box-shadow: inset 0 0 0 1px var(--cyan); }
-    .reward-icon { display: block; color: var(--gold); font-size: 24px; margin-bottom: 7px; }
-    .field { text-align: left; width: min(520px, 100%); margin: 14px auto 0; }
-    .field label { display: block; color: var(--muted); font-size: 12px; font-weight: 750; margin-bottom: 7px; text-transform: uppercase; letter-spacing: 1px; }
-    .field input, .field select { width: 100%; min-height: 48px; border: 1px solid var(--line); border-radius: 6px; background: #090d14; color: var(--text); padding: 0 13px; }
-    .code {
-      border: 1px solid #6e7fff; background: #090d18; border-radius: 7px; padding: 18px;
-      font: 800 clamp(15px, 4vw, 24px)/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
-      color: #bdc6ff; word-break: break-all; margin: 22px 0 8px;
+    .reward-choice {
+      min-height: 92px;
+      border: 1px solid var(--line);
+      background: var(--surface-raised);
+      color: var(--text);
+      border-radius: 3px;
+      padding: 15px 12px;
+      text-align: left;
     }
-    .admin { margin-top: 22px; padding: 22px; display: none; }
+    .reward-choice.active { border-color: var(--signal); }
+    .reward-icon { display: block; color: var(--gold); font: 800 18px/1 ui-monospace, monospace; margin-bottom: 13px; }
+    .field { text-align: left; width: min(520px, 100%); margin: 14px auto 0; }
+    .field label { display: block; color: var(--muted); font-size: 10px; font-weight: 800; margin-bottom: 7px; text-transform: uppercase; letter-spacing: 1px; }
+    .field input, .field select { width: 100%; min-height: 46px; border: 1px solid var(--line-strong); border-radius: 3px; background: #090b0e; color: var(--text); padding: 0 13px; }
+    .code {
+      border: 1px solid var(--signal);
+      border-radius: 3px;
+      padding: 20px;
+      background: #0a0c0f;
+      font: 800 clamp(14px, 3vw, 22px)/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+      color: var(--signal);
+      word-break: break-all;
+      margin: 22px 0 8px;
+    }
+    .admin { margin-top: 18px; padding: 0; display: none; }
     .admin.visible { display: block; }
-    .admin-head { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 18px; }
-    .admin-grid { display: grid; grid-template-columns: 1.2fr .8fr .8fr; gap: 10px; }
+    .admin-head { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 20px 22px; border-bottom: 1px solid var(--line); }
+    .admin-grid { display: grid; grid-template-columns: 1.2fr .8fr .8fr; gap: 12px; padding: 22px; }
     .admin .field { width: auto; margin: 0; }
-    .payload { margin-top: 16px; padding: 12px; background: #090d14; border: 1px solid var(--line); border-radius: 6px; color: var(--cyan); font-family: ui-monospace, monospace; word-break: break-all; }
+    #tag-result { padding: 0 22px 22px; }
+    .payload { padding: 12px; background: #090b0e; border: 1px solid var(--line); border-radius: 3px; color: var(--signal); font-family: ui-monospace, monospace; word-break: break-all; }
+    #admin-error { padding: 0 22px; }
     [hidden] { display: none !important; }
-    @media (max-width: 680px) {
-      .shell { width: min(100% - 20px, 920px); padding-top: 22px; }
-      .stage { padding: 24px 16px; }
+    @media (max-width: 880px) {
+      .stage { grid-template-columns: 150px minmax(0, 1fr); }
+      .stage-meta { display: none; }
+    }
+    @media (max-width: 640px) {
+      .shell { width: min(100% - 20px, 1180px); }
+      .brand small { display: none; }
+      .hero { display: block; padding-top: 30px; }
+      .hero-status { margin-top: 16px; }
+      .stage { display: block; min-height: 0; }
+      .stage-rail { display: flex; padding: 14px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .rail-label, .step span:last-child { display: none; }
+      .step { flex: 1; display: flex; align-items: center; min-height: 0; }
+      .step:not(:last-child)::after { display: none; }
+      .step strong { font-size: 10px; }
+      .stage-main { padding: 34px 16px; min-height: 410px; }
       .reward-grid, .admin-grid { grid-template-columns: 1fr; }
-      .topbar { margin-bottom: 26px; }
+      .reward-choice { min-height: 66px; }
+      .admin-head { align-items: flex-start; }
     }
   </style>
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
-      <div class="brand"><span class="mark">N</span><span>NEXUS LIMITED</span></div>
-      <a class="back" href="/">Back to Nexus</a>
+      <div class="brand"><span class="mark">N</span><span>NEXUS</span><small>Limited claim system</small></div>
+      <a class="back" href="/">Return to Nexus</a>
     </header>
 
     <section class="hero">
-      <div class="eyebrow">Physical releases</div>
-      <h1>Tap into something rare.</h1>
-      <p>Scan an official Nexus NFC tag, choose its reward, then redeem the one-time code in the Decoration Shop.</p>
+      <div>
+        <div class="eyebrow">Physical release terminal</div>
+        <h1>Limited claim</h1>
+        <p>Present an official Nexus NFC tag to issue one account-bound reward code.</p>
+      </div>
+      <div class="hero-status">Claim network online</div>
     </section>
 
     <section class="panel stage">
-      <div id="scan-stage">
-        <div class="nfc-glyph" aria-hidden="true"></div>
-        <h2>Ready to scan</h2>
-        <p class="muted" id="scan-help">Hold your Android phone near an official Nexus tag.</p>
-        <div class="actions"><button class="primary" id="scan-btn">Scan NFC Tag</button></div>
-        <div class="error" id="scan-error"></div>
+      <aside class="stage-rail">
+        <span class="rail-label">Claim sequence</span>
+        <div class="step active"><span class="step-num">01</span><div><strong>Scan</strong><span>Read physical tag</span></div></div>
+        <div class="step"><span class="step-num">02</span><div><strong>Select</strong><span>Choose reward</span></div></div>
+        <div class="step"><span class="step-num">03</span><div><strong>Redeem</strong><span>Use in shop</span></div></div>
+      </aside>
+
+      <div class="stage-main">
+        <div id="scan-stage">
+          <div class="scan-target"><div class="nfc-glyph" aria-hidden="true"></div></div>
+          <div class="eyebrow">Scanner standing by</div>
+          <h2>Present your NFC tag</h2>
+          <p class="muted" id="scan-help">Hold your Android phone near the tag after starting the scanner.</p>
+          <div class="actions"><button class="primary" id="scan-btn">Start NFC Scanner</button></div>
+          <div class="error" id="scan-error"></div>
+        </div>
+
+        <div id="choose-stage" hidden>
+          <div class="eyebrow">Tag authenticated</div>
+          <h2>Select one reward</h2>
+          <p class="muted">The tag is consumed when your one-time code is issued.</p>
+          <div class="reward-grid">
+            <button class="reward-choice active" data-type="decoration"><span class="reward-icon">01</span>Any Decoration</button>
+            <button class="reward-choice" data-type="nexals"><span class="reward-icon">02</span>Nexals</button>
+            <button class="reward-choice" data-type="pro"><span class="reward-icon">03</span>Nexus PRO</button>
+          </div>
+          <div class="field" id="decoration-field">
+            <label for="decoration-select">Decoration</label>
+            <select id="decoration-select"></select>
+          </div>
+          <div class="field" id="nexals-field" hidden>
+            <label for="nexals-input">Nexal amount</label>
+            <input id="nexals-input" type="number" min="1" value="10000">
+          </div>
+          <div class="field" id="pro-field" hidden>
+            <label for="pro-input">PRO duration in days</label>
+            <input id="pro-input" type="number" min="1" value="30">
+          </div>
+          <div class="actions"><button class="primary" id="choose-btn">Issue One-Time Code</button></div>
+          <div class="error" id="choose-error"></div>
+        </div>
+
+        <div id="code-stage" hidden>
+          <div class="eyebrow">Code issued</div>
+          <h2>Reward reserved</h2>
+          <p class="muted" id="reward-summary"></p>
+          <div class="code" id="result-code"></div>
+          <p class="muted">Bound to this account. Expires in 30 minutes.</p>
+          <div class="actions">
+            <button class="primary" id="copy-btn">Copy Code</button>
+            <a class="secondary" href="/#shop" style="display:inline-grid;place-items:center;text-decoration:none">Open Shop</a>
+          </div>
+        </div>
       </div>
 
-      <div id="choose-stage" hidden>
-        <div class="eyebrow">Tag verified</div>
-        <h2>Choose your reward</h2>
-        <p class="muted">This choice is final. Your generated code expires after 30 minutes.</p>
-        <div class="reward-grid">
-          <button class="reward-choice active" data-type="decoration"><span class="reward-icon">✦</span>Any Decoration</button>
-          <button class="reward-choice" data-type="nexals"><span class="reward-icon">N</span>Nexals</button>
-          <button class="reward-choice" data-type="pro"><span class="reward-icon">P</span>Nexus PRO</button>
-        </div>
-        <div class="field" id="decoration-field">
-          <label for="decoration-select">Decoration</label>
-          <select id="decoration-select"></select>
-        </div>
-        <div class="field" id="nexals-field" hidden>
-          <label for="nexals-input">Nexal amount</label>
-          <input id="nexals-input" type="number" min="1" value="10000">
-        </div>
-        <div class="field" id="pro-field" hidden>
-          <label for="pro-input">PRO duration in days</label>
-          <input id="pro-input" type="number" min="1" value="30">
-        </div>
-        <div class="actions"><button class="primary" id="choose-btn">Generate One-Time Code</button></div>
-        <div class="error" id="choose-error"></div>
-      </div>
-
-      <div id="code-stage" hidden>
-        <div class="eyebrow">Limited code generated</div>
-        <h2>Your reward is reserved</h2>
-        <p class="muted" id="reward-summary"></p>
-        <div class="code" id="result-code"></div>
-        <p class="muted">Only your Nexus account can redeem this code. It expires in 30 minutes.</p>
-        <div class="actions">
-          <button class="primary" id="copy-btn">Copy Code</button>
-          <a class="secondary" href="/#shop" style="display:inline-grid;place-items:center;text-decoration:none">Open Shop</a>
-        </div>
-      </div>
+      <aside class="stage-meta">
+        <span class="rail-label">Session</span>
+        <div class="meta-row"><span>Mode</span><strong>ONE-TIME</strong></div>
+        <div class="meta-row"><span>Binding</span><strong>NEXUS ACCOUNT</strong></div>
+        <div class="meta-row"><span>Code life</span><strong>30 MINUTES</strong></div>
+        <div class="meta-row"><span>Transport</span><strong>NFC / NDEF</strong></div>
+      </aside>
     </section>
 
     <section class="panel admin" id="admin-panel">
@@ -178,6 +381,12 @@
       let limits = {};
       let rewardType = 'decoration';
       let currentPayload = '';
+
+      function setStep(number) {
+        document.querySelectorAll('.step').forEach((step, index) => {
+          step.classList.toggle('active', index + 1 === number);
+        });
+      }
 
       async function api(method, path, body) {
         const response = await fetch(path, {
@@ -250,6 +459,7 @@
             $('pro-input').max = limits.maxProDays || 1;
             $('scan-stage').hidden = true;
             $('choose-stage').hidden = false;
+            setStep(2);
           }, { once: true });
         } catch (error) {
           $('scan-error').textContent = error.name === 'NotAllowedError'
@@ -289,6 +499,7 @@
         if (result.reward.type === 'pro') $('reward-summary').textContent = `${result.reward.days} days of Nexus PRO`;
         $('choose-stage').hidden = true;
         $('code-stage').hidden = false;
+        setStep(3);
       });
 
       $('copy-btn').addEventListener('click', async () => {
