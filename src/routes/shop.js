@@ -7,6 +7,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 const SECRET_CATEGORY = '???SECRET???';
+const HEHESHUIS_SECRET_ID = 'heheshuis_aura';
 const DECORATION_SELL_PRICES = {
   common: 300,
   rare: 650,
