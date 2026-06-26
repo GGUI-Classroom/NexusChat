@@ -308,8 +308,8 @@ const DECORATION_PACKS = [
       { decorationId: 'prism_overdrive', chance: 12 },
       { decorationId: 'eternal_flame', chance: 8 },
       { decorationId: 'magic_mists', chance: 5 },
-      { decorationId: 'singularity', chance: 0.2 },
-      { decorationId: 'event_horizon', chance: 0.25 }
+      { decorationId: 'event_horizon', chance: 0.25 },
+      { decorationId: 'singularity', chance: 0.2 }
     ]
   }
 ];
