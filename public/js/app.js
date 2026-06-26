@@ -5773,7 +5773,7 @@
     if (data.error) return toast(data.error, 'error');
     const count = $('stats-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
     const rarities = Object.entries(data.rarityBreakdown || {}).map(([rarity, amount]) => `<div class="stat-rarity"><span>${esc(rarity)}</span><b>${amount}</b></div>`).join('');
-    $('stats-content').innerHTML = `<div class="stats-hero"><div><span>COLLECTION VALUE</span><strong>${data.sellableValue.toLocaleString()} Nexals</strong><p>Resale value from your pack-only decorations.</p></div><button class="shop-card-btn buy" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All</button></div><div class="stats-metrics"><div><b>${data.decorationCount}</b><span>Total copies</span></div><div><b>${data.uniqueDecorations}</b><span>Unique effects</span></div><div><b>${data.nexals.toLocaleString()}</b><span>Current Nexals</span></div></div><div class="stats-rarities">${rarities || '<span>No decorations yet</span>'}</div>`;
+    $('stats-content').innerHTML = `<div class="stats-hero"><div><span>COLLECTION VALUE</span><strong>${data.sellableValue.toLocaleString()} Nexals</strong><p>Resale value from your pack-only decorations. Duplicates: ${(data.duplicateCount || 0).toLocaleString()} worth ${(data.duplicateValue || 0).toLocaleString()} Nexals.</p></div><div class="stats-actions"><button class="shop-card-btn buy" onclick="sellDuplicateDecorations()" ${(data.duplicateValue || 0) ? '' : 'disabled'}>Sell Duplicates</button><button class="shop-card-btn buy danger" onclick="sellAllDecorations()" ${data.sellableValue ? '' : 'disabled'}>Sell All</button></div></div><div class="stats-metrics"><div><b>${data.decorationCount}</b><span>Total copies</span></div><div><b>${data.uniqueDecorations}</b><span>Unique effects</span></div><div><b>${data.nexals.toLocaleString()}</b><span>Current Nexals</span></div></div><div class="stats-rarities">${rarities || '<span>No decorations yet</span>'}</div>`;
   }
 
   async function loadQuests() {
@@ -5790,6 +5790,15 @@
     if (result.error) return toast(result.error, 'error');
     updateNexalDisplay(result.nexals);
     toast('Sold collection for ' + result.soldValue.toLocaleString() + ' Nexals', 'success');
+    await loadCollectionStats();
+  };
+
+  window.sellDuplicateDecorations = async function() {
+    if (!confirm('Sell all duplicate pack decorations and keep one copy of each?')) return;
+    const result = await api('POST', '/api/shop/sell-duplicates');
+    if (result.error) return toast(result.error, 'error');
+    updateNexalDisplay(result.nexals);
+    toast('Sold ' + result.soldCount.toLocaleString() + ' duplicates for ' + result.soldValue.toLocaleString() + ' Nexals', 'success');
     await loadCollectionStats();
   };
 

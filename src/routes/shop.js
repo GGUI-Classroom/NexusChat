@@ -687,15 +687,18 @@ router.get('/stats', async (req, res) => {
   const items = owned.rows.map(row => {
     const decoration = DECORATIONS.find(d => d.id === row.decoration_id);
     const sellPrice = decoration?.packOnly ? (DECORATION_SELL_PRICES[decoration.rarity] || 0) : 0;
-    return decoration ? { ...toClientDecoration(decoration, row.quantity), totalValue: sellPrice * row.quantity } : null;
+    const duplicateCount = decoration?.packOnly ? Math.max(0, row.quantity - 1) : 0;
+    return decoration ? { ...toClientDecoration(decoration, row.quantity), totalValue: sellPrice * row.quantity, duplicateCount, duplicateValue: sellPrice * duplicateCount } : null;
   }).filter(Boolean);
   const sellableValue = items.reduce((total, item) => total + item.totalValue, 0);
+  const duplicateValue = items.reduce((total, item) => total + item.duplicateValue, 0);
+  const duplicateCount = items.reduce((total, item) => total + item.duplicateCount, 0);
   const rarityBreakdown = items.reduce((all, item) => {
     all[item.rarity] = (all[item.rarity] || 0) + item.quantity;
     return all;
   }, {});
   const user = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
-  res.json({ nexals: user.rows[0]?.nexals || 0, items, sellableValue, rarityBreakdown, uniqueDecorations: items.length, decorationCount: items.reduce((total, item) => total + item.quantity, 0) });
+  res.json({ nexals: user.rows[0]?.nexals || 0, items, sellableValue, duplicateValue, duplicateCount, rarityBreakdown, uniqueDecorations: items.length, decorationCount: items.reduce((total, item) => total + item.quantity, 0) });
 });
 
 router.post('/sell-all', async (req, res) => {
@@ -723,6 +726,43 @@ router.post('/sell-all', async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: 'Could not sell your collection' });
+  } finally { client.release(); }
+});
+
+router.post('/sell-duplicates', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const owned = await client.query(
+      'SELECT decoration_id, COUNT(*)::int AS quantity FROM user_decorations WHERE user_id=$1 GROUP BY decoration_id',
+      [req.session.userId]
+    );
+    let value = 0;
+    let soldCount = 0;
+    for (const row of owned.rows) {
+      const decoration = DECORATIONS.find(d => d.id === row.decoration_id);
+      if (!decoration?.packOnly || row.quantity <= 1) continue;
+      const duplicates = row.quantity - 1;
+      value += (DECORATION_SELL_PRICES[decoration.rarity] || 0) * duplicates;
+      soldCount += duplicates;
+      await client.query(`
+        WITH duplicate_copies AS (
+          SELECT id FROM user_decorations
+          WHERE user_id=$1 AND decoration_id=$2
+          ORDER BY unlocked_at DESC, id DESC
+          LIMIT $3
+        )
+        DELETE FROM user_decorations WHERE id IN (SELECT id FROM duplicate_copies)
+      `, [req.session.userId, decoration.id, duplicates]);
+    }
+    if (!soldCount) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'No duplicate pack decorations to sell' }); }
+    const updated = await client.query('UPDATE users SET nexals=nexals+$1 WHERE id=$2 RETURNING nexals', [value, req.session.userId]);
+    await client.query('COMMIT');
+    res.json({ success: true, soldValue: value, soldCount, nexals: updated.rows[0].nexals });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Sell duplicates failed:', error.message);
+    res.status(500).json({ error: 'Could not sell duplicate decorations' });
   } finally { client.release(); }
 });
 
