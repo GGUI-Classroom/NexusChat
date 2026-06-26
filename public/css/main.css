@@ -5499,13 +5499,13 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   filter: saturate(1.38) contrast(1.18) drop-shadow(0 0 14px rgba(125,247,255,0.44));
 }
 .premium-event-horizon .premium-shell {
-  inset: -11px;
+  inset: -10px;
   background:
-    radial-gradient(circle at 50% 50%, #020006 0 18%, rgba(255,244,180,0.95) 20%, rgba(5,0,15,0.92) 24%, transparent 38%),
+    radial-gradient(circle at 50% 50%, transparent 0 48%, rgba(255,244,180,0.26) 51%, transparent 60%),
     conic-gradient(from 18deg, transparent 0 18deg, #fff4a3 26deg, #7df7ff 36deg, transparent 54deg, transparent 92deg, #b66cff 116deg, transparent 138deg, transparent 184deg, #fff08a 204deg, #7df7ff 218deg, transparent 240deg, transparent 306deg, #d284ff 326deg, transparent 360deg);
-  -webkit-mask: radial-gradient(circle, #000 0 42%, transparent 68%);
-          mask: radial-gradient(circle, #000 0 42%, transparent 68%);
-  animation: event-horizon-vortex 2.7s linear infinite, event-horizon-pulse 4.6s ease-in-out infinite;
+  -webkit-mask: radial-gradient(circle, transparent 0 46%, #000 52% 70%, transparent 78%);
+          mask: radial-gradient(circle, transparent 0 46%, #000 52% 70%, transparent 78%);
+  animation: event-horizon-vortex 5.2s linear infinite, event-horizon-pulse 4.6s ease-in-out infinite;
 }
 .premium-event-horizon .premium-glass {
   inset: -6px;
@@ -5541,21 +5541,23 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 }
 .premium-event-horizon .premium-motif-singularity {
   background:
-    radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 0 17%, rgba(255,255,255,0.9) 19%, rgba(255,224,94,0.92) 21%, rgba(125,247,255,0.36) 26%, transparent 38%),
-    repeating-radial-gradient(circle at 50% 50%, transparent 0 7px, rgba(255,244,163,0.5) 8px 9px, transparent 10px 17px);
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.94) 0 8%, rgba(255,255,255,0.82) 10%, rgba(255,224,94,0.78) 12%, transparent 20%),
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 9px, rgba(255,244,163,0.42) 10px 11px, transparent 12px 20px);
+  -webkit-mask: radial-gradient(circle, #000 0 22%, transparent 32% 42%, #000 48% 60%, transparent 68%);
+          mask: radial-gradient(circle, #000 0 22%, transparent 32% 42%, #000 48% 60%, transparent 68%);
   animation: event-horizon-core 3.2s ease-in-out infinite;
 }
 .premium-event-horizon .premium-intrusion {
   background:
-    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.98) 0 20%, rgba(255,244,163,0.88) 23%, rgba(125,247,255,0.4) 28%, transparent 42%),
-    conic-gradient(from 0deg, transparent 0 30deg, rgba(255,244,163,0.9) 44deg, transparent 58deg, transparent 122deg, rgba(125,247,255,0.78) 146deg, transparent 168deg, transparent 244deg, rgba(182,108,255,0.8) 266deg, transparent 286deg);
-  animation: event-horizon-intrude 7s ease-in-out infinite;
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.88) 0 18%, rgba(255,244,163,0.76) 22%, rgba(125,247,255,0.36) 29%, transparent 44%),
+    conic-gradient(from 0deg, transparent 0 30deg, rgba(255,244,163,0.82) 44deg, transparent 58deg, transparent 122deg, rgba(125,247,255,0.72) 146deg, transparent 168deg, transparent 244deg, rgba(182,108,255,0.72) 266deg, transparent 286deg);
+  animation: event-horizon-intrude 8s ease-in-out infinite;
 }
 .premium-event-horizon .premium-strike {
   background: linear-gradient(115deg, transparent 0 38%, rgba(255,244,163,0.0) 42%, #fff4a3 48%, #7df7ff 52%, transparent 60%);
   -webkit-mask: linear-gradient(115deg, transparent 0 38%, #000 47% 53%, transparent 62%);
           mask: linear-gradient(115deg, transparent 0 38%, #000 47% 53%, transparent 62%);
-  animation: event-horizon-strike 7s ease-in-out infinite;
+  animation: event-horizon-strike 8s ease-in-out infinite;
 }
 
 .premium-time .premium-shell {
@@ -5797,12 +5799,12 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   45% { transform: scale(1.12); filter: brightness(1.4); }
 }
 @keyframes event-horizon-intrude {
-  0%,58%,100% { opacity: 0; transform: scale(0.55) rotate(0deg); }
-  68%,84% { opacity: 0.82; transform: scale(1.04) rotate(38deg); }
+  0%,18%,63%,100% { opacity: 0; transform: scale(0.5) rotate(0deg); }
+  28%,52% { opacity: 0.78; transform: scale(0.96) rotate(42deg); }
 }
 @keyframes event-horizon-strike {
-  0%,62%,100% { opacity: 0; transform: translateX(-26%) rotate(0deg); }
-  70%,78% { opacity: 0.9; transform: translateX(14%) rotate(8deg); }
+  0%,24%,58%,100% { opacity: 0; transform: translateX(-24%) rotate(0deg); }
+  34%,45% { opacity: 0.88; transform: translateX(12%) rotate(8deg); }
 }
 @keyframes prism-sweep {
   0%,100% { opacity: 0.62; transform: translateX(-3px) rotate(-4deg); }
