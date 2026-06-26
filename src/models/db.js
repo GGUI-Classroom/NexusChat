@@ -367,14 +367,6 @@ async function initDb() {
   await runSql(`CREATE INDEX IF NOT EXISTS idx_ip_bans_active_ip ON ip_bans(ip_address, active)`, 'idx_ip_bans_active_ip');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_ip_bans_active_device ON ip_bans(device_id, active)`, 'idx_ip_bans_active_device');
 
-  await runSql(`CREATE TABLE IF NOT EXISTS code_redemptions (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    code TEXT NOT NULL,
-    redeemed_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
-    UNIQUE(user_id, code)
-  )`, 'code_redemptions');
-
   await runSql(`CREATE TABLE IF NOT EXISTS user_achievements (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

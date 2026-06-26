@@ -23,7 +23,6 @@
   let quickPopupTimer = null;
   let secretHumCtx = null;
   let secretHumNodes = [];
-  let secretClaimRunning = false;
   let pendingGifts = [];
   let selectedGift = null;
   const externalCallParams = new URLSearchParams(window.location.search);
@@ -63,9 +62,6 @@
 
   const SECRET_CATEGORY = '???SECRET???';
   const SECRET_DECORATION_ID = 'stormveil';
-  const SECRET_UNLOCK_PASSPHRASE = 'void';
-  const HEHESHUIS_SECRET_ID = 'heheshuis_aura';
-  const HEHESHUIS_PASSPHRASE = 'lol';
 
   // Call state
   let callState = null; // { roomId, peerId, peerUser, peerConnection, localStream, timerInterval }
@@ -5769,7 +5765,7 @@
     if (action === 'locked') {
       const d = shopData && shopData.decorations.find(x => x.id === decoId);
       if (d && d.nexalPrice) toast('Not enough Nexals! Need ' + d.nexalPrice.toLocaleString(), 'error');
-      else toast('Redeem an exclusive code to unlock this decoration!', 'info');
+      else toast('This decoration is not currently available for purchase.', 'info');
       return;
     }
     if (action === 'buy') {
@@ -5911,30 +5907,6 @@
       ringtonePreviewTimer = null;
     }, 1600);
   }
-
-  $('shop-redeem-btn').addEventListener('click', async () => {
-    const code = $('shop-code-input').value.trim().toUpperCase();
-    if (!code) return showError('shop-error', 'Enter a code');
-    showError('shop-error', '');
-    const btn = $('shop-redeem-btn');
-    btn.disabled = true; btn.textContent = 'Redeeming…';
-    const r = await api('POST', '/api/shop/redeem', { code });
-    btn.disabled = false; btn.textContent = 'Redeem';
-    if (r.error) return showError('shop-error', r.error);
-    $('shop-code-input').value = '';
-    if (r.nexalBoost) {
-      updateNexalDisplay(r.nexals);
-      toast('💰 +' + r.amount.toLocaleString() + ' Nexals added!', 'success', 5000);
-      await loadShop();
-      return;
-    }
-    if (['mythical', 'ascendent'].includes(r.decoration.rarity)) {
-      await showClaimAnimation(r.decoration);
-    } else {
-      toast('🎉 Unlocked: ' + r.decoration.name + '!', 'success', 5000);
-    }
-    await loadShop();
-  });
 
   // ---- Achievements ----
   let achData = null;
@@ -6236,7 +6208,7 @@
   };
 
   window.unclaimDeco = async function(decoId, name) {
-    if (!confirm('Remove "' + name + '" from your collection? You will need the code to reclaim it.')) return;
+    if (!confirm('Remove "' + name + '" from your collection? This cannot be undone.')) return;
     const r = await api('DELETE', '/api/shop/unclaim/' + decoId);
     if (r.error) return toast(r.error, 'error');
     if (currentUser.activeDecoration === decoId) {
@@ -6245,77 +6217,6 @@
     }
     toast('Removed "' + name + '" from your collection', 'info');
     await loadShop();
-  };
-
-  $('shop-code-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') $('shop-redeem-btn').click();
-  });
-
-  async function claimSecretDecoration(payload = {}) {
-    if (secretClaimRunning) {
-      return { error: 'A secret claim sequence is already running' };
-    }
-    const body = {};
-    if (payload.secretId) body.secretId = payload.secretId;
-    if (payload.passphrase) body.passphrase = payload.passphrase;
-
-    const r = await api('POST', '/api/shop/claim-secret', body);
-    if (r.error) {
-      toast(r.error, 'error');
-      return r;
-    }
-
-    secretClaimRunning = true;
-    try {
-      await showSecretClaimAnimation(r.decoration || {
-        id: SECRET_DECORATION_ID,
-        name: 'The Stormveil',
-        rarity: '??SECRET??',
-        flavorText: "It doesn't rain here. It hunts."
-      });
-    } finally {
-      secretClaimRunning = false;
-    }
-
-    currentUser.activeDecoration = r.active || SECRET_DECORATION_ID;
-    updateSelfCard();
-    syncSecretAmbient();
-    await loadShop();
-    toast(r.alreadyOwned ? 'Secret rekindled.' : 'Secret decoration claimed.', 'success', 4500);
-    return r;
-  }
-
-  window.claimSecret = async function(secretId) {
-    const target = String(secretId || '').trim() || SECRET_DECORATION_ID;
-    if (target !== SECRET_DECORATION_ID) {
-      const err = 'Unknown secret id. Try claimSecret("stormveil")';
-      console.warn(err);
-      return { error: err };
-    }
-    console.info('Claim sequence started...');
-    return claimSecretDecoration({ secretId: target });
-  };
-
-  window.unlock = async function(passphrase) {
-    const code = String(passphrase || '').trim().toLowerCase();
-    if (code !== SECRET_UNLOCK_PASSPHRASE) {
-      const err = 'Invalid passphrase';
-      console.warn(err);
-      return { error: err };
-    }
-    console.info('Passphrase accepted. Secret sequence started...');
-    return claimSecretDecoration({ passphrase: code });
-  };
-
-  window.heheshuis = async function(passphrase) {
-    const code = String(passphrase || '').trim().toLowerCase();
-    if (code !== HEHESHUIS_PASSPHRASE) {
-      const err = 'Invalid passphrase';
-      console.warn(err);
-      return { error: err };
-    }
-    console.info('Heheshuis sequence started...');
-    return claimSecretDecoration({ secretId: HEHESHUIS_SECRET_ID, passphrase: code });
   };
 
   // ---- Mythical Claim Animation ----

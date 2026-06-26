@@ -7,9 +7,6 @@ const router = express.Router();
 router.use(requireAuth);
 
 const SECRET_CATEGORY = '???SECRET???';
-const SECRET_PASSPHRASE = (process.env.SECRET_DECO_PASSPHRASE || 'void').trim().toLowerCase();
-const HEHESHUIS_SECRET_ID = 'heheshuis_aura';
-const HEHESHUIS_PASSPHRASE = 'lol';
 const DECORATION_SELL_PRICES = {
   common: 300,
   rare: 650,
@@ -27,7 +24,7 @@ async function syncAchievementFields(userId, fields) {
       const relevant = ACHIEVEMENTS.filter(a => a.field === field);
       if (!relevant.length) continue;
       let count = 0;
-      if (field === 'codes_redeemed' || field === 'decos_owned') {
+      if (field === 'decos_owned') {
         const r = await pool.query('SELECT COUNT(*) FROM user_decorations WHERE user_id=$1', [userId]);
         count = parseInt(r.rows[0].count);
       } else if (field === 'decos_equipped') {
@@ -419,34 +416,6 @@ function rollPackItem(pack) {
   return candidates[candidates.length - 1].decoration;
 }
 
-// Special nexal boost codes (not decorations)
-// Set amount to negative to mark as infinite-use
-const NEXAL_CODES = {
-  [process.env.NEXAL_CODE_1 || 'ADMIN1231209#7327']: { amount: 100000, infinite: true },
-};
-
-// Code -> decoration mapping (loaded from env vars)
-function getCodeMap() {
-  return {
-    [process.env.DECO_CODE_NEXUS2026 || 'NEXUS2026']:       'orbit_white',
-    [process.env.DECO_CODE_FIRSTYEAR || 'FIRSTYEAR']:       'halo_gold',
-    [process.env.DECO_CODE_FIRSTDEP  || 'FIRSTDEP']:        'galaxy',
-    [process.env.DECO_CODE_GLOWYMOON || 'GLOWYMOON']:       'glow_green',
-    [process.env.DECO_CODE_NEONWAVE  || 'NEONWAVE']:        'neon_pink',
-    [process.env.DECO_CODE_FIRESTORM || 'FIRESTORM']:       'fire',
-    [process.env.DECO_CODE_RAINBOW   || 'RAINBOW']:         'rainbow',
-    [process.env.DECO_CODE_FROSTBITE || 'FROSTBITE']:       'frost',
-    [process.env.DECO_CODE_GOLDRING  || 'GOLDRING']:        'orbit_gold',
-    [process.env.DECO_CODE_BLUEGLOW      || 'BLUEGLOW']:      'glow_blue',
-    [process.env.DECO_CODE_NEXUSADMIN    || 'NEXUSADMIN']:    'nexus_admin',
-    [process.env.DECO_CODE_STORMBRINGER  || 'STORMBRINGER']:  'storm',
-    [process.env.DECO_CODE_INFERNO       || 'INFERNO']:       'inferno',
-    [process.env.DECO_CODE_HYDRO         || 'HYDRO']:         'hydro',
-    [process.env.DECO_CODE_SHATTER       || 'SHATTER']:       'shatter',
-    [process.env.DECO_CODE_YINYANG       || 'YINYANG']:       'yinyang',
-  };
-}
-
 // Get all decorations + which ones the user owns
 router.get('/', async (req, res) => {
   const owned = await pool.query(
@@ -467,106 +436,6 @@ router.get('/', async (req, res) => {
     active: user.rows[0]?.active_decoration || null,
     nexals: nexalsRes.rows[0]?.nexals || 0
   });
-});
-
-router.post('/claim-secret', async (req, res) => {
-  const secretId = String(req.body.secretId || '').trim();
-  const passphrase = String(req.body.passphrase || '').trim().toLowerCase();
-
-  let secretDeco = null;
-  const wantsHeheshuis = secretId === HEHESHUIS_SECRET_ID;
-  if (secretId) {
-    secretDeco = DECORATIONS.find(d => d.id === secretId && SECRET_DECORATION_IDS.has(d.id));
-    if (wantsHeheshuis && passphrase !== HEHESHUIS_PASSPHRASE) {
-      return res.status(403).json({ error: 'Secret claim denied' });
-    }
-  } else if (passphrase && passphrase === SECRET_PASSPHRASE) {
-    secretDeco = DECORATIONS.find(d => SECRET_DECORATION_IDS.has(d.id));
-  }
-
-  if (!secretDeco) {
-    return res.status(403).json({ error: 'Secret claim denied' });
-  }
-  if (passphrase && passphrase !== SECRET_PASSPHRASE && passphrase !== HEHESHUIS_PASSPHRASE) {
-    return res.status(403).json({ error: 'Secret claim denied' });
-  }
-
-  const already = await pool.query(
-    'SELECT id FROM user_decorations WHERE user_id=$1 AND decoration_id=$2',
-    [req.session.userId, secretDeco.id]
-  );
-
-  if (!already.rows.length) {
-    await pool.query(
-      'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3)',
-      [uuidv4(), req.session.userId, secretDeco.id]
-    );
-    await syncAchievementFields(req.session.userId, ['decos_owned']);
-  }
-
-  await pool.query(
-    'UPDATE users SET active_decoration=$1 WHERE id=$2',
-    [secretDeco.id, req.session.userId]
-  );
-  await syncAchievementFields(req.session.userId, ['decos_equipped']);
-
-  res.json({
-    success: true,
-    alreadyOwned: already.rows.length > 0,
-    decoration: toClientDecoration(secretDeco, true),
-    active: secretDeco.id
-  });
-});
-
-// Redeem a code
-router.post('/redeem', async (req, res) => {
-  const { code } = req.body;
-  if (!code || typeof code !== 'string') return res.status(400).json({ error: 'No code provided' });
-
-  const codeMap = getCodeMap();
-  const decorationId = codeMap[code.trim().toUpperCase()];
-
-  // Check if it's a nexal boost code
-  const cleanCode = code.trim().toUpperCase();
-  const nexalEntry = NEXAL_CODES[cleanCode] || NEXAL_CODES[code.trim()]; // try both upper and raw
-  if (nexalEntry) {
-    if (!nexalEntry.infinite) {
-      // Check if already redeemed
-      const already = await pool.query(
-        'SELECT id FROM code_redemptions WHERE user_id=$1 AND code=$2',
-        [req.session.userId, cleanCode]
-      );
-      if (already.rows.length) return res.status(409).json({ error: 'You have already redeemed this code' });
-      // Record redemption
-      await pool.query(
-        'INSERT INTO code_redemptions (id, user_id, code) VALUES ($1,$2,$3)',
-        [require('uuid').v4(), req.session.userId, cleanCode]
-      );
-    }
-    await pool.query('UPDATE users SET nexals = nexals + $1 WHERE id=$2', [nexalEntry.amount, req.session.userId]);
-    const r = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
-    return res.json({ success: true, nexalBoost: true, amount: nexalEntry.amount, nexals: r.rows[0].nexals });
-  }
-
-  if (!decorationId) return res.status(404).json({ error: 'Invalid code' });
-
-  const deco = DECORATIONS.find(d => d.id === decorationId);
-  if (!deco) return res.status(404).json({ error: 'Decoration not found' });
-
-  // Check already owned
-  const already = await pool.query(
-    'SELECT id FROM user_decorations WHERE user_id=$1 AND decoration_id=$2',
-    [req.session.userId, decorationId]
-  );
-  if (already.rows.length) return res.status(409).json({ error: 'You already own this decoration!' });
-
-  await pool.query(
-    'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3)',
-    [uuidv4(), req.session.userId, decorationId]
-  );
-  // Track achievements
-  await syncAchievementFields(req.session.userId, ['codes_redeemed', 'decos_owned']);
-  res.json({ success: true, decoration: toClientDecoration(deco, true) });
 });
 
 // Equip / unequip a decoration
@@ -768,7 +637,7 @@ router.post('/buy', async (req, res) => {
   const deco = DECORATIONS.find(d => d.id === decorationId);
   if (!deco) return res.status(404).json({ error: 'Decoration not found' });
   if (deco.hidden) return res.status(403).json({ error: 'This decoration cannot be purchased' });
-  if (!deco.nexalPrice) return res.status(403).json({ error: 'This decoration is code-only and cannot be purchased' });
+  if (!deco.nexalPrice) return res.status(403).json({ error: 'This decoration is not available for direct purchase' });
 
   // Check not already owned
   const owned = await pool.query('SELECT id FROM user_decorations WHERE user_id=$1 AND decoration_id=$2', [req.session.userId, decorationId]);

@@ -2568,13 +2568,6 @@ html, body {
 .shop-card-btn.unequip:hover { background: rgba(61,214,140,0.25); }
 .shop-card-btn.locked  { background: var(--bg-hover); color: var(--text-muted); cursor: default; }
 
-.shop-redeem-area {
-  padding: 20px;
-  border-bottom: 1px solid var(--border);
-  display: flex; gap: 10px; align-items: flex-end;
-}
-.shop-redeem-area .field-group { flex: 1; margin: 0; }
-
 #shop-dynamic-tabs {
   padding: 8px 20px 0;
 }

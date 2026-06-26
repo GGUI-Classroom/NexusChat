@@ -43,7 +43,6 @@ const CHAINS = {
     { id: 'role_1', title: 'Ranked Up',    desc: 'Receive a role in a server',  icon: '🎖️', nexals: 250, target: 1 },
   ],
   decos: [
-    { id: 'deco_redeem', title: 'Code Hunter',    desc: 'Redeem an exclusive code',    icon: '🔑', nexals: 600,  target: 1 },
     { id: 'deco_equip',  title: 'Looking Fresh',  desc: 'Equip a decoration',          icon: '✨', nexals: 100,  target: 1 },
     { id: 'deco_3',      title: 'Decorator',      desc: 'Own 3 decorations',           icon: '🎨', nexals: 500,  target: 3 },
     { id: 'deco_5',      title: 'Connoisseur',    desc: 'Own 5 decorations',           icon: '💎', nexals: 1500, target: 5 },
@@ -102,7 +101,6 @@ async function getUserStats(userId) {
     roles:        parseInt(roleRes.rows[0].count) > 0 ? 1 : 0,
     decos_owned:  decoCount,
     decos_equip:  equippedRes.rows[0]?.active_decoration ? 1 : 0,
-    decos_redeem: decoCount,
     packs:        packRes.rows[0]?.openings || 0,
     nexals:       nexalsRes.rows[0]?.nexals || 0,
   };
@@ -119,7 +117,6 @@ function getStatForAch(a, stats, chainKey) {
   if (chainKey === 'roles')        return stats.roles;
   if (chainKey === 'decos') {
     if (a.id === 'deco_equip')  return stats.decos_equip;
-    if (a.id === 'deco_redeem') return stats.decos_redeem;
     return stats.decos_owned;
   }
   if (chainKey === 'packs')        return stats.packs;

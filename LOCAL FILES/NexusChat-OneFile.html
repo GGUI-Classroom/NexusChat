@@ -2579,13 +2579,6 @@ html, body {
 .shop-card-btn.unequip:hover { background: rgba(61,214,140,0.25); }
 .shop-card-btn.locked  { background: var(--bg-hover); color: var(--text-muted); cursor: default; }
 
-.shop-redeem-area {
-  padding: 20px;
-  border-bottom: 1px solid var(--border);
-  display: flex; gap: 10px; align-items: flex-end;
-}
-.shop-redeem-area .field-group { flex: 1; margin: 0; }
-
 #shop-dynamic-tabs {
   padding: 8px 20px 0;
 }
@@ -6546,14 +6539,6 @@ html, body {
               <span id="shop-nexal-count">0</span> Nexals
             </div>
           </div>
-          <div class="shop-redeem-area">
-            <div class="field-group">
-              <label>Redeem Code</label>
-              <input type="text" id="shop-code-input" placeholder="Enter your code…" style="text-transform:uppercase;letter-spacing:2px" maxlength="30" />
-            </div>
-            <button class="btn-primary" id="shop-redeem-btn" style="white-space:nowrap;padding:10px 18px">Redeem</button>
-            <div class="form-error" id="shop-error" style="align-self:center"></div>
-          </div>
           <div id="shop-dynamic-tabs"></div>
           <div id="shop-grid" class="shop-grid"></div>
           <div class="shop-subsection">
@@ -7280,7 +7265,6 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   let quickPopupTimer = null;
   let secretHumCtx = null;
   let secretHumNodes = [];
-  let secretClaimRunning = false;
   let pendingGifts = [];
   let selectedGift = null;
   const LOCAL_API_ORIGIN = String(window.NEXUS_API_URL || '').replace(/\/+$/, '');
@@ -7356,9 +7340,6 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
 
   const SECRET_CATEGORY = '???SECRET???';
   const SECRET_DECORATION_ID = 'stormveil';
-  const SECRET_UNLOCK_PASSPHRASE = 'void';
-  const HEHESHUIS_SECRET_ID = 'heheshuis_aura';
-  const HEHESHUIS_PASSPHRASE = 'lol';
 
   // Call state
   let callState = null; // { roomId, peerId, peerUser, peerConnection, localStream, timerInterval }
@@ -12791,7 +12772,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     if (action === 'locked') {
       const d = shopData && shopData.decorations.find(x => x.id === decoId);
       if (d && d.nexalPrice) toast('Not enough Nexals! Need ' + d.nexalPrice.toLocaleString(), 'error');
-      else toast('Redeem an exclusive code to unlock this decoration!', 'info');
+      else toast('This decoration is not currently available for purchase.', 'info');
       return;
     }
     if (action === 'buy') {
@@ -12933,30 +12914,6 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       ringtonePreviewTimer = null;
     }, 1600);
   }
-
-  $('shop-redeem-btn').addEventListener('click', async () => {
-    const code = $('shop-code-input').value.trim().toUpperCase();
-    if (!code) return showError('shop-error', 'Enter a code');
-    showError('shop-error', '');
-    const btn = $('shop-redeem-btn');
-    btn.disabled = true; btn.textContent = 'Redeeming…';
-    const r = await api('POST', '/api/shop/redeem', { code });
-    btn.disabled = false; btn.textContent = 'Redeem';
-    if (r.error) return showError('shop-error', r.error);
-    $('shop-code-input').value = '';
-    if (r.nexalBoost) {
-      updateNexalDisplay(r.nexals);
-      toast('💰 +' + r.amount.toLocaleString() + ' Nexals added!', 'success', 5000);
-      await loadShop();
-      return;
-    }
-    if (['mythical', 'ascendent'].includes(r.decoration.rarity)) {
-      await showClaimAnimation(r.decoration);
-    } else {
-      toast('🎉 Unlocked: ' + r.decoration.name + '!', 'success', 5000);
-    }
-    await loadShop();
-  });
 
   // ---- Achievements ----
   let achData = null;
@@ -13252,7 +13209,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   };
 
   window.unclaimDeco = async function(decoId, name) {
-    if (!confirm('Remove "' + name + '" from your collection? You will need the code to reclaim it.')) return;
+    if (!confirm('Remove "' + name + '" from your collection? This cannot be undone.')) return;
     const r = await api('DELETE', '/api/shop/unclaim/' + decoId);
     if (r.error) return toast(r.error, 'error');
     if (currentUser.activeDecoration === decoId) {
@@ -13261,77 +13218,6 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     }
     toast('Removed "' + name + '" from your collection', 'info');
     await loadShop();
-  };
-
-  $('shop-code-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') $('shop-redeem-btn').click();
-  });
-
-  async function claimSecretDecoration(payload = {}) {
-    if (secretClaimRunning) {
-      return { error: 'A secret claim sequence is already running' };
-    }
-    const body = {};
-    if (payload.secretId) body.secretId = payload.secretId;
-    if (payload.passphrase) body.passphrase = payload.passphrase;
-
-    const r = await api('POST', '/api/shop/claim-secret', body);
-    if (r.error) {
-      toast(r.error, 'error');
-      return r;
-    }
-
-    secretClaimRunning = true;
-    try {
-      await showSecretClaimAnimation(r.decoration || {
-        id: SECRET_DECORATION_ID,
-        name: 'The Stormveil',
-        rarity: '??SECRET??',
-        flavorText: "It doesn't rain here. It hunts."
-      });
-    } finally {
-      secretClaimRunning = false;
-    }
-
-    currentUser.activeDecoration = r.active || SECRET_DECORATION_ID;
-    updateSelfCard();
-    syncSecretAmbient();
-    await loadShop();
-    toast(r.alreadyOwned ? 'Secret rekindled.' : 'Secret decoration claimed.', 'success', 4500);
-    return r;
-  }
-
-  window.claimSecret = async function(secretId) {
-    const target = String(secretId || '').trim() || SECRET_DECORATION_ID;
-    if (target !== SECRET_DECORATION_ID) {
-      const err = 'Unknown secret id. Try claimSecret("stormveil")';
-      console.warn(err);
-      return { error: err };
-    }
-    console.info('Claim sequence started...');
-    return claimSecretDecoration({ secretId: target });
-  };
-
-  window.unlock = async function(passphrase) {
-    const code = String(passphrase || '').trim().toLowerCase();
-    if (code !== SECRET_UNLOCK_PASSPHRASE) {
-      const err = 'Invalid passphrase';
-      console.warn(err);
-      return { error: err };
-    }
-    console.info('Passphrase accepted. Secret sequence started...');
-    return claimSecretDecoration({ passphrase: code });
-  };
-
-  window.heheshuis = async function(passphrase) {
-    const code = String(passphrase || '').trim().toLowerCase();
-    if (code !== HEHESHUIS_PASSPHRASE) {
-      const err = 'Invalid passphrase';
-      console.warn(err);
-      return { error: err };
-    }
-    console.info('Heheshuis sequence started...');
-    return claimSecretDecoration({ secretId: HEHESHUIS_SECRET_ID, passphrase: code });
   };
 
   // ---- Mythical Claim Animation ----
