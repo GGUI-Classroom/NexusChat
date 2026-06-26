@@ -405,7 +405,24 @@ async function initDb() {
     created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
   )`, 'limited_redemption_codes');
   await runSql(`ALTER TABLE limited_redemption_codes ADD COLUMN IF NOT EXISTS redeemed_by TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL`, 'alter_limited_redemption_redeemed_by');
+  await runSql(`ALTER TABLE limited_redemption_codes ADD COLUMN IF NOT EXISTS label TEXT DEFAULT NULL`, 'alter_limited_redemption_label');
+  await runSql(`ALTER TABLE limited_redemption_codes ADD COLUMN IF NOT EXISTS code_hint TEXT DEFAULT NULL`, 'alter_limited_redemption_code_hint');
+  await runSql(`ALTER TABLE limited_redemption_codes ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE`, 'alter_limited_redemption_active');
+  await runSql(`ALTER TABLE limited_redemption_codes ADD COLUMN IF NOT EXISTS max_uses INTEGER DEFAULT 1`, 'alter_limited_redemption_max_uses');
+  await runSql(`ALTER TABLE limited_redemption_codes ADD COLUMN IF NOT EXISTS use_count INTEGER NOT NULL DEFAULT 0`, 'alter_limited_redemption_use_count');
+  await runSql(`UPDATE limited_redemption_codes SET use_count=1 WHERE redeemed_at IS NOT NULL AND use_count=0`, 'normalize_limited_redemption_use_count');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_limited_redemption_user ON limited_redemption_codes(user_id, expires_at)`, 'idx_limited_redemption_user');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS limited_code_uses (
+    id TEXT PRIMARY KEY,
+    code_id TEXT NOT NULL REFERENCES limited_redemption_codes(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reward_type TEXT NOT NULL,
+    reward_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(code_id, user_id)
+  )`, 'limited_code_uses');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_limited_code_uses_code ON limited_code_uses(code_id, created_at DESC)`, 'idx_limited_code_uses_code');
 
   await runSql(`CREATE TABLE IF NOT EXISTS user_achievements (
     id TEXT PRIMARY KEY,
