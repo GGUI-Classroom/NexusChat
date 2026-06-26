@@ -338,6 +338,33 @@ function toClientDecoration(d, quantityOrOwned = 0) {
   };
 }
 
+function giftPayload(row) {
+  const decoration = row.decoration_id ? DECORATIONS.find(d => d.id === row.decoration_id) : null;
+  return {
+    id: row.id,
+    type: row.gift_type,
+    amount: row.nexal_amount || null,
+    decoration: decoration ? toClientDecoration(decoration, 1) : null,
+    fromUser: {
+      id: row.from_user_id,
+      username: row.from_username,
+      displayName: row.from_display_name
+    },
+    createdAt: parseInt(row.created_at, 10)
+  };
+}
+
+async function getGiftForClient(clientOrPool, giftId) {
+  const r = await clientOrPool.query(
+    `SELECT g.*, u.username AS from_username, u.display_name AS from_display_name
+     FROM user_gifts g
+     JOIN users u ON u.id=g.from_user_id
+     WHERE g.id=$1`,
+    [giftId]
+  );
+  return r.rows[0] ? giftPayload(r.rows[0]) : null;
+}
+
 function toClientPack(pack, ownedQuantities) {
   const totalChance = pack.items.reduce((sum, item) => sum + item.chance, 0);
   const decorations = pack.items
@@ -593,18 +620,19 @@ router.post('/gift/nexals', async (req, res) => {
       return res.status(400).json({ error: 'Not enough Nexals for that gift' });
     }
     const updatedSender = await client.query('UPDATE users SET nexals=nexals-$1 WHERE id=$2 RETURNING nexals', [amount, req.session.userId]);
-    const updatedRecipient = await client.query('UPDATE users SET nexals=nexals+$1 WHERE id=$2 RETURNING nexals', [amount, toUserId]);
+    const giftId = uuidv4();
+    await client.query(
+      `INSERT INTO user_gifts (id, from_user_id, to_user_id, gift_type, nexal_amount)
+       VALUES ($1,$2,$3,'nexals',$4)`,
+      [giftId, req.session.userId, toUserId, amount]
+    );
+    const gift = await getGiftForClient(client, giftId);
     await client.query('COMMIT');
     if (req.io) {
       req.io.to(`user:${req.session.userId}`).emit('nexals_updated', { nexals: updatedSender.rows[0].nexals });
-      req.io.to(`user:${toUserId}`).emit('nexals_updated', { nexals: updatedRecipient.rows[0].nexals });
-      req.io.to(`user:${toUserId}`).emit('gift_received', {
-        type: 'nexals',
-        amount,
-        fromUserId: req.session.userId
-      });
+      req.io.to(`user:${toUserId}`).emit('gift_received', gift);
     }
-    res.json({ success: true, nexals: updatedSender.rows[0].nexals, recipient: { id: toUserId, username: recipient.rows[0].username, displayName: recipient.rows[0].display_name } });
+    res.json({ success: true, nexals: updatedSender.rows[0].nexals, gift, recipient: { id: toUserId, username: recipient.rows[0].username, displayName: recipient.rows[0].display_name } });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Nexal gift failed:', error.message);
@@ -658,20 +686,77 @@ router.post('/gift/decoration', async (req, res) => {
     if (!remaining.rows.length) {
       await client.query('UPDATE users SET active_decoration=NULL WHERE id=$1 AND active_decoration=$2', [req.session.userId, decorationId]);
     }
+    const giftId = uuidv4();
+    await client.query(
+      `INSERT INTO user_gifts (id, from_user_id, to_user_id, gift_type, decoration_id, decoration_row_id)
+       VALUES ($1,$2,$3,'decoration',$4,$5)`,
+      [giftId, req.session.userId, toUserId, decorationId, copy.rows[0].id]
+    );
+    const gift = await getGiftForClient(client, giftId);
     await client.query('COMMIT');
     if (req.io) {
-      req.io.to(`user:${toUserId}`).emit('gift_received', {
-        type: 'decoration',
-        decoration: toClientDecoration(deco, 1),
-        fromUserId: req.session.userId
-      });
+      req.io.to(`user:${toUserId}`).emit('gift_received', gift);
     }
     await syncAchievementFields(toUserId, ['decos_owned']);
-    res.json({ success: true, decoration: toClientDecoration(deco, 1), recipient: { id: toUserId, username: recipient.rows[0].username, displayName: recipient.rows[0].display_name } });
+    res.json({ success: true, gift, decoration: toClientDecoration(deco, 1), recipient: { id: toUserId, username: recipient.rows[0].username, displayName: recipient.rows[0].display_name } });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Decoration gift failed:', error.message);
     res.status(500).json({ error: 'Could not send decoration gift' });
+  } finally {
+    client.release();
+  }
+});
+
+router.get('/gifts', async (req, res) => {
+  const r = await pool.query(
+    `SELECT g.*, u.username AS from_username, u.display_name AS from_display_name
+     FROM user_gifts g
+     JOIN users u ON u.id=g.from_user_id
+     WHERE g.to_user_id=$1 AND g.claimed=FALSE
+     ORDER BY g.created_at DESC
+     LIMIT 25`,
+    [req.session.userId]
+  );
+  res.json({ gifts: r.rows.map(giftPayload) });
+});
+
+router.post('/gifts/:giftId/open', async (req, res) => {
+  const giftId = String(req.params.giftId || '').trim();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const r = await client.query(
+      `SELECT g.*, u.username AS from_username, u.display_name AS from_display_name
+       FROM user_gifts g
+       JOIN users u ON u.id=g.from_user_id
+       WHERE g.id=$1 AND g.to_user_id=$2
+       FOR UPDATE OF g`,
+      [giftId, req.session.userId]
+    );
+    const gift = r.rows[0];
+    if (!gift) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Gift not found' });
+    }
+    if (gift.claimed) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Gift already opened' });
+    }
+    let nexals = null;
+    if (gift.gift_type === 'nexals') {
+      const updated = await client.query('UPDATE users SET nexals=nexals+$1 WHERE id=$2 RETURNING nexals', [gift.nexal_amount || 0, req.session.userId]);
+      nexals = updated.rows[0].nexals;
+    }
+    await client.query('UPDATE user_gifts SET claimed=TRUE, claimed_at=EXTRACT(EPOCH FROM NOW())::BIGINT WHERE id=$1', [giftId]);
+    await client.query('COMMIT');
+    if (typeof nexals === 'number' && req.io) req.io.to(`user:${req.session.userId}`).emit('nexals_updated', { nexals });
+    if (gift.gift_type === 'decoration') await syncAchievementFields(req.session.userId, ['decos_owned']);
+    res.json({ success: true, gift: giftPayload(gift), nexals });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Open gift failed:', error.message);
+    res.status(500).json({ error: 'Could not open gift' });
   } finally {
     client.release();
   }

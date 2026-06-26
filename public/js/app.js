@@ -24,6 +24,8 @@
   let secretHumCtx = null;
   let secretHumNodes = [];
   let secretClaimRunning = false;
+  let pendingGifts = [];
+  let selectedGift = null;
   const externalCallParams = new URLSearchParams(window.location.search);
   let externalCallJoinPending = externalCallParams.get('nexusCall')
     ? { roomId: externalCallParams.get('nexusCall'), fromId: externalCallParams.get('from'), callType: externalCallParams.get('type') === 'video' ? 'video' : 'voice' }
@@ -1542,6 +1544,7 @@
       connectSocket();
       loadFriends();
       loadPendingRequests();
+      loadPendingGifts();
       loadServers();
       loadServerInvites();
       switchView('friends');
@@ -3604,10 +3607,9 @@
     });
     socket.on('gift_received', gift => {
       if (!gift) return;
-      if (gift.type === 'nexals') toast(`Gift received: ${(gift.amount || 0).toLocaleString()} Nexals`, 'success');
-      if (gift.type === 'decoration') toast(`Gift received: ${gift.decoration?.name || 'Decoration'}`, 'success');
-      if (activeView === 'shop') loadShop();
-      if (activeView === 'stats') loadCollectionStats();
+      pendingGifts = [gift, ...pendingGifts.filter(item => item.id !== gift.id)];
+      renderPendingGifts();
+      toast(`New gift from @${gift.fromUser?.username || 'someone'}`, 'success');
     });
 
     socket.on('connect', () => {
@@ -6817,6 +6819,62 @@
   let giftTarget = null;
   let giftMode = 'nexals';
 
+  function renderPendingGifts() {
+    const stack = $('pending-gifts-stack');
+    if (!stack) return;
+    stack.innerHTML = pendingGifts.map(gift => {
+      const label = gift.type === 'nexals'
+        ? `${(gift.amount || 0).toLocaleString()} Nexals`
+        : (gift.decoration?.name || 'Decoration');
+      return `<button class="pending-gift-card" onclick="openPendingGift('${esc(gift.id)}')">
+        <span class="pending-gift-icon">✦</span>
+        <span><strong>Gift from @${esc(gift.fromUser?.username || 'user')}</strong><span>${esc(label)} waiting to open</span></span>
+      </button>`;
+    }).join('');
+  }
+
+  async function loadPendingGifts() {
+    const r = await api('GET', '/api/shop/gifts');
+    if (r.error) return;
+    pendingGifts = r.gifts || [];
+    renderPendingGifts();
+  }
+
+  window.openPendingGift = function(giftId) {
+    selectedGift = pendingGifts.find(gift => gift.id === giftId);
+    if (!selectedGift) return;
+    $('gift-box-button').classList.remove('opened');
+    showError('gift-open-error', '');
+    $('gift-open-text').textContent = `A gift from @${selectedGift.fromUser?.username || 'someone'} is waiting. Click the box to open it.`;
+    $('gift-open-modal').classList.add('active');
+  };
+
+  async function claimSelectedGift() {
+    if (!selectedGift) return;
+    const box = $('gift-box-button');
+    box.disabled = true;
+    showError('gift-open-error', '');
+    const r = await api('POST', `/api/shop/gifts/${encodeURIComponent(selectedGift.id)}/open`);
+    box.disabled = false;
+    if (r.error) return showError('gift-open-error', r.error);
+    box.classList.add('opened');
+    pendingGifts = pendingGifts.filter(gift => gift.id !== selectedGift.id);
+    renderPendingGifts();
+    if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals);
+    if (activeView === 'shop') loadShop();
+    if (activeView === 'stats') loadCollectionStats();
+    const opened = r.gift || selectedGift;
+    const reward = opened.type === 'nexals'
+      ? `${(opened.amount || 0).toLocaleString()} Nexals`
+      : (opened.decoration?.name || 'Decoration');
+    $('gift-open-text').textContent = `You opened ${reward}!`;
+    toast(`Opened gift: ${reward}`, 'success');
+  }
+
+  if ($('gift-open-close')) $('gift-open-close').addEventListener('click', () => $('gift-open-modal').classList.remove('active'));
+  if ($('gift-open-modal')) $('gift-open-modal').addEventListener('click', e => { if (e.target === $('gift-open-modal')) $('gift-open-modal').classList.remove('active'); });
+  if ($('gift-box-button')) $('gift-box-button').addEventListener('click', claimSelectedGift);
+
   async function openGiftModal(mode, target) {
     giftTarget = target;
     giftMode = mode;
@@ -6856,7 +6914,7 @@
     if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals);
     if (activeView === 'shop') await loadShop();
     if (activeView === 'stats') await loadCollectionStats();
-    toast(giftMode === 'nexals' ? `Sent Nexals to @${r.recipient.username}` : `Sent ${r.decoration.name} to @${r.recipient.username}`, 'success');
+    toast(`Gift box sent to @${r.recipient.username}`, 'success');
   }
 
   if ($('gift-modal-close')) $('gift-modal-close').addEventListener('click', () => $('gift-modal').classList.remove('active'));

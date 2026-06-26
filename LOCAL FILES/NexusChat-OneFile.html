@@ -1768,6 +1768,19 @@ html, body {
 .tutorial-card p { margin:0 auto; max-width:470px; color:var(--text-secondary); line-height:1.55; }
 .tutorial-actions { display:flex; gap:10px; justify-content:flex-end; align-items:center; }
 .tutorial-actions #tutorial-skip-btn { margin-right:auto; }
+.pending-gifts-stack { position:fixed; right:18px; bottom:86px; z-index:900; display:flex; flex-direction:column; gap:10px; pointer-events:none; }
+.pending-gift-card { pointer-events:auto; display:flex; align-items:center; gap:10px; min-width:250px; padding:11px 12px; border:1px solid rgba(255,214,10,.45); border-radius:12px; background:linear-gradient(135deg,rgba(255,214,10,.18),rgba(88,101,242,.16)),var(--bg-surface); box-shadow:0 18px 44px rgba(0,0,0,.35); cursor:pointer; color:var(--text-primary); font-family:Syne,sans-serif; text-align:left; }
+.pending-gift-card strong { display:block; font-size:13px; }
+.pending-gift-card span { color:var(--text-secondary); font-size:11px; }
+.pending-gift-icon { width:38px; height:38px; border-radius:10px; display:grid; place-items:center; background:linear-gradient(135deg,#ffd60a,#f97316); color:#111827; font-weight:900; font-size:20px; }
+.gift-open-modal { max-width:430px; }
+.gift-box-button { position:relative; width:132px; height:116px; margin:10px auto 6px; display:block; border:0; background:transparent; cursor:pointer; }
+.gift-box-lid,.gift-box-body { position:absolute; left:50%; transform:translateX(-50%); display:block; background:linear-gradient(135deg,#ffd60a,#f97316); box-shadow:0 18px 44px rgba(249,115,22,.28); }
+.gift-box-lid { top:16px; width:118px; height:34px; border-radius:10px 10px 5px 5px; }
+.gift-box-body { top:48px; width:100px; height:68px; border-radius:7px 7px 12px 12px; }
+.gift-box-lid::after,.gift-box-body::after { content:""; position:absolute; left:50%; top:0; bottom:0; width:18px; transform:translateX(-50%); background:rgba(88,101,242,.86); }
+.gift-box-button.opened .gift-box-lid { transform:translateX(-50%) translateY(-20px) rotate(-12deg); transition:transform .35s ease; }
+.gift-open-text { text-align:center; color:var(--text-secondary); line-height:1.45; }
 .profile-tag-choices { display:flex; flex-wrap:wrap; gap:7px; }
 .tag-choice { border:1px solid var(--border); background:var(--bg-input); color:var(--text-secondary); padding:7px 9px; border-radius:5px; cursor:pointer; font:inherit; font-size:12px; font-weight:700; }
 .tag-choice:hover,.tag-choice.selected { border-color:var(--accent); color:var(--text-primary); background:color-mix(in srgb, var(--tag-bg, var(--accent)) 22%, var(--bg-input)); }
@@ -7182,6 +7195,22 @@ html, body {
     </div>
   </div>
 
+  <div class="modal-overlay" id="gift-open-modal">
+    <div class="modal gift-open-modal">
+      <div class="modal-header"><h2>Gift Box</h2><button class="modal-close" id="gift-open-close">Close</button></div>
+      <div class="modal-body">
+        <button type="button" class="gift-box-button" id="gift-box-button">
+          <span class="gift-box-lid"></span>
+          <span class="gift-box-body"></span>
+        </button>
+        <div id="gift-open-text" class="gift-open-text">Click the box to open your gift.</div>
+        <div class="form-error" id="gift-open-error"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pending-gifts-stack" class="pending-gifts-stack"></div>
+
   <div class="modal-overlay" id="tutorial-overlay" style="z-index:1200">
     <div class="modal tutorial-modal">
       <div class="modal-header"><h2 id="tutorial-title">Welcome to Nexus</h2><button class="modal-close" id="tutorial-skip-x">Skip</button></div>
@@ -7252,6 +7281,8 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   let secretHumCtx = null;
   let secretHumNodes = [];
   let secretClaimRunning = false;
+  let pendingGifts = [];
+  let selectedGift = null;
   const LOCAL_API_ORIGIN = String(window.NEXUS_API_URL || '').replace(/\/+$/, '');
 
   function apiUrl(path) {
@@ -8777,6 +8808,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       connectSocket();
       loadFriends();
       loadPendingRequests();
+      loadPendingGifts();
       loadServers();
       loadServerInvites();
       switchView('friends');
@@ -10666,10 +10698,9 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     });
     socket.on('gift_received', gift => {
       if (!gift) return;
-      if (gift.type === 'nexals') toast(`Gift received: ${(gift.amount || 0).toLocaleString()} Nexals`, 'success');
-      if (gift.type === 'decoration') toast(`Gift received: ${gift.decoration?.name || 'Decoration'}`, 'success');
-      if (activeView === 'shop') loadShop();
-      if (activeView === 'stats') loadCollectionStats();
+      pendingGifts = [gift, ...pendingGifts.filter(item => item.id !== gift.id)];
+      renderPendingGifts();
+      toast(`New gift from @${gift.fromUser?.username || 'someone'}`, 'success');
     });
 
     socket.on('connect', () => console.log('Socket connected'));
@@ -13804,6 +13835,62 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   let giftTarget = null;
   let giftMode = 'nexals';
 
+  function renderPendingGifts() {
+    const stack = $('pending-gifts-stack');
+    if (!stack) return;
+    stack.innerHTML = pendingGifts.map(gift => {
+      const label = gift.type === 'nexals'
+        ? `${(gift.amount || 0).toLocaleString()} Nexals`
+        : (gift.decoration?.name || 'Decoration');
+      return `<button class="pending-gift-card" onclick="openPendingGift('${esc(gift.id)}')">
+        <span class="pending-gift-icon">✦</span>
+        <span><strong>Gift from @${esc(gift.fromUser?.username || 'user')}</strong><span>${esc(label)} waiting to open</span></span>
+      </button>`;
+    }).join('');
+  }
+
+  async function loadPendingGifts() {
+    const r = await api('GET', '/api/shop/gifts');
+    if (r.error) return;
+    pendingGifts = r.gifts || [];
+    renderPendingGifts();
+  }
+
+  window.openPendingGift = function(giftId) {
+    selectedGift = pendingGifts.find(gift => gift.id === giftId);
+    if (!selectedGift) return;
+    $('gift-box-button').classList.remove('opened');
+    showError('gift-open-error', '');
+    $('gift-open-text').textContent = `A gift from @${selectedGift.fromUser?.username || 'someone'} is waiting. Click the box to open it.`;
+    $('gift-open-modal').classList.add('active');
+  };
+
+  async function claimSelectedGift() {
+    if (!selectedGift) return;
+    const box = $('gift-box-button');
+    box.disabled = true;
+    showError('gift-open-error', '');
+    const r = await api('POST', `/api/shop/gifts/${encodeURIComponent(selectedGift.id)}/open`);
+    box.disabled = false;
+    if (r.error) return showError('gift-open-error', r.error);
+    box.classList.add('opened');
+    pendingGifts = pendingGifts.filter(gift => gift.id !== selectedGift.id);
+    renderPendingGifts();
+    if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals);
+    if (activeView === 'shop') loadShop();
+    if (activeView === 'stats') loadCollectionStats();
+    const opened = r.gift || selectedGift;
+    const reward = opened.type === 'nexals'
+      ? `${(opened.amount || 0).toLocaleString()} Nexals`
+      : (opened.decoration?.name || 'Decoration');
+    $('gift-open-text').textContent = `You opened ${reward}!`;
+    toast(`Opened gift: ${reward}`, 'success');
+  }
+
+  if ($('gift-open-close')) $('gift-open-close').addEventListener('click', () => $('gift-open-modal').classList.remove('active'));
+  if ($('gift-open-modal')) $('gift-open-modal').addEventListener('click', e => { if (e.target === $('gift-open-modal')) $('gift-open-modal').classList.remove('active'); });
+  if ($('gift-box-button')) $('gift-box-button').addEventListener('click', claimSelectedGift);
+
   async function openGiftModal(mode, target) {
     giftTarget = target;
     giftMode = mode;
@@ -13843,7 +13930,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals);
     if (activeView === 'shop') await loadShop();
     if (activeView === 'stats') await loadCollectionStats();
-    toast(giftMode === 'nexals' ? `Sent Nexals to @${r.recipient.username}` : `Sent ${r.decoration.name} to @${r.recipient.username}`, 'success');
+    toast(`Gift box sent to @${r.recipient.username}`, 'success');
   }
 
   if ($('gift-modal-close')) $('gift-modal-close').addEventListener('click', () => $('gift-modal').classList.remove('active'));

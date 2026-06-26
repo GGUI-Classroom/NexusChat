@@ -220,6 +220,19 @@ async function initDb() {
   )`, 'decoration_auctions');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_decoration_auctions_active ON decoration_auctions(status, created_at DESC)`, 'idx_decoration_auctions_active');
   await runSql(`CREATE UNIQUE INDEX IF NOT EXISTS idx_decoration_auction_one_active_row ON decoration_auctions(decoration_row_id) WHERE status='active'`, 'idx_decoration_auction_one_active_row');
+  await runSql(`CREATE TABLE IF NOT EXISTS user_gifts (
+    id TEXT PRIMARY KEY,
+    from_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    to_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    gift_type TEXT NOT NULL,
+    nexal_amount INTEGER DEFAULT NULL,
+    decoration_id TEXT DEFAULT NULL,
+    decoration_row_id TEXT DEFAULT NULL REFERENCES user_decorations(id) ON DELETE SET NULL,
+    claimed BOOLEAN DEFAULT FALSE,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    claimed_at BIGINT DEFAULT NULL
+  )`, 'user_gifts');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_user_gifts_to_claimed ON user_gifts(to_user_id, claimed, created_at DESC)`, 'idx_user_gifts_to_claimed');
   await runSql(`CREATE TABLE IF NOT EXISTS user_pack_stats (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     openings INTEGER NOT NULL DEFAULT 0
