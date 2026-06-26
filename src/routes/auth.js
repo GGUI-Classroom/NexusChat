@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 const { avatarUrl } = require('../utils/avatar');
 const { getActiveReportForUser } = require('../utils/systemReport');
+const { requestIp } = require('../utils/ip');
 
 const router = express.Router();
 const DEFAULT_SERVER_INVITE_CODE = 'GPFA9B32';
@@ -19,12 +20,17 @@ router.post('/register', async (req, res) => {
   if (password.length < 6)
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   try {
+    const ip = requestIp(req);
+    if (ip) {
+      const banned = await pool.query('SELECT reason FROM ip_bans WHERE ip_address=$1 AND active=TRUE LIMIT 1', [ip]);
+      if (banned.rows.length) return res.status(403).json({ error: 'This network is banned from Nexus' });
+    }
     const exists = await pool.query('SELECT id FROM users WHERE LOWER(username)=LOWER($1)', [username]);
     if (exists.rows.length) return res.status(409).json({ error: 'Username already taken' });
     const hash = await bcrypt.hash(password, 12);
     const id = uuidv4();
-    await pool.query('INSERT INTO users (id, username, display_name, password_hash) VALUES ($1,$2,$3,$4)',
-      [id, username.toLowerCase(), displayName, hash]);
+    await pool.query('INSERT INTO users (id, username, display_name, password_hash, last_ip) VALUES ($1,$2,$3,$4,$5)',
+      [id, username.toLowerCase(), displayName, hash, ip || null]);
     const defaultServer = await pool.query(
       'SELECT id FROM servers WHERE UPPER(invite_code)=UPPER($1) LIMIT 1',
       [DEFAULT_SERVER_INVITE_CODE]
@@ -49,6 +55,11 @@ router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'All fields required' });
   try {
+    const ip = requestIp(req);
+    if (ip) {
+      const banned = await pool.query('SELECT reason FROM ip_bans WHERE ip_address=$1 AND active=TRUE LIMIT 1', [ip]);
+      if (banned.rows.length) return res.status(403).json({ error: 'This network is banned from Nexus' });
+    }
     const r = await pool.query(
       `SELECT id, username, display_name, password_hash, bio, (avatar_data IS NOT NULL) AS has_avatar,
         active_decoration, active_color, active_font, active_ringtone, pro_expires_at,
@@ -76,6 +87,7 @@ router.post('/login', async (req, res) => {
     }
 
     req.session.userId = user.id;
+    await pool.query('UPDATE users SET last_ip=$1 WHERE id=$2', [ip || null, user.id]);
     const systemReport = await getActiveReportForUser(pool, user.id);
     return res.json({ success: true, systemReport, user: {
       id: user.id, username: user.username, displayName: user.display_name,

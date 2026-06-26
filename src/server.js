@@ -11,6 +11,7 @@ const { v4: uuidv4 } = require('uuid');
 const { envFlag } = require('./config/env');
 const { pool, initDb } = require('./models/db');
 const { avatarUrl } = require('./utils/avatar');
+const { requestIp } = require('./utils/ip');
 
 const app = express();
 const server = http.createServer(app);
@@ -123,6 +124,22 @@ app.use(express.static(path.join(__dirname, '../public'), {
   etag: true,
   maxAge: isProd ? '1h' : 0
 }));
+
+app.use(async (req, res, next) => {
+  if (!req.path.startsWith('/api')) return next();
+  if (req.path === '/api/auth/logout') return next();
+  try {
+    const ip = requestIp(req);
+    if (!ip) return next();
+    const banned = await pool.query('SELECT reason FROM ip_bans WHERE ip_address=$1 AND active=TRUE LIMIT 1', [ip]);
+    if (banned.rows.length) {
+      return res.status(403).json({ error: 'This network is banned from Nexus' });
+    }
+  } catch (error) {
+    console.error('IP ban check failed:', error.message);
+  }
+  next();
+});
 
 // Expose io so routes can emit socket events
 app.set('io', io);
@@ -577,9 +594,19 @@ async function clearRoomParticipants(roomId) {
   voiceRooms.delete(roomId);
 }
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const sess = socket.request.session;
   if (!sess || !sess.userId) return next(new Error('Unauthorized'));
+  try {
+    const ip = requestIp(socket.request);
+    if (ip) {
+      const banned = await pool.query('SELECT reason FROM ip_bans WHERE ip_address=$1 AND active=TRUE LIMIT 1', [ip]);
+      if (banned.rows.length) return next(new Error('This network is banned from Nexus'));
+      await pool.query('UPDATE users SET last_ip=$1 WHERE id=$2', [ip, sess.userId]);
+    }
+  } catch (error) {
+    console.error('Socket IP ban check failed:', error.message);
+  }
   socket.userId = sess.userId;
   next();
 });

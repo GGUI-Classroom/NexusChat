@@ -245,6 +245,7 @@ async function initDb() {
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_ringtone TEXT DEFAULT NULL`, 'alter_users_ringtone');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_status TEXT DEFAULT 'offline'`, 'alter_users_discord_status');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_activity TEXT DEFAULT NULL`, 'alter_users_discord_activity');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip TEXT DEFAULT NULL`, 'alter_users_last_ip');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS mod_log_channel_id TEXT DEFAULT NULL`, 'alter_servers_mod_log_channel');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_name TEXT DEFAULT 'NexusBot'`, 'alter_servers_bot_name');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_prefix TEXT DEFAULT '/'`, 'alter_servers_bot_prefix');
@@ -332,6 +333,18 @@ async function initDb() {
     active BOOLEAN DEFAULT TRUE
   )`, 'suspensions');
 
+  await runSql(`CREATE TABLE IF NOT EXISTS ip_bans (
+    id TEXT PRIMARY KEY,
+    ip_address TEXT NOT NULL,
+    username TEXT DEFAULT NULL,
+    user_id TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+    banned_by TEXT NOT NULL REFERENCES users(id),
+    reason TEXT DEFAULT NULL,
+    active BOOLEAN DEFAULT TRUE,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'ip_bans');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_ip_bans_active_ip ON ip_bans(ip_address, active)`, 'idx_ip_bans_active_ip');
+
   await runSql(`CREATE TABLE IF NOT EXISTS code_redemptions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -389,6 +402,24 @@ async function initDb() {
     UNIQUE(report_id, user_id)
   )`, 'system_report_acknowledgements');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_system_report_acks_user_report ON system_report_acknowledgements(user_id, report_id)`, 'idx_system_report_acks_user_report');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS user_reports (
+    id TEXT PRIMARY KEY,
+    reporter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    report_type TEXT NOT NULL,
+    reason TEXT DEFAULT NULL,
+    message_type TEXT DEFAULT NULL,
+    message_id TEXT DEFAULT NULL,
+    message_content TEXT DEFAULT NULL,
+    server_id TEXT DEFAULT NULL REFERENCES servers(id) ON DELETE SET NULL,
+    channel_id TEXT DEFAULT NULL REFERENCES channels(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    resolved_at BIGINT DEFAULT NULL,
+    resolved_by TEXT DEFAULT NULL REFERENCES users(id)
+  )`, 'user_reports');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_user_reports_status_created ON user_reports(status, created_at DESC)`, 'idx_user_reports_status_created');
 
   await runSql(`CREATE TABLE IF NOT EXISTS server_mutes (
     id TEXT PRIMARY KEY,

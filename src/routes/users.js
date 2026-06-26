@@ -112,4 +112,86 @@ router.post('/system-report/:reportId/ack', requireAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+router.post('/report', requireAuth, async (req, res) => {
+  const reportType = String(req.body.type || '').trim().toLowerCase();
+  const reason = String(req.body.reason || '').trim().slice(0, 600) || null;
+  const messageType = String(req.body.messageType || '').trim().toLowerCase();
+  const messageId = String(req.body.messageId || '').trim();
+  let targetUserId = String(req.body.targetUserId || '').trim();
+  let messageContent = null;
+  let serverId = null;
+  let channelId = null;
+
+  if (!['user', 'message'].includes(reportType)) {
+    return res.status(400).json({ error: 'Choose user or message report type' });
+  }
+
+  try {
+    if (reportType === 'message') {
+      if (!messageId || !['dm', 'channel'].includes(messageType)) {
+        return res.status(400).json({ error: 'Message report is missing context' });
+      }
+      if (messageType === 'dm') {
+        const msg = await pool.query(
+          `SELECT id, from_id, to_id, content
+           FROM messages
+           WHERE id=$1 AND (from_id=$2 OR to_id=$2)
+           LIMIT 1`,
+          [messageId, req.session.userId]
+        );
+        if (!msg.rows.length) return res.status(404).json({ error: 'Message not found' });
+        const row = msg.rows[0];
+        targetUserId = row.from_id === req.session.userId ? row.to_id : row.from_id;
+        messageContent = String(row.content || '').slice(0, 1200);
+      } else {
+        const msg = await pool.query(
+          `SELECT cm.id, cm.from_id, cm.content, cm.channel_id, c.server_id
+           FROM channel_messages cm
+           JOIN channels c ON c.id=cm.channel_id
+           JOIN server_members sm ON sm.server_id=c.server_id AND sm.user_id=$2
+           WHERE cm.id=$1
+           LIMIT 1`,
+          [messageId, req.session.userId]
+        );
+        if (!msg.rows.length) return res.status(404).json({ error: 'Message not found' });
+        const row = msg.rows[0];
+        targetUserId = row.from_id;
+        messageContent = String(row.content || '').slice(0, 1200);
+        serverId = row.server_id;
+        channelId = row.channel_id;
+      }
+    }
+
+    if (!targetUserId || targetUserId === req.session.userId) {
+      return res.status(400).json({ error: 'You cannot report yourself' });
+    }
+
+    const target = await pool.query('SELECT id FROM users WHERE id=$1', [targetUserId]);
+    if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
+
+    await pool.query(
+      `INSERT INTO user_reports
+       (id, reporter_id, target_user_id, report_type, reason, message_type, message_id, message_content, server_id, channel_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [
+        uuidv4(),
+        req.session.userId,
+        targetUserId,
+        reportType,
+        reason,
+        reportType === 'message' ? messageType : null,
+        reportType === 'message' ? messageId : null,
+        messageContent,
+        serverId,
+        channelId
+      ]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('user report failed:', error.message);
+    res.status(500).json({ error: 'Could not submit report' });
+  }
+});
+
 module.exports = router;

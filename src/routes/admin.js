@@ -127,7 +127,7 @@ router.delete('/system-report', requireCoreAdmin, async (req, res) => {
 // Get all users
 router.get('/users', async (req, res) => {
   const { search } = req.query;
-  let q = `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime,
+  let q = `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.last_ip,
     (SELECT s.suspended_until FROM suspensions s
      WHERE s.user_id=u.id AND s.active=TRUE AND s.suspended_until > EXTRACT(EPOCH FROM NOW())::BIGINT
      ORDER BY s.created_at DESC LIMIT 1) as suspended_until
@@ -142,6 +142,7 @@ router.get('/users', async (req, res) => {
   res.json({ users: r.rows.map(u => ({
     id: u.id, username: u.username, displayName: u.display_name,
     avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
+    lastIp: u.last_ip || null,
     suspendedUntil: u.suspended_until ? parseInt(u.suspended_until) : null,
   }))});
 });
@@ -193,6 +194,24 @@ router.post('/unsuspend', async (req, res) => {
   if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
   await pool.query('UPDATE suspensions SET active=FALSE WHERE user_id=$1', [user.rows[0].id]);
   res.json({ success: true });
+});
+
+router.post('/ip-ban', async (req, res) => {
+  const username = String(req.body.username || '').trim();
+  const reason = String(req.body.reason || '').trim().slice(0, 400) || null;
+  if (!username) return res.status(400).json({ error: 'Username is required' });
+  const user = await pool.query('SELECT id, username, last_ip FROM users WHERE LOWER(username)=LOWER($1)', [username]);
+  if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
+  const row = user.rows[0];
+  if (ADMIN_IDS.has(row.id)) return res.status(403).json({ error: 'Cannot IP ban a core admin' });
+  if (!row.last_ip) return res.status(400).json({ error: 'That user has no recorded IP yet. Have them log in first.' });
+  await pool.query(
+    `INSERT INTO ip_bans (id, ip_address, username, user_id, banned_by, reason)
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [uuidv4(), row.last_ip, row.username, row.id, req.session.userId, reason]
+  );
+  if (req.io) req.io.to(`user:${row.id}`).emit('force_logout', { reason: 'This network was banned from Nexus.' });
+  res.json({ success: true, username: row.username, ip: row.last_ip });
 });
 
 // Get all servers
@@ -251,11 +270,67 @@ router.get('/suspensions', async (req, res) => {
   }))});
 });
 
+router.get('/user-reports', async (req, res) => {
+  const status = String(req.query.status || 'open').toLowerCase();
+  const params = [];
+  let where = '';
+  if (status !== 'all') {
+    params.push(status === 'resolved' ? 'resolved' : 'open');
+    where = 'WHERE ur.status=$1';
+  }
+  const r = await pool.query(`
+    SELECT ur.id, ur.report_type, ur.reason, ur.message_type, ur.message_id, ur.message_content,
+      ur.server_id, ur.channel_id, ur.status, ur.created_at, ur.resolved_at,
+      reporter.username AS reporter_username, reporter.display_name AS reporter_display_name,
+      target.username AS target_username, target.display_name AS target_display_name,
+      s.name AS server_name, c.name AS channel_name,
+      resolver.username AS resolver_username
+    FROM user_reports ur
+    JOIN users reporter ON reporter.id=ur.reporter_id
+    JOIN users target ON target.id=ur.target_user_id
+    LEFT JOIN servers s ON s.id=ur.server_id
+    LEFT JOIN channels c ON c.id=ur.channel_id
+    LEFT JOIN users resolver ON resolver.id=ur.resolved_by
+    ${where}
+    ORDER BY ur.created_at DESC
+    LIMIT 100
+  `, params);
+  res.json({ reports: r.rows.map(row => ({
+    id: row.id,
+    type: row.report_type,
+    reason: row.reason || '',
+    messageType: row.message_type || null,
+    messageId: row.message_id || null,
+    messageContent: row.message_content || null,
+    serverId: row.server_id || null,
+    serverName: row.server_name || null,
+    channelId: row.channel_id || null,
+    channelName: row.channel_name || null,
+    status: row.status,
+    createdAt: parseInt(row.created_at, 10),
+    resolvedAt: row.resolved_at ? parseInt(row.resolved_at, 10) : null,
+    resolvedBy: row.resolver_username || null,
+    reporter: { username: row.reporter_username, displayName: row.reporter_display_name },
+    target: { username: row.target_username, displayName: row.target_display_name }
+  }))});
+});
+
+router.post('/user-reports/:reportId/resolve', async (req, res) => {
+  const reportId = String(req.params.reportId || '').trim();
+  await pool.query(
+    `UPDATE user_reports
+     SET status='resolved', resolved_at=EXTRACT(EPOCH FROM NOW())::BIGINT, resolved_by=$1
+     WHERE id=$2`,
+    [req.session.userId, reportId]
+  );
+  res.json({ success: true });
+});
+
 // Get user info (nexals + servers)
 router.get('/users/:userId', async (req, res) => {
   const { userId } = req.params;
   const userRes = await pool.query(
-    'SELECT id, username, display_name, nexals, active_font FROM users WHERE id=$1', [userId]
+    'SELECT id, username, display_name, nexals, active_font, last_ip FROM users WHERE id=$1', [userId]
   );
   if (!userRes.rows.length) return res.status(404).json({ error: 'User not found' });
   const u = userRes.rows[0];
@@ -284,6 +359,7 @@ router.get('/users/:userId', async (req, res) => {
   res.json({
     id: u.id, username: u.username, displayName: u.display_name,
     nexals: u.nexals,
+    lastIp: u.last_ip || null,
     suspendedUntil: suspRes.rows[0] ? parseInt(suspRes.rows[0].suspended_until) : null,
     suspendReason: suspRes.rows[0]?.reason || null,
     servers: serversRes.rows.map(s => ({

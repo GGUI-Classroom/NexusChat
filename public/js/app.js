@@ -3185,6 +3185,34 @@
     return `${chips}<button class="msg-reaction-add" title="Add reaction" onclick="openChannelEmojiPicker(event,'${msgId}','${channelId}')">+</button>`;
   }
 
+  window.reportUser = async function(targetUserId, displayName) {
+    if (!targetUserId || (currentUser && targetUserId === currentUser.id)) return;
+    const reason = prompt(`Report ${displayName || 'this user'}? Add a short reason for admins:`);
+    if (reason === null) return;
+    const r = await api('POST', '/api/users/report', {
+      type: 'user',
+      targetUserId,
+      reason: reason.trim()
+    });
+    if (r.error) return toast(r.error, 'error');
+    toast('Report sent to admins', 'success');
+  };
+
+  window.reportMessage = async function(messageId, messageType, targetUserId, displayName) {
+    const name = decodeURIComponent(displayName || '') || 'this user';
+    const reason = prompt(`Report this message from ${name}? Add a short reason:`);
+    if (reason === null) return;
+    const r = await api('POST', '/api/users/report', {
+      type: 'message',
+      messageType,
+      messageId,
+      targetUserId,
+      reason: reason.trim()
+    });
+    if (r.error) return toast(r.error, 'error');
+    toast('Message report sent to admins', 'success');
+  };
+
   window.promptChannelReaction = function(msgId, channelId) {
     const emoji = prompt('React with emoji (examples: 👍 🔥 😂)');
     if (!emoji || !emoji.trim()) return;
@@ -3293,6 +3321,11 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M16 3l5 5-4 4-2-2-5 5v4h-2v-4l5-5-2-2z"/></svg>
         </button>`
       : '';
+    const reportAction = !isMe
+      ? `<button class="msg-action-btn" onclick="reportMessage('${msg.id}','${isChannelMsg ? 'channel' : 'dm'}','${msg.fromId}','${encodeURIComponent(author.displayName || author.username || 'User')}')" title="Report message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+        </button>`
+      : '';
     const reactionBar = isChannelMsg
       ? `<div class="msg-reactions" id="reactions-${msg.id}">${renderReactionChips(msg.id, msg.channelId, msg.reactions || [])}</div>`
       : '';
@@ -3310,6 +3343,7 @@
         ${reactionBar}
         ${replyAction}
         ${pinAction}
+        ${reportAction}
         ${(isChannelMsg && canDeleteThisMsg) ? `<button class="msg-delete-btn" onclick="deleteChannelMessage('${msg.id}','${msg.channelId}',this)" title="Delete message">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
         </button>` : ''}
@@ -3784,6 +3818,16 @@
         leaveGroupCall(false);
         if (socket) { socket.disconnect(); socket = null; }
         showSuspensionScreen(null, suspendedUntil, reason || null);
+      });
+    });
+
+    socket.on('force_logout', ({ reason }) => {
+      api('POST', '/api/auth/logout').finally(() => {
+        stopSecretHum();
+        currentUser = null;
+        if (socket) { socket.disconnect(); socket = null; }
+        toast(reason || 'You have been logged out.', 'error', 7000);
+        showAuth();
       });
     });
 
@@ -4643,6 +4687,7 @@
     if (tab === 'history') adminLoadHistory();
     if (tab === 'admins') adminLoadAdmins();
     if (tab === 'reports') adminLoadSystemReport();
+    if (tab === 'userreports') adminLoadUserReports();
     if (tab === 'userinfo') { $('admin-userinfo-result').innerHTML = ''; }
   }
 
@@ -4678,6 +4723,21 @@
     $('admin-unsuspend-username').value = '';
     toast('✓ @' + username + ' unsuspended', 'success');
   });
+
+  if ($('admin-ipban-btn')) {
+    $('admin-ipban-btn').addEventListener('click', async () => {
+      const username = ($('admin-ipban-username').value || '').trim();
+      const reason = ($('admin-ipban-reason').value || '').trim();
+      showError('admin-ipban-error', '');
+      if (!username) return showError('admin-ipban-error', 'Enter a username');
+      if (!confirm('IP ban @' + username + '? This blocks their last recorded network.')) return;
+      const r = await api('POST', '/api/admin/ip-ban', { username, reason });
+      if (r.error) return showError('admin-ipban-error', r.error);
+      $('admin-ipban-username').value = '';
+      $('admin-ipban-reason').value = '';
+      toast(`IP banned @${r.username} (${r.ip})`, 'success');
+    });
+  }
 
   window.adminLoadServers = async function() {
     const list = $('admin-servers-list');
@@ -5041,6 +5101,62 @@
       toast('Active report cleared', 'info');
     });
   }
+
+  async function adminLoadUserReports() {
+    const list = $('admin-userreports-list');
+    if (!list) return;
+    const status = $('admin-userreports-status')?.value || 'open';
+    list.innerHTML = '<div style="padding:14px;color:var(--text-muted)">Loading reports...</div>';
+    const r = await api('GET', '/api/admin/user-reports?status=' + encodeURIComponent(status));
+    if (r.error) {
+      list.innerHTML = '<div style="padding:14px;color:var(--red)">' + esc(r.error) + '</div>';
+      return;
+    }
+    const reports = r.reports || [];
+    if (!reports.length) {
+      list.innerHTML = '<div style="padding:14px;color:var(--text-muted)">No reports in this view.</div>';
+      return;
+    }
+    list.innerHTML = reports.map(report => {
+      const created = new Date((report.createdAt || 0) * 1000).toLocaleString();
+      const location = report.messageType === 'channel'
+        ? `Server: ${esc(report.serverName || report.serverId || 'Unknown')} / #${esc(report.channelName || report.channelId || 'channel')}`
+        : report.messageType === 'dm' ? 'Direct message' : 'User profile';
+      return `<div class="admin-history-row" style="align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <span class="admin-history-user">${esc(report.type).toUpperCase()} REPORT</span>
+            <span style="font-size:11px;color:var(--text-muted)">${created}</span>
+            <span style="font-size:11px;color:${report.status === 'open' ? 'var(--red)' : 'var(--green)'}">${esc(report.status)}</span>
+          </div>
+          <div class="admin-history-meta">Target: @${esc(report.target.username)} · Reporter: @${esc(report.reporter.username)} · ${location}</div>
+          ${report.reason ? `<div style="margin-top:8px;font-size:12px;color:var(--text-secondary)">Reason: ${esc(report.reason)}</div>` : ''}
+          ${report.messageContent ? `<div style="margin-top:8px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);font-size:12px;color:var(--text-primary);white-space:pre-wrap">${esc(report.messageContent)}</div>` : ''}
+          ${report.resolvedBy ? `<div class="admin-history-meta">Resolved by @${esc(report.resolvedBy)}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          <button class="btn-secondary" style="font-size:11px;padding:5px 9px" onclick="adminFillSuspend('${esc(report.target.username)}')">Suspend</button>
+          ${report.status === 'open' ? `<button class="action-btn ghost" style="font-size:11px;padding:5px 9px" onclick="adminResolveUserReport('${report.id}')">Resolve</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  window.adminFillSuspend = function(username) {
+    adminSwitchTab('suspend');
+    $('admin-suspend-username').value = username || '';
+    $('admin-ipban-username').value = username || '';
+  };
+
+  window.adminResolveUserReport = async function(reportId) {
+    const r = await api('POST', '/api/admin/user-reports/' + reportId + '/resolve');
+    if (r.error) return toast(r.error, 'error');
+    toast('Report resolved', 'success');
+    await adminLoadUserReports();
+  };
+
+  if ($('admin-userreports-refresh')) $('admin-userreports-refresh').addEventListener('click', adminLoadUserReports);
+  if ($('admin-userreports-status')) $('admin-userreports-status').addEventListener('change', adminLoadUserReports);
 
   async function adminLoadAdmins() {
     const list = $('admin-admin-list');
@@ -6607,6 +6723,12 @@
     $('popup-bio').textContent = '';
 
     $('popup-role').style.display = 'none';
+    const reportBtn = $('popup-report-user');
+    if (reportBtn) {
+      const canReport = currentUser && data.id && data.id !== currentUser.id;
+      reportBtn.style.display = canReport ? 'block' : 'none';
+      reportBtn.onclick = canReport ? () => window.reportUser(data.id, data.displayName || data.username) : null;
+    }
 
     // Position popup near the click
     popup.style.display = 'block';
@@ -6666,6 +6788,7 @@
     $('popup-username').textContent = 'Server invite';
     $('popup-role').style.display = 'none'; $('popup-bio-section').style.display = 'none';
     $('popup-server-tag').style.display = 'none';
+    if ($('popup-report-user')) $('popup-report-user').style.display = 'none';
     $('popup-tag-invite').style.display = 'block';
     $('popup-tag-invite').innerHTML = `<strong>${esc(tag.serverName || 'Server')}</strong><span>[${esc(tag.tag)}] Server invite</span><button type="button">Join Server</button>`;
     $('popup-tag-invite').querySelector('button').onclick = async () => { if (!tag.inviteCode) return; const joined = await api('POST', '/api/servers/join/' + tag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); };
