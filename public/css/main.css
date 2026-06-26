@@ -5495,69 +5495,95 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
     conic-gradient(from 70deg, transparent 0 34deg, var(--fx-a) 48deg, transparent 64deg, transparent 138deg, var(--fx-c) 154deg, transparent 174deg, transparent 245deg, var(--fx-b) 264deg, transparent 286deg);
 }
 
-.premium-event-horizon {
-  filter: saturate(1.38) contrast(1.18) drop-shadow(0 0 14px rgba(125,247,255,0.44));
+.premium-astral-dominion {
+  filter: saturate(1.32) contrast(1.08) drop-shadow(0 0 12px rgba(125,247,255,0.34));
 }
-.premium-event-horizon .premium-shell {
-  inset: -10px;
+.premium-astral-dominion .premium-shell {
+  inset: -11px;
   background:
-    radial-gradient(circle at 50% 50%, transparent 0 48%, rgba(255,244,180,0.26) 51%, transparent 60%),
-    conic-gradient(from 18deg, transparent 0 18deg, #fff4a3 26deg, #7df7ff 36deg, transparent 54deg, transparent 92deg, #b66cff 116deg, transparent 138deg, transparent 184deg, #fff08a 204deg, #7df7ff 218deg, transparent 240deg, transparent 306deg, #d284ff 326deg, transparent 360deg);
-  -webkit-mask: radial-gradient(circle, transparent 0 46%, #000 52% 70%, transparent 78%);
-          mask: radial-gradient(circle, transparent 0 46%, #000 52% 70%, transparent 78%);
-  animation: event-horizon-vortex 5.2s linear infinite, event-horizon-pulse 4.6s ease-in-out infinite;
+    radial-gradient(circle at 50% 6%, rgba(255,255,255,0.96) 0 2px, transparent 5px),
+    radial-gradient(circle at 18% 28%, #ffe66d 0 2px, transparent 6px),
+    radial-gradient(circle at 82% 28%, #7df7ff 0 2px, transparent 6px),
+    radial-gradient(circle at 28% 84%, #d884ff 0 2px, transparent 6px),
+    radial-gradient(circle at 72% 84%, #ffe66d 0 2px, transparent 6px),
+    conic-gradient(from 205deg, transparent 0 20deg, rgba(255,230,109,0.94) 34deg, transparent 54deg, transparent 92deg, rgba(125,247,255,0.92) 116deg, transparent 142deg, transparent 186deg, rgba(216,132,255,0.84) 212deg, transparent 236deg, transparent 300deg, rgba(255,255,255,0.9) 326deg, transparent 360deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 50%, #000 55% 72%, transparent 80%);
+          mask: radial-gradient(circle, transparent 0 50%, #000 55% 72%, transparent 80%);
+  animation: astral-dominion-orbit 6.8s linear infinite, astral-dominion-breathe 4.2s ease-in-out infinite;
 }
-.premium-event-horizon .premium-glass {
-  inset: -6px;
-  background:
-    repeating-conic-gradient(from 4deg, rgba(255,244,163,0.95) 0 2deg, transparent 3deg 15deg),
-    radial-gradient(circle, transparent 0 46%, rgba(125,247,255,0.58) 48% 50%, transparent 54% 60%, rgba(182,108,255,0.5) 62% 64%, transparent 70%);
-  -webkit-mask: radial-gradient(circle, transparent 0 39%, #000 42% 70%, transparent 78%);
-          mask: radial-gradient(circle, transparent 0 39%, #000 42% 70%, transparent 78%);
-  animation: pristine-spin 8s linear infinite reverse;
-}
-.premium-event-horizon .premium-rim-a,
-.premium-event-horizon .premium-rim-b {
-  inset: -9px;
-  filter: blur(0.25px) drop-shadow(0 0 8px #7df7ff) drop-shadow(0 0 10px #fff08a);
-}
-.premium-event-horizon .premium-wisp-a {
-  inset: -14px;
-  background:
-    linear-gradient(105deg, transparent 0 33%, rgba(125,247,255,0.0) 36%, rgba(125,247,255,0.9) 45%, rgba(255,244,163,0.86) 50%, transparent 61%),
-    linear-gradient(285deg, transparent 0 34%, rgba(182,108,255,0.72) 45%, transparent 58%);
-  -webkit-mask: radial-gradient(ellipse at 50% 50%, transparent 0 42%, #000 48% 55%, transparent 67%);
-          mask: radial-gradient(ellipse at 50% 50%, transparent 0 42%, #000 48% 55%, transparent 67%);
-  animation: event-horizon-lens 3.8s ease-in-out infinite;
-}
-.premium-event-horizon .premium-wisp-b {
+.premium-astral-dominion .premium-glass {
   inset: -7px;
   background:
-    radial-gradient(circle at 24% 26%, rgba(255,244,163,0.98) 0 3%, transparent 7%),
-    radial-gradient(circle at 74% 30%, rgba(125,247,255,0.95) 0 3%, transparent 8%),
-    radial-gradient(circle at 68% 78%, rgba(198,112,255,0.9) 0 3%, transparent 8%),
-    radial-gradient(circle at 30% 72%, rgba(255,244,163,0.82) 0 2%, transparent 7%);
-  animation: event-horizon-glyphs 4.4s linear infinite;
+    linear-gradient(118deg, transparent 0 28%, rgba(125,247,255,0.0) 34%, rgba(125,247,255,0.72) 43%, rgba(255,230,109,0.8) 50%, rgba(216,132,255,0.62) 58%, transparent 70%),
+    linear-gradient(245deg, transparent 0 32%, rgba(216,132,255,0.58) 45%, rgba(125,247,255,0.46) 54%, transparent 66%);
+  -webkit-mask: radial-gradient(ellipse at 50% 50%, transparent 0 42%, #000 48% 58%, transparent 70%);
+          mask: radial-gradient(ellipse at 50% 50%, transparent 0 42%, #000 48% 58%, transparent 70%);
+  animation: astral-dominion-ribbon 5.4s ease-in-out infinite;
 }
-.premium-event-horizon .premium-motif-singularity {
+.premium-astral-dominion .premium-rim-a {
+  inset: -5px;
   background:
-    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.94) 0 8%, rgba(255,255,255,0.82) 10%, rgba(255,224,94,0.78) 12%, transparent 20%),
-    repeating-radial-gradient(circle at 50% 50%, transparent 0 9px, rgba(255,244,163,0.42) 10px 11px, transparent 12px 20px);
-  -webkit-mask: radial-gradient(circle, #000 0 22%, transparent 32% 42%, #000 48% 60%, transparent 68%);
-          mask: radial-gradient(circle, #000 0 22%, transparent 32% 42%, #000 48% 60%, transparent 68%);
-  animation: event-horizon-core 3.2s ease-in-out infinite;
+    repeating-conic-gradient(from 0deg, rgba(255,230,109,0.9) 0 2deg, transparent 3deg 18deg),
+    radial-gradient(circle, transparent 0 52%, rgba(125,247,255,0.5) 54% 56%, transparent 60%);
+  -webkit-mask: radial-gradient(circle, transparent 0 48%, #000 52% 61%, transparent 67%);
+          mask: radial-gradient(circle, transparent 0 48%, #000 52% 61%, transparent 67%);
+  animation: astral-dominion-glyphs 9s linear infinite reverse;
 }
-.premium-event-horizon .premium-intrusion {
+.premium-astral-dominion .premium-rim-b {
+  inset: -15px -10px;
   background:
-    radial-gradient(circle at 50% 50%, rgba(0,0,0,0.88) 0 18%, rgba(255,244,163,0.76) 22%, rgba(125,247,255,0.36) 29%, transparent 44%),
-    conic-gradient(from 0deg, transparent 0 30deg, rgba(255,244,163,0.82) 44deg, transparent 58deg, transparent 122deg, rgba(125,247,255,0.72) 146deg, transparent 168deg, transparent 244deg, rgba(182,108,255,0.72) 266deg, transparent 286deg);
-  animation: event-horizon-intrude 8s ease-in-out infinite;
+    radial-gradient(ellipse at 50% 50%, transparent 0 44%, rgba(255,230,109,0.5) 48%, transparent 50%),
+    conic-gradient(from 36deg, transparent 0 72deg, rgba(125,247,255,0.75) 82deg 96deg, transparent 108deg 210deg, rgba(216,132,255,0.66) 222deg 236deg, transparent 250deg 360deg);
+  -webkit-mask: radial-gradient(ellipse at 50% 50%, transparent 0 44%, #000 48% 54%, transparent 62%);
+          mask: radial-gradient(ellipse at 50% 50%, transparent 0 44%, #000 48% 54%, transparent 62%);
+  animation: astral-dominion-tilt 6.2s ease-in-out infinite;
 }
-.premium-event-horizon .premium-strike {
-  background: linear-gradient(115deg, transparent 0 38%, rgba(255,244,163,0.0) 42%, #fff4a3 48%, #7df7ff 52%, transparent 60%);
-  -webkit-mask: linear-gradient(115deg, transparent 0 38%, #000 47% 53%, transparent 62%);
-          mask: linear-gradient(115deg, transparent 0 38%, #000 47% 53%, transparent 62%);
-  animation: event-horizon-strike 8s ease-in-out infinite;
+.premium-astral-dominion .premium-wisp-a,
+.premium-astral-dominion .premium-wisp-b {
+  inset: -13px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,230,109,0.9) 0 2px, transparent 5px),
+    radial-gradient(circle at 6% 48%, rgba(125,247,255,0.86) 0 2px, transparent 5px),
+    radial-gradient(circle at 94% 48%, rgba(216,132,255,0.82) 0 2px, transparent 5px),
+    linear-gradient(90deg, transparent 0 30%, rgba(125,247,255,0.34) 42%, rgba(255,255,255,0.5) 50%, rgba(216,132,255,0.34) 58%, transparent 70%);
+  -webkit-mask: radial-gradient(circle, transparent 0 43%, #000 49% 56%, transparent 66%);
+          mask: radial-gradient(circle, transparent 0 43%, #000 49% 56%, transparent 66%);
+  animation: astral-dominion-spark-orbit 4.8s linear infinite;
+}
+.premium-astral-dominion .premium-wisp-b {
+  animation-direction: reverse;
+  opacity: 0.72;
+}
+.premium-astral-dominion .premium-motif-crown {
+  inset: -6px;
+  background:
+    radial-gradient(circle at 50% 12%, #fff8bf 0 2px, transparent 5px),
+    radial-gradient(circle at 33% 23%, #7df7ff 0 2px, transparent 5px),
+    radial-gradient(circle at 67% 23%, #d884ff 0 2px, transparent 5px),
+    linear-gradient(128deg, transparent 0 40%, rgba(255,230,109,0.7) 44%, transparent 49%),
+    linear-gradient(52deg, transparent 0 40%, rgba(125,247,255,0.62) 44%, transparent 49%);
+  -webkit-mask: radial-gradient(circle, transparent 0 23%, #000 28% 48%, transparent 58%);
+          mask: radial-gradient(circle, transparent 0 23%, #000 28% 48%, transparent 58%);
+  animation: astral-dominion-crown 3.6s ease-in-out infinite;
+}
+.premium-astral-dominion .premium-intrusion {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.42) 0 5%, rgba(255,230,109,0.36) 8%, transparent 22%),
+    radial-gradient(circle at 34% 34%, rgba(125,247,255,0.54) 0 3%, transparent 10%),
+    radial-gradient(circle at 66% 36%, rgba(216,132,255,0.48) 0 3%, transparent 10%),
+    radial-gradient(circle at 50% 72%, rgba(255,230,109,0.44) 0 3%, transparent 10%),
+    conic-gradient(from 20deg, transparent 0 40deg, rgba(255,230,109,0.36) 54deg, transparent 70deg, transparent 128deg, rgba(125,247,255,0.32) 144deg, transparent 164deg, transparent 238deg, rgba(216,132,255,0.32) 254deg, transparent 278deg);
+  -webkit-mask: radial-gradient(circle, #000 0 34%, transparent 47%);
+          mask: radial-gradient(circle, #000 0 34%, transparent 47%);
+  animation: astral-dominion-bloom 8s ease-in-out infinite;
+}
+.premium-astral-dominion .premium-strike {
+  background:
+    linear-gradient(90deg, transparent 0 22%, rgba(125,247,255,0.0) 30%, rgba(125,247,255,0.76) 45%, rgba(255,255,255,0.82) 50%, rgba(255,230,109,0.7) 56%, transparent 72%),
+    linear-gradient(0deg, transparent 0 24%, rgba(216,132,255,0.0) 32%, rgba(216,132,255,0.56) 48%, transparent 66%);
+  -webkit-mask: radial-gradient(circle, transparent 0 22%, #000 28% 46%, transparent 58%);
+          mask: radial-gradient(circle, transparent 0 22%, #000 28% 46%, transparent 58%);
+  animation: astral-dominion-crossflare 8s ease-in-out infinite;
 }
 
 .premium-time .premium-shell {
@@ -5778,33 +5804,41 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   50% { opacity: 1; transform: rotate(180deg) scale(1.05); }
   100% { opacity: 0.82; transform: rotate(360deg) scale(0.98); }
 }
-@keyframes event-horizon-vortex {
-  from { transform: rotate(0deg) scale(1.02); }
-  to { transform: rotate(360deg) scale(1.02); }
+@keyframes astral-dominion-orbit {
+  from { transform: rotate(0deg) scale(1); }
+  to { transform: rotate(360deg) scale(1); }
 }
-@keyframes event-horizon-pulse {
-  0%,100% { opacity: 0.86; filter: brightness(1); }
-  50% { opacity: 1; filter: brightness(1.28); }
+@keyframes astral-dominion-breathe {
+  0%,100% { opacity: 0.78; filter: brightness(1); }
+  50% { opacity: 1; filter: brightness(1.18); }
 }
-@keyframes event-horizon-lens {
-  0%,100% { transform: rotate(-14deg) scale(0.96); opacity: 0.68; }
-  46% { transform: rotate(12deg) scale(1.12); opacity: 1; }
+@keyframes astral-dominion-ribbon {
+  0%,100% { transform: rotate(-10deg) scale(0.96); opacity: 0.62; }
+  46% { transform: rotate(14deg) scale(1.08); opacity: 0.94; }
 }
-@keyframes event-horizon-glyphs {
-  from { transform: rotate(0deg); opacity: 0.74; }
-  to { transform: rotate(-360deg); opacity: 0.74; }
+@keyframes astral-dominion-glyphs {
+  from { transform: rotate(0deg); opacity: 0.8; }
+  to { transform: rotate(360deg); opacity: 0.8; }
 }
-@keyframes event-horizon-core {
-  0%,100% { transform: scale(0.9); filter: brightness(1); }
-  45% { transform: scale(1.12); filter: brightness(1.4); }
+@keyframes astral-dominion-tilt {
+  0%,100% { transform: rotateX(0deg) rotateZ(-7deg); opacity: 0.56; }
+  50% { transform: rotateX(0deg) rotateZ(8deg); opacity: 0.9; }
 }
-@keyframes event-horizon-intrude {
-  0%,18%,63%,100% { opacity: 0; transform: scale(0.5) rotate(0deg); }
-  28%,52% { opacity: 0.78; transform: scale(0.96) rotate(42deg); }
+@keyframes astral-dominion-spark-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
 }
-@keyframes event-horizon-strike {
-  0%,24%,58%,100% { opacity: 0; transform: translateX(-24%) rotate(0deg); }
-  34%,45% { opacity: 0.88; transform: translateX(12%) rotate(8deg); }
+@keyframes astral-dominion-crown {
+  0%,100% { transform: translateY(0) scale(0.94); opacity: 0.7; }
+  50% { transform: translateY(-2px) scale(1.04); opacity: 1; }
+}
+@keyframes astral-dominion-bloom {
+  0%,22%,64%,100% { opacity: 0; transform: scale(0.54) rotate(0deg); }
+  32%,52% { opacity: 0.74; transform: scale(1.02) rotate(22deg); }
+}
+@keyframes astral-dominion-crossflare {
+  0%,26%,58%,100% { opacity: 0; transform: scale(0.72) rotate(0deg); }
+  34%,48% { opacity: 0.82; transform: scale(1.08) rotate(6deg); }
 }
 @keyframes prism-sweep {
   0%,100% { opacity: 0.62; transform: translateX(-3px) rotate(-4deg); }

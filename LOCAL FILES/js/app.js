@@ -291,7 +291,7 @@
     time_rift: ['time', '#76ffe0', '#7e5cff', '#ffffff', 'rift'],
     zero_gravity: ['gravity', '#96daff', '#d894ff', '#ffe678', 'float'],
     singularity: ['singularity', '#8e68ff', '#040210', '#c898ff', 'rift'],
-    event_horizon: ['event-horizon', '#f7d46a', '#05000f', '#7df7ff', 'singularity'],
+    event_horizon: ['astral-dominion', '#ffe66d', '#7df7ff', '#d884ff', 'crown'],
     celestial_wings: ['wings', '#ffeeb8', '#70d2ff', '#ffffff', 'wings'],
     apex_storm: ['storm', '#76e2ff', '#5268ff', '#ffffff', 'storm'],
     prism_overdrive: ['prism', '#ff54d8', '#52e6ff', '#ffe252', 'prism'],

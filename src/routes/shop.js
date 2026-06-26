@@ -199,7 +199,7 @@ const DECORATIONS = [
   { id: 'prism_overdrive', nexalPrice: null, name: 'Prism Overdrive', description: 'Prismatic light races around in overdrive.', rarity: 'mythical', preview: 'prism_overdrive', packOnly: true },
   { id: 'eternal_flame', nexalPrice: null, name: 'Eternal Flame', description: 'An everlasting flame crown rolls over the border.', rarity: 'mythical', preview: 'eternal_flame', packOnly: true },
   { id: 'magic_mists', nexalPrice: null, name: 'Magic Mists', description: 'Iridescent violet and cyan mist wraps your avatar in a glossy arcane sphere.', rarity: 'mythical', preview: 'magic_mists', packOnly: true },
-  { id: 'event_horizon', nexalPrice: null, name: 'Event Horizon', description: 'A pristine cosmic relic ring with golden glyphs, cyan lens arcs, and rare gravity surges.', rarity: 'ascendent', preview: 'event_horizon', packOnly: true },
+  { id: 'event_horizon', nexalPrice: null, name: 'Astral Dominion', description: 'An Ascendent star-crown lattice with aurora ribbons, orbiting jewel glyphs, and a brief constellation bloom.', rarity: 'ascendent', preview: 'event_horizon', packOnly: true },
   {
     id: 'stormveil',
     nexalPrice: null,
