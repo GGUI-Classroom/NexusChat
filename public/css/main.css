@@ -3582,8 +3582,27 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 }
 
 .pack-result-preview {
-  width: 52px;
-  height: 52px;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 4px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  contain: layout;
+}
+.pack-result-preview .avatar {
+  width: 56px !important;
+  height: 56px !important;
+  font-size: 20px !important;
+  flex-shrink: 0;
+}
+.pack-result-preview .premium-deco {
+  inset: 1px;
+}
+.pack-result-preview .storm-canvas {
+  inset: 0;
 }
 
 .pack-result-card b {

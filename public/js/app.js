@@ -5529,7 +5529,9 @@
     </div>`;
     overlay.style.display = 'flex';
     overlay.classList.add('active');
-    overlay.querySelectorAll('.avatar-wrap[data-deco-id]').forEach(wrap => applyDecorationToWrap(wrap, wrap.dataset.decoId));
+    requestAnimationFrame(() => {
+      overlay.querySelectorAll('.pack-result-preview[data-deco-id]').forEach(wrap => applyDecorationToWrap(wrap, wrap.dataset.decoId));
+    });
     $('pack-results-close').onclick = () => { overlay.classList.remove('active'); overlay.style.display = 'none'; };
     overlay.onclick = e => { if (e.target === overlay) { overlay.classList.remove('active'); overlay.style.display = 'none'; } };
   }

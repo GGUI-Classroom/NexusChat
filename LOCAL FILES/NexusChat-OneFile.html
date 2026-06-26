@@ -3500,8 +3500,27 @@ html, body {
 }
 
 .pack-result-preview {
-  width: 52px;
-  height: 52px;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 4px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  contain: layout;
+}
+.pack-result-preview .avatar {
+  width: 56px !important;
+  height: 56px !important;
+  font-size: 20px !important;
+  flex-shrink: 0;
+}
+.pack-result-preview .premium-deco {
+  inset: 1px;
+}
+.pack-result-preview .storm-canvas {
+  inset: 0;
 }
 
 .pack-result-card b {
@@ -12294,7 +12313,9 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     </div>`;
     overlay.style.display = 'flex';
     overlay.classList.add('active');
-    overlay.querySelectorAll('.avatar-wrap[data-deco-id]').forEach(wrap => applyDecorationToWrap(wrap, wrap.dataset.decoId));
+    requestAnimationFrame(() => {
+      overlay.querySelectorAll('.pack-result-preview[data-deco-id]').forEach(wrap => applyDecorationToWrap(wrap, wrap.dataset.decoId));
+    });
     $('pack-results-close').onclick = () => { overlay.classList.remove('active'); overlay.style.display = 'none'; };
     overlay.onclick = e => { if (e.target === overlay) { overlay.classList.remove('active'); overlay.style.display = 'none'; } };
   }
