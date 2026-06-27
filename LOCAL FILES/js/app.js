@@ -3425,6 +3425,7 @@
     socket = io(LOCAL_API_ORIGIN || undefined, { transports: ['websocket', 'polling'], withCredentials: true, auth: { deviceId: getDeviceId() } });
     socket.on('call_game_state', ({ roomId, game }) => {
       if (roomId !== activeGameRoomId()) return;
+      pendingUnoCardId = null;
       activeCallGame = game;
       if ($('call-games-modal').classList.contains('active')) renderCallGame(game);
     });
@@ -4379,26 +4380,60 @@
   }
 
   let activeCallGame = null;
+  let pendingUnoCardId = null;
   function nexalsToTableTokens(nexals) { return Math.floor(((parseInt(nexals, 10) || 0) * 1000) / 900); }
   function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
   function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
+  function activityName(type) { return type === 'poker' ? "Texas Hold'em" : type === 'uno' ? 'UNO' : 'Blackjack'; }
+  function unoSymbol(value) { return ({ skip: '⊘', reverse: '↻', draw2: '+2', wild: 'W', wild4: '+4' })[value] || value; }
+  function unoCardHtml(card, playable = false) {
+    if (card.hidden) return '<span class="uno-card uno-card-back"><i>N</i></span>';
+    const symbol = unoSymbol(card.value);
+    const action = playable ? ` onclick="playUnoCard('${esc(card.id)}',${card.color === 'wild'})"` : '';
+    return `<button class="uno-card uno-${card.color}${playable ? ' playable' : ''}"${action}${playable ? '' : ' disabled'}><span class="uno-corner top">${esc(symbol)}</span><span class="uno-oval"><b>${esc(symbol)}</b></span><span class="uno-corner bottom">${esc(symbol)}</span></button>`;
+  }
+  function unoCardPlayable(game, card) { return !card.hidden && (card.color === 'wild' || card.color === game.currentColor || card.value === game.topCard?.value); }
   function renderCallGame(game) {
     activeCallGame = game; const content = $('call-games-content');
-    if (!game) { content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">900 Nexals = 1,000 table tokens</span></div><div class="game-picker"><button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button></div>`; const buyInput = $('call-buyin-input'); if (buyInput) buyInput.addEventListener('input', () => { const tokens = nexalsToTableTokens(buyInput.value); $('call-token-preview').textContent = `${(parseInt(buyInput.value, 10) || 0).toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens`; }); return; }
+    if (!game) { content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">Blackjack and Poker use table tokens. UNO is free.</span></div><div class="game-picker"><button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button><button class="game-choice uno-choice" data-game-type="uno"><strong>UNO</strong><span>Match colors and symbols, use action cards, and empty your hand first.</span></button></div>`; const buyInput = $('call-buyin-input'); if (buyInput) buyInput.addEventListener('input', () => { const tokens = nexalsToTableTokens(buyInput.value); $('call-token-preview').textContent = `${(parseInt(buyInput.value, 10) || 0).toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens`; }); return; }
+    if (game.type === 'uno' && game.phase !== 'lobby') {
+      const myTurn = game.phase === 'playing' && game.turnId === currentUser.id;
+      const orderedPlayers = [...game.players].sort((left, right) => left.id === currentUser.id ? 1 : right.id === currentUser.id ? -1 : 0);
+      const seats = orderedPlayers.map(player => {
+        const isMe = player.id === currentUser.id;
+        return `<div class="uno-seat${game.turnId === player.id ? ' turn' : ''}${isMe ? ' me' : ''}"><div class="uno-seat-head"><strong>${esc(player.displayName)}${isMe ? ' (YOU)' : ''}</strong><span>${player.cardCount} cards · ${player.score || 0} pts</span></div><div class="uno-hand">${(player.hand || []).map(card => unoCardHtml(card, isMe && myTurn && unoCardPlayable(game, card))).join('')}</div></div>`;
+      }).join('');
+      const controls = game.phase === 'playing'
+        ? (myTurn ? `<button class="btn-primary" onclick="callGameAction('draw')" ${game.canPass ? 'disabled' : ''}>Draw Card</button>${game.canPass ? '<button class="btn-secondary" onclick="callGameAction(\'pass\')">Keep Card</button>' : ''}` : `<span class="uno-waiting">Waiting for ${esc(game.players.find(player => player.id === game.turnId)?.displayName || 'another player')}...</span>`)
+        : game.phase === 'round_complete' && game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Deal Next Round</button>'
+        : game.phase === 'complete' && game.hostId === currentUser.id ? '<button class="btn-primary" onclick="openCallGame(\'uno\')">New UNO Match</button>' : '';
+      const picker = pendingUnoCardId ? `<div class="uno-color-picker"><strong>Choose the wild color</strong><div>${['red','yellow','green','blue'].map(color => `<button class="uno-color ${color}" onclick="confirmUnoColor('${color}')"></button>`).join('')}</div><button class="btn-secondary" onclick="cancelUnoColor()">Cancel</button></div>` : '';
+      content.innerHTML = `<div class="call-uno-table"><div class="uno-table-bar"><div><span class="uno-logo">UNO</span><b>UNO Table</b><small>Round ${game.roundNumber || 1}/${game.roundsTotal || 1}</small></div><span>${game.direction === 1 ? 'Clockwise ↻' : 'Counter-clockwise ↺'}</span></div><div class="uno-felt uno-current-${esc(game.currentColor || 'red')}"><div class="uno-opponents">${seats}</div><div class="uno-center"><div class="uno-pile"><div><span class="uno-pile-label">DRAW · ${game.deckCount}</span><button class="uno-card uno-card-back deck-card" onclick="${myTurn && !game.canPass ? "callGameAction('draw')" : ''}" ${myTurn && !game.canPass ? '' : 'disabled'}><i>N</i></button></div><div><span class="uno-pile-label">DISCARD</span>${unoCardHtml(game.topCard || { hidden: true })}</div></div><div class="uno-color-status"><span class="${esc(game.currentColor || 'red')}"></span>Current color: <b>${esc(game.currentColor || 'red')}</b></div></div>${game.message ? `<p class="uno-message">${esc(game.message)}</p>` : ''}<div class="uno-actions">${controls}<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>${game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : ''}</div>${picker}</div></div>`;
+      return;
+    }
     const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
-    content.innerHTML = `<div class="game-table"><div><b>${game.type === 'blackjack' ? 'Blackjack' : "Texas Hold'em"}</b><span style="float:right;color:var(--text-muted)">${esc(game.phase)}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}${p.bet ? ' | Bet ' + p.bet.toLocaleString() : ''}</b><span style="float:right">${(p.chips || 0).toLocaleString()} tokens</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? `<button class="btn-secondary" onclick="joinCallGame()">Join</button>${game.hostId === currentUser.id ? '<button class="btn-primary" onclick="startCallGame()">Start game</button>' : ''}` : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New round</button>'}</div></div>`;
+    content.innerHTML = `<div class="game-table"><div><b>${activityName(game.type)}</b><span style="float:right;color:var(--text-muted)">${esc(game.phase)}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}${p.bet ? ' | Bet ' + p.bet.toLocaleString() : ''}</b><span style="float:right">${(p.chips || 0).toLocaleString()} tokens</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? `<button class="btn-secondary" onclick="joinCallGame()">Join</button>${game.hostId === currentUser.id ? '<button class="btn-primary" onclick="startCallGame()">Start game</button>' : ''}` : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New round</button>'}</div></div>`;
   }
   window.openCallGame = type => {
     const roomId = activeGameRoomId();
     if (!roomId || !socket) return toast('Join a call first', 'error');
-    const buyIn = parseInt($('call-buyin-input')?.value, 10) || 0;
-    const bet = parseInt($('call-bet-input')?.value, 10) || 0;
+    const buyIn = type === 'uno' ? 0 : (parseInt($('call-buyin-input')?.value, 10) || 0);
+    const bet = type === 'uno' ? 0 : (parseInt($('call-bet-input')?.value, 10) || 0);
     renderCallGame({ type, phase: 'lobby', hostId: currentUser.id, players: [{ id: currentUser.id, displayName: currentUser.displayName, chips: nexalsToTableTokens(buyIn), buyIn, bet, hand: [] }], dealer: type === 'blackjack' ? { hand: [], score: null } : null, community: [], pot: 0, message: 'Opening table...' });
     socket.emit('call_game_open', { roomId, type, buyIn, bet }, result => { if (result && result.error) { activeCallGame = null; renderCallGame(null); toast(result.error, 'error'); } });
   };
   window.joinCallGame = () => { const roomId = activeGameRoomId(); const buyIn = parseInt($('call-buyin-input')?.value, 10) || 900; const bet = parseInt($('call-bet-input')?.value, 10) || 100; if (roomId && socket) socket.emit('call_game_join', { roomId, buyIn, bet }); };
   window.startCallGame = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_start', { roomId }); };
   window.callGameAction = action => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
+  window.nextCallGameRound = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_next_round', { roomId }); };
+  window.leaveCallGame = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_leave', { roomId }); };
+  window.endCallGame = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_close', { roomId }); };
+  window.playUnoCard = (cardId, needsColor) => {
+    if (needsColor) { pendingUnoCardId = cardId; renderCallGame(activeCallGame); return; }
+    const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action: 'play', cardId });
+  };
+  window.confirmUnoColor = color => { const roomId = activeGameRoomId(); if (roomId && socket && pendingUnoCardId) socket.emit('call_game_action', { roomId, action: 'play', cardId: pendingUnoCardId, color }); pendingUnoCardId = null; };
+  window.cancelUnoColor = () => { pendingUnoCardId = null; renderCallGame(activeCallGame); };
   $('call-games-btn').addEventListener('click', () => { if (!activeGameRoomId()) return toast('Join a call first', 'error'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); });
   $('call-games-close').addEventListener('click', () => $('call-games-modal').classList.remove('active'));
   $('call-games-modal').addEventListener('click', e => { if (e.target === $('call-games-modal')) $('call-games-modal').classList.remove('active'); });

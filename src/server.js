@@ -389,13 +389,124 @@ function gameDeck() {
 }
 function shuffle(cards) { for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cards[i], cards[j]] = [cards[j], cards[i]]; } return cards; }
 function blackjackScore(cards) { let total = cards.reduce((sum, c) => sum + (c.rank === 'A' ? 11 : ['J','Q','K'].includes(c.rank) ? 10 : Number(c.rank)), 0); let aces = cards.filter(c => c.rank === 'A').length; while (total > 21 && aces--) total -= 10; return total; }
+function unoDeck() {
+  const cards = [];
+  const colors = ['red', 'yellow', 'green', 'blue'];
+  const add = (color, value) => cards.push({ id: uuidv4(), color, value });
+  for (const color of colors) {
+    add(color, '0');
+    for (let value = 1; value <= 9; value++) {
+      add(color, String(value));
+      add(color, String(value));
+    }
+    for (const action of ['skip', 'reverse', 'draw2']) {
+      add(color, action);
+      add(color, action);
+    }
+  }
+  for (let count = 0; count < 4; count++) {
+    add('wild', 'wild');
+    add('wild', 'wild4');
+  }
+  return cards;
+}
+function unoCardPoints(card) {
+  if (!card) return 0;
+  if (['wild', 'wild4'].includes(card.value)) return 50;
+  if (['skip', 'reverse', 'draw2'].includes(card.value)) return 20;
+  return Number(card.value) || 0;
+}
+function refillUnoDeck(game) {
+  if (game.deck.length || game.discard.length <= 1) return;
+  const top = game.discard.pop();
+  game.deck = shuffle(game.discard.map(card => ({ ...card, id: uuidv4() })));
+  game.discard = [top];
+}
+function drawUnoCards(game, player, count) {
+  for (let index = 0; index < count; index++) {
+    refillUnoDeck(game);
+    const card = game.deck.pop();
+    if (card) player.hand.push(card);
+  }
+}
+function advanceUnoTurn(game, steps = 1) {
+  if (!game.players.length) return;
+  let index = game.players.findIndex(player => player.id === game.turnId);
+  if (index < 0) index = 0;
+  for (let step = 0; step < steps; step++) {
+    index = (index + game.direction + game.players.length) % game.players.length;
+  }
+  game.turnId = game.players[index].id;
+}
+function isPlayableUnoCard(game, card) {
+  const top = game.discard[game.discard.length - 1];
+  return card.color === 'wild' || card.color === game.currentColor || card.value === top?.value;
+}
 function gameStateFor(game, viewerId) {
+  if (game.type === 'uno') {
+    return {
+      type: game.type,
+      phase: game.phase,
+      hostId: game.hostId,
+      roundsTotal: game.roundsTotal || 1,
+      roundNumber: game.roundNumber || 0,
+      turnId: game.turnId || null,
+      currentColor: game.currentColor || null,
+      direction: game.direction || 1,
+      topCard: game.discard?.[game.discard.length - 1] || null,
+      deckCount: game.deck?.length || 0,
+      dealer: null,
+      community: [],
+      pot: 0,
+      canPass: !!game.players.find(player => player.id === viewerId)?.drawnCardId,
+      players: game.players.map(player => ({
+        id: player.id,
+        displayName: player.displayName,
+        chips: 0,
+        folded: false,
+        score: player.score || 0,
+        cardCount: player.hand.length,
+        hand: player.id === viewerId || game.phase === 'complete'
+          ? player.hand
+          : player.hand.map(() => ({ hidden: true }))
+      })),
+      winnerId: game.winnerId || null,
+      message: game.message || ''
+    };
+  }
   const revealDealer = game.type !== 'blackjack' || game.phase === 'round_complete' || game.phase === 'complete';
   return { type: game.type, phase: game.phase, hostId: game.hostId, roundsTotal: game.roundsTotal || 1, roundNumber: game.roundNumber || 0, turnId: game.turnId || null, community: game.community || [], pot: game.pot || 0,
     dealer: game.type === 'blackjack' ? { hand: revealDealer ? game.dealer.hand : [game.dealer.hand[0], { hidden: true }], score: revealDealer ? blackjackScore(game.dealer.hand) : null } : null,
     players: game.players.map(p => ({ id: p.id, displayName: p.displayName, chips: p.chips, buyIn: p.buyIn || 0, bet: p.bet || 0, folded: !!p.folded, standing: !!p.standing, hand: p.id === viewerId || game.phase === 'complete' ? p.hand : p.hand.map(() => ({ hidden: true })), score: game.type === 'blackjack' ? blackjackScore(p.hand) : null })), winnerId: game.winnerId || null, message: game.message || '' };
 }
 function beginCallGameRound(game) {
+  if (game.type === 'uno') {
+    game.deck = shuffle(unoDeck());
+    game.discard = [];
+    game.direction = 1;
+    game.winnerId = null;
+    game.phase = 'playing';
+    game.message = '';
+    game.players.forEach(player => {
+      player.hand = [];
+      player.drawnCardId = null;
+      drawUnoCards(game, player, 7);
+    });
+    let first = game.deck.pop();
+    while (first && ['wild4', 'draw2', 'skip', 'reverse'].includes(first.value)) {
+      game.deck.unshift(first);
+      game.deck = shuffle(game.deck);
+      first = game.deck.pop();
+    }
+    if (!first) first = { id: uuidv4(), color: 'red', value: '0' };
+    game.discard.push(first);
+    const colors = ['red', 'yellow', 'green', 'blue'];
+    game.currentColor = first.color === 'wild' ? colors[Math.floor(Math.random() * colors.length)] : first.color;
+    const startingIndex = (game.startingPlayerIndex || 0) % game.players.length;
+    game.turnId = game.players[startingIndex].id;
+    game.startingPlayerIndex = (startingIndex + 1) % game.players.length;
+    return;
+  }
   game.deck = shuffle(gameDeck());
   game.phase = 'playing';
   game.message = '';
@@ -418,6 +529,10 @@ async function settleCallGame(roomId, reason = 'Activity ended') {
   const game = callGames.get(roomId);
   if (!game || game.settled) return [];
   game.settled = true;
+  if (game.type === 'uno') {
+    game.message = reason;
+    return [];
+  }
   const payouts = [];
   for (const player of game.players || []) {
     const payout = tableTokensToNexals(player.chips || 0);
@@ -1822,18 +1937,20 @@ io.on('connection', (socket) => {
   });
 
   socket.on('call_game_open', async ({ roomId, type, buyIn, bet }, ack = () => {}) => {
-    if (!roomId || !['blackjack', 'poker'].includes(type)) return ack({ error: 'Choose a valid game.' });
+    if (!roomId || !['blackjack', 'poker', 'uno'].includes(type)) return ack({ error: 'Choose a valid game.' });
     if (!await isInGameRoom(userId, roomId)) return ack({ error: 'Join the call before starting a game.' });
     let game = callGames.get(roomId);
     if (!game || game.phase === 'complete') {
       const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
-      let purchase;
-      try { purchase = await buyCallTableTokens(userId, buyIn); }
-      catch (error) { return ack({ error: error.message }); }
+      let purchase = { buyIn: 0, tokens: 0, nexals: null };
+      if (type !== 'uno') {
+        try { purchase = await buyCallTableTokens(userId, buyIn); }
+        catch (error) { return ack({ error: error.message }); }
+      }
       const openingBet = Math.min(1000000, Math.max(0, parseInt(bet, 10) || 0));
-      game = { type, phase: 'lobby', hostId: userId, roundsTotal: 3, roundNumber: 0, players: [{ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: purchase.tokens, buyIn: purchase.buyIn, bet: openingBet, hand: [] }], dealer: { hand: [] }, deck: [], community: [], pot: 0 };
+      game = { type, phase: 'lobby', hostId: userId, roundsTotal: 3, roundNumber: 0, players: [{ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: purchase.tokens, buyIn: purchase.buyIn, bet: openingBet, score: 0, hand: [] }], dealer: { hand: [] }, deck: [], discard: [], community: [], pot: 0 };
       callGames.set(roomId, game);
-      socket.emit('nexals_updated', { nexals: purchase.nexals });
+      if (purchase.nexals !== null) socket.emit('nexals_updated', { nexals: purchase.nexals });
       const host = { id: userId, displayName: me.rows[0]?.display_name || 'Player' };
       socket.to(`call:${roomId}`).emit('call_game_invite', { roomId, type, host });
       socket.to(`groupcall:${roomId}`).emit('call_game_invite', { roomId, type, host });
@@ -1850,12 +1967,14 @@ io.on('connection', (socket) => {
     const game = callGames.get(roomId);
     if (!game || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId) || game.players.some(p => p.id === userId) || game.players.length >= 6) return;
     const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
-    let purchase;
-    try { purchase = await buyCallTableTokens(userId, buyIn); }
-    catch (error) { socket.emit('call_game_error', { message: error.message }); return; }
+    let purchase = { buyIn: 0, tokens: 0, nexals: null };
+    if (game.type !== 'uno') {
+      try { purchase = await buyCallTableTokens(userId, buyIn); }
+      catch (error) { socket.emit('call_game_error', { message: error.message }); return; }
+    }
     const openingBet = Math.min(1000000, Math.max(0, parseInt(bet, 10) || 0));
-    game.players.push({ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: purchase.tokens, buyIn: purchase.buyIn, bet: openingBet, hand: [] });
-    socket.emit('nexals_updated', { nexals: purchase.nexals });
+    game.players.push({ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: purchase.tokens, buyIn: purchase.buyIn, bet: openingBet, score: 0, hand: [] });
+    if (purchase.nexals !== null) socket.emit('nexals_updated', { nexals: purchase.nexals });
     emitGame(roomId);
   });
 
@@ -1912,12 +2031,90 @@ io.on('connection', (socket) => {
     emitGame(roomId);
   });
 
-  socket.on('call_game_action', async ({ roomId, action }) => {
+  socket.on('call_game_action', async ({ roomId, action, cardId, color }) => {
     const game = callGames.get(roomId);
     if (!game || game.phase !== 'playing' || !await isInGameRoom(userId, roomId)) return;
     const player = game.players.find(p => p.id === userId);
     if (!player) return;
-    if (game.type === 'blackjack') {
+    if (game.type === 'uno') {
+      if (game.turnId !== userId) return;
+      if (action === 'draw') {
+        if (player.drawnCardId) return;
+        drawUnoCards(game, player, 1);
+        const drawn = player.hand[player.hand.length - 1];
+        if (drawn && isPlayableUnoCard(game, drawn)) {
+          player.drawnCardId = drawn.id;
+          game.message = `${player.displayName} drew a playable card.`;
+        } else {
+          game.message = `${player.displayName} drew a card.`;
+          advanceUnoTurn(game);
+        }
+      } else if (action === 'pass') {
+        if (!player.drawnCardId) return;
+        player.drawnCardId = null;
+        game.message = `${player.displayName} kept the drawn card.`;
+        advanceUnoTurn(game);
+      } else if (action === 'play') {
+        const cardIndex = player.hand.findIndex(card => card.id === cardId);
+        if (cardIndex < 0) return;
+        const card = player.hand[cardIndex];
+        if (player.drawnCardId && player.drawnCardId !== card.id) {
+          socket.emit('call_game_error', { message: 'After drawing, you may only play the card you just drew.' });
+          return;
+        }
+        if (!isPlayableUnoCard(game, card)) {
+          socket.emit('call_game_error', { message: 'That card does not match the current color or symbol.' });
+          return;
+        }
+        if (card.value === 'wild4' && player.hand.some((held, index) => index !== cardIndex && held.color === game.currentColor)) {
+          socket.emit('call_game_error', { message: 'Wild Draw Four is only legal when you have no card matching the current color.' });
+          return;
+        }
+        const chosenColor = String(color || '').toLowerCase();
+        if (card.color === 'wild' && !['red', 'yellow', 'green', 'blue'].includes(chosenColor)) {
+          socket.emit('call_game_error', { message: 'Choose a color for the wild card.' });
+          return;
+        }
+        player.hand.splice(cardIndex, 1);
+        player.drawnCardId = null;
+        game.discard.push(card);
+        game.currentColor = card.color === 'wild' ? chosenColor : card.color;
+        game.message = player.hand.length === 1 ? `${player.displayName} calls UNO!` : `${player.displayName} played a card.`;
+
+        if (player.hand.length === 0) {
+          const points = game.players
+            .filter(other => other.id !== player.id)
+            .flatMap(other => other.hand)
+            .reduce((sum, remainingCard) => sum + unoCardPoints(remainingCard), 0);
+          player.score = (player.score || 0) + points;
+          game.winnerId = player.id;
+          if (game.roundNumber >= game.roundsTotal) {
+            const champion = [...game.players].sort((left, right) => (right.score || 0) - (left.score || 0))[0];
+            game.phase = 'complete';
+            game.message = `${player.displayName} won round ${game.roundNumber} for ${points} points. ${champion.displayName} wins the match with ${champion.score || 0} points.`;
+            await settleCallGame(roomId, game.message);
+          } else {
+            game.phase = 'round_complete';
+            game.message = `${player.displayName} won round ${game.roundNumber} for ${points} points.`;
+          }
+        } else if (card.value === 'reverse') {
+          game.direction *= -1;
+          advanceUnoTurn(game, game.players.length === 2 ? 2 : 1);
+        } else if (card.value === 'skip') {
+          advanceUnoTurn(game, 2);
+        } else if (card.value === 'draw2' || card.value === 'wild4') {
+          advanceUnoTurn(game);
+          const target = game.players.find(other => other.id === game.turnId);
+          drawUnoCards(game, target, card.value === 'draw2' ? 2 : 4);
+          game.message = `${target.displayName} draws ${card.value === 'draw2' ? 2 : 4} cards and loses their turn.`;
+          advanceUnoTurn(game);
+        } else {
+          advanceUnoTurn(game);
+        }
+      } else {
+        return;
+      }
+    } else if (game.type === 'blackjack') {
       if (player.standing) return;
       if (action === 'hit') { player.hand.push(game.deck.pop()); if (blackjackScore(player.hand) >= 21) player.standing = true; }
       if (action === 'stand') player.standing = true;

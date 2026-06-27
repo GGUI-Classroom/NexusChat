@@ -3451,22 +3451,35 @@
   let activeCallGame = null;
   let availableCallGame = null;
   let pendingActivityInvite = null;
+  let pendingUnoCardId = null;
   function nexalsToTableTokens(nexals) { return Math.floor(((parseInt(nexals, 10) || 0) * 1000) / 900); }
   function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
   function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
+  function activityName(type) { return type === 'poker' ? "Texas Hold'em" : type === 'uno' ? 'UNO' : 'Blackjack'; }
+  function unoSymbol(value) { return ({ skip: '⊘', reverse: '↻', draw2: '+2', wild: 'W', wild4: '+4' })[value] || value; }
+  function unoCardHtml(card, options = {}) {
+    if (card.hidden) return '<span class="uno-card uno-card-back"><i>N</i></span>';
+    const symbol = unoSymbol(card.value);
+    const classes = `uno-card uno-${card.color}${options.playable ? ' playable' : ''}`;
+    const action = options.playable ? ` onclick="playUnoCard('${esc(card.id)}',${card.color === 'wild'})"` : '';
+    return `<button class="${classes}"${action}${options.playable ? '' : ' disabled'}><span class="uno-corner top">${esc(symbol)}</span><span class="uno-oval"><b>${esc(symbol)}</b></span><span class="uno-corner bottom">${esc(symbol)}</span></button>`;
+  }
+  function unoCardPlayable(game, card) {
+    return !card.hidden && (card.color === 'wild' || card.color === game.currentColor || card.value === game.topCard?.value);
+  }
   function renderCallGame(game) {
     activeCallGame = game;
     const content = $('call-games-content');
     if (!game) {
-      const openRoom = availableCallGame ? `<button class="game-choice open" onclick="joinAvailableCallGame()"><strong>${availableCallGame.type === 'poker' ? "Texas Hold'em" : 'Blackjack'} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span></button>` : '';
-      content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">900 Nexals = 1,000 table tokens</span></div><div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button></div>`;
+      const openRoom = availableCallGame ? `<button class="game-choice open" onclick="joinAvailableCallGame()"><strong>${activityName(availableCallGame.type)} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span></button>` : '';
+      content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">Blackjack and Poker use table tokens. UNO is free.</span></div><div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button><button class="game-choice uno-choice" data-game-type="uno"><strong>UNO</strong><span>Match colors and symbols, use action cards, and empty your hand first.</span></button></div>`;
       const buyInput = $('call-buyin-input');
       if (buyInput) buyInput.addEventListener('input', () => { const tokens = nexalsToTableTokens(buyInput.value); $('call-token-preview').textContent = `${(parseInt(buyInput.value, 10) || 0).toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens`; });
       return;
     }
     const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
     const joined = game.players.some(player => player.id === currentUser.id);
-    const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for the other call participant to join.' : 'Both players joined. Start when ready.'}</p>${!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : ''}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,10,15].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${game.type === 'poker' ? 'Poker' : 'Blackjack'}</button>` : ''}`;
+    const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for another call participant to join.' : `${game.players.length} players joined. Start when ready.`}</p>${!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : ''}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,10,15].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${activityName(game.type)}</button>` : ''}`;
     const end = game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : '';
     const leave = joined ? '<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>' : '';
     if (game.type === 'blackjack' && game.phase !== 'lobby') {
@@ -3482,13 +3495,32 @@
       content.innerHTML = `<div class="call-poker-table blackjack-window"><div class="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Texas Hold'em</b><small>Call activity</small></div><span>Round ${game.roundNumber || 1} / ${game.roundsTotal || 1}</span></div><div class="blackjack-window-body"><div class="poker-table-felt"><div class="poker-community"><div class="blackjack-head"><b>Community Cards</b><span>Pot: ${game.pot || 0}</span></div>${blackjackCards(game.community || [])}</div><div class="call-poker-players">${game.players.map(player => `<div class="call-poker-seat${game.turnId === player.id ? ' turn' : ''}"><div class="blackjack-seat"><span>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''}${player.folded ? ' - Folded' : ''}</span><b>${player.chips} chips</b></div>${blackjackCards(player.hand || [])}</div>`).join('')}</div>${game.message ? `<p class="blackjack-result">${esc(game.message)}</p>` : ''}<div class="game-actions">${pokerActions}${leave}${end}</div></div></div></div>`;
       return;
     }
-    content.innerHTML = `<div class="game-table"><div><b>${game.type === 'blackjack' ? 'Blackjack' : "Texas Hold'em"}</b><span style="float:right;color:var(--text-muted)">Round ${game.roundNumber || 1} / ${game.roundsTotal || 1}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}</b><span style="float:right">${p.chips} chips</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? lobby : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : game.phase === 'round_complete' ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Start Next Round</button>' : '<span>Waiting for the host to start the next round.</span>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New Match</button>'}${leave}${end}</div></div>`;
+    if (game.type === 'uno' && game.phase !== 'lobby') {
+      const myTurn = game.phase === 'playing' && game.turnId === currentUser.id;
+      const orderedPlayers = [...game.players].sort((left, right) => left.id === currentUser.id ? 1 : right.id === currentUser.id ? -1 : 0);
+      const playerSeats = orderedPlayers.map(player => {
+        const isMe = player.id === currentUser.id;
+        return `<div class="uno-seat${game.turnId === player.id ? ' turn' : ''}${isMe ? ' me' : ''}"><div class="uno-seat-head"><strong>${esc(player.displayName)}${isMe ? ' (YOU)' : ''}</strong><span>${player.cardCount} card${player.cardCount === 1 ? '' : 's'} · ${player.score || 0} pts</span></div><div class="uno-hand">${(player.hand || []).map(card => unoCardHtml(card, { playable: isMe && myTurn && unoCardPlayable(game, card) })).join('')}</div></div>`;
+      }).join('');
+      const roundAction = game.phase === 'round_complete'
+        ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Deal Next Round</button>' : '<span class="uno-waiting">Waiting for the host to deal.</span>')
+        : game.phase === 'complete' ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="openCallGame(\'uno\')">New UNO Match</button>' : '<span class="uno-waiting">Match complete.</span>') : '';
+      const turnActions = myTurn
+        ? `<button class="btn-primary" onclick="callGameAction('draw')" ${game.canPass ? 'disabled' : ''}>Draw Card</button>${game.canPass ? '<button class="btn-secondary" onclick="callGameAction(\'pass\')">Keep Card</button>' : ''}`
+        : game.phase === 'playing' ? `<span class="uno-waiting">Waiting for ${esc(game.players.find(player => player.id === game.turnId)?.displayName || 'another player')}...</span>` : '';
+      const colorPicker = pendingUnoCardId
+        ? `<div class="uno-color-picker"><strong>Choose the wild color</strong><div>${['red','yellow','green','blue'].map(color => `<button class="uno-color ${color}" onclick="confirmUnoColor('${color}')" title="${color}"></button>`).join('')}</div><button class="btn-secondary" onclick="cancelUnoColor()">Cancel</button></div>`
+        : '';
+      content.innerHTML = `<div class="call-uno-table"><div class="uno-table-bar"><div><span class="uno-logo">UNO</span><b>UNO Table</b><small>Call activity · Round ${game.roundNumber || 1}/${game.roundsTotal || 1}</small></div><span>${game.direction === 1 ? 'Clockwise ↻' : 'Counter-clockwise ↺'}</span></div><div class="uno-felt uno-current-${esc(game.currentColor || 'red')}"><div class="uno-opponents">${playerSeats}</div><div class="uno-center"><div class="uno-pile"><div><span class="uno-pile-label">DRAW · ${game.deckCount}</span><button class="uno-card uno-card-back deck-card" onclick="${myTurn && !game.canPass ? "callGameAction('draw')" : ''}" ${myTurn && !game.canPass ? '' : 'disabled'}><i>N</i></button></div><div><span class="uno-pile-label">DISCARD</span>${unoCardHtml(game.topCard || { hidden: true })}</div></div><div class="uno-color-status"><span class="${esc(game.currentColor || 'red')}"></span>Current color: <b>${esc(game.currentColor || 'red')}</b></div></div>${game.message ? `<p class="uno-message">${esc(game.message)}</p>` : ''}<div class="uno-actions">${turnActions}${roundAction}${leave}${end}</div>${colorPicker}</div></div>`;
+      return;
+    }
+    content.innerHTML = `<div class="game-table"><div><b>${activityName(game.type)}</b><span style="float:right;color:var(--text-muted)">Round ${game.roundNumber || 1} / ${game.roundsTotal || 1}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}</b><span style="float:right">${p.chips} chips</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? lobby : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : game.phase === 'round_complete' ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Start Next Round</button>' : '<span>Waiting for the host to start the next round.</span>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New Match</button>'}${leave}${end}</div></div>`;
   }
   window.openCallGame = function(type) {
     const roomId = activeGameRoomId();
     if (!roomId || !socket) return toast('Join a call first', 'error');
-    const buyIn = parseInt($('call-buyin-input')?.value, 10) || 0;
-    const bet = parseInt($('call-bet-input')?.value, 10) || 0;
+    const buyIn = type === 'uno' ? 0 : (parseInt($('call-buyin-input')?.value, 10) || 0);
+    const bet = type === 'uno' ? 0 : (parseInt($('call-bet-input')?.value, 10) || 0);
     renderCallGame({ type, phase: 'lobby', hostId: currentUser.id, players: [{ id: currentUser.id, displayName: currentUser.displayName, chips: nexalsToTableTokens(buyIn), buyIn, bet, hand: [] }], dealer: type === 'blackjack' ? { hand: [], score: null } : null, community: [], pot: 0, message: 'Opening table...' });
     socket.emit('call_game_open', { roomId, type, buyIn, bet }, result => { if (result && result.error) { activeCallGame = null; renderCallGame(null); toast(result.error, 'error'); } });
   };
@@ -3497,6 +3529,21 @@
   window.startCallGame = function() { const roomId = activeGameRoomId(); const rounds = parseInt($('call-round-count')?.value, 10) || 3; if (roomId && socket) socket.emit('call_game_start', { roomId, rounds }); };
   window.nextCallGameRound = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_next_round', { roomId }); };
   window.callGameAction = function(action) { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
+  window.playUnoCard = function(cardId, needsColor) {
+    if (needsColor) {
+      pendingUnoCardId = cardId;
+      renderCallGame(activeCallGame);
+      return;
+    }
+    const roomId = activeGameRoomId();
+    if (roomId && socket) socket.emit('call_game_action', { roomId, action: 'play', cardId });
+  };
+  window.confirmUnoColor = function(color) {
+    const roomId = activeGameRoomId();
+    if (roomId && socket && pendingUnoCardId) socket.emit('call_game_action', { roomId, action: 'play', cardId: pendingUnoCardId, color });
+    pendingUnoCardId = null;
+  };
+  window.cancelUnoColor = function() { pendingUnoCardId = null; renderCallGame(activeCallGame); };
   window.endCallGame = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_close', { roomId }); };
   window.leaveCallGame = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_leave', { roomId }); };
   $('call-games-btn').addEventListener('click', () => { if (!activeGameRoomId()) return toast('Join a call first', 'error'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); });
@@ -3572,6 +3619,7 @@
 
     socket.on('call_game_state', ({ roomId, game }) => {
       if (roomId !== activeGameRoomId()) return;
+      pendingUnoCardId = null;
       activeCallGame = game;
       availableCallGame = null;
       if ($('call-games-modal').classList.contains('active')) renderCallGame(game);
@@ -3586,7 +3634,8 @@
       if (roomId !== activeGameRoomId() || !host) return;
       pendingActivityInvite = { roomId, type };
       availableCallGame = { type, hostName: host.displayName };
-      const label = type === 'poker' ? "Texas Hold'em" : 'Blackjack';
+      const label = activityName(type);
+      $('activity-invite-icon').textContent = type === 'uno' ? 'UNO' : '♠';
       $('activity-invite-title').textContent = `${host.displayName} started ${label}`;
       $('activity-invite-text').textContent = 'Join the activity?';
       $('activity-invite-modal').classList.add('active');
