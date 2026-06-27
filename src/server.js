@@ -122,7 +122,12 @@ app.use(sessionMiddleware);
 app.use((req, res, next) => { req.io = io; req.userSockets = userSockets; next(); });
 app.use(express.static(path.join(__dirname, '../public'), {
   etag: true,
-  maxAge: isProd ? '1h' : 0
+  maxAge: isProd ? '1h' : 0,
+  setHeaders(res, filePath) {
+    if (path.extname(filePath).toLowerCase() === '.html') {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
 }));
 
 app.use(async (req, res, next) => {
@@ -349,10 +354,12 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/limited', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(path.join(__dirname, '../public/limited.html'));
 });
 
 app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
