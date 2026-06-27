@@ -3455,7 +3455,7 @@
   function nexalsToTableTokens(nexals) { return Math.floor(((parseInt(nexals, 10) || 0) * 1000) / 900); }
   function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
   function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
-  function activityName(type) { return type === 'poker' ? "Texas Hold'em" : type === 'uno' ? 'UNO' : 'Blackjack'; }
+  function activityName(type) { return type === 'poker' ? "Texas Hold'em" : type === 'uno' ? 'UNO' : type === 'connect4' ? 'Connect Four' : 'Blackjack'; }
   function unoSymbol(value) { return ({ skip: '⊘', reverse: '↻', draw2: '+2', wild: 'W', wild4: '+4' })[value] || value; }
   function unoCardHtml(card, options = {}) {
     if (card.hidden) return '<span class="uno-card uno-card-back"><i>N</i></span>';
@@ -3485,12 +3485,30 @@
   };
   window.playUno = function() { window.openCallGame('uno'); };
   window.joinUnoRoom = function() { window.joinCallGame(); };
+  function renderConnectFourBrowser(room = null) {
+    const content = $('call-games-content');
+    const openRoom = room
+      ? `<button class="connect4-room" onclick="joinConnectFourRoom()"><span class="connect4-room-mark">OPEN</span><div><strong>${esc(room.hostName)}'s table</strong><small>${room.playerCount || 1} / 2 players · Waiting for opponent</small></div><b>${room.joined ? 'Rejoin' : 'Join'}</b></button>`
+      : '<div class="uno-room-empty">No open Connect Four tables in this call.</div>';
+    content.innerHTML = `<div class="connect4-browser"><div class="connect4-browser-hero"><div class="connect4-mini-board">${Array.from({ length: 20 }, (_, index) => `<i class="${[13,14,15,16].includes(index) ? 'red' : [7,12,17].includes(index) ? 'yellow' : ''}"></i>`).join('')}</div><div><small>CALL ACTIVITY</small><h2>Connect Four</h2><p>Drop discs into the grid. First to connect four in any direction wins.</p></div><button class="btn-primary" onclick="playConnectFour()" ${room ? 'disabled' : ''}>Play</button></div><div class="uno-room-section"><div><span>OPEN ROOMS</span><button class="uno-refresh" onclick="openConnectFourBrowser()" title="Refresh rooms">↻</button></div>${openRoom}</div></div>`;
+  }
+  window.openConnectFourBrowser = function() {
+    const roomId = activeGameRoomId();
+    if (!roomId || !socket) return toast('Join a call first', 'error');
+    renderConnectFourBrowser();
+    socket.emit('call_game_browse', { roomId, type: 'connect4' }, result => {
+      if (result?.error) return toast(result.error, 'error');
+      if (!activeCallGame) renderConnectFourBrowser(result?.room || null);
+    });
+  };
+  window.playConnectFour = function() { window.openCallGame('connect4'); };
+  window.joinConnectFourRoom = function() { window.joinCallGame(); };
   function renderCallGame(game) {
     activeCallGame = game;
     const content = $('call-games-content');
     if (!game) {
       const openRoom = availableCallGame ? `<button class="game-choice open" onclick="joinAvailableCallGame()"><strong>${activityName(availableCallGame.type)} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span></button>` : '';
-      content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">Table-token settings apply to Blackjack and Poker only.</span></div><div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button><button class="game-choice uno-choice" onclick="openUnoBrowser()"><strong>UNO</strong><span>Free to play. Open UNO rooms or create a new one.</span><b>Play</b></button></div>`;
+      content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">Table-token settings apply to Blackjack and Poker only.</span></div><div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button><button class="game-choice uno-choice" onclick="openUnoBrowser()"><strong>UNO</strong><span>Free to play. Open UNO rooms or create a new one.</span><b>Play</b></button><button class="game-choice connect4-choice" onclick="openConnectFourBrowser()"><strong>Connect Four</strong><span>Free two-player drop-disc strategy.</span><b>Play</b></button></div>`;
       const buyInput = $('call-buyin-input');
       if (buyInput) buyInput.addEventListener('input', () => { const tokens = nexalsToTableTokens(buyInput.value); $('call-token-preview').textContent = `${(parseInt(buyInput.value, 10) || 0).toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens`; });
       return;
@@ -3502,6 +3520,10 @@
     const leave = joined ? '<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>' : '';
     if (game.type === 'uno' && game.phase === 'lobby') {
       content.innerHTML = `<div class="uno-lobby"><div class="uno-lobby-banner"><span class="uno-browser-logo">UNO</span><div><small>OPEN ROOM</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s UNO room</h2><p>${game.players.length} / 6 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST</b>' : '<b>READY</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for another caller to join...' : 'Players ready. The host can start the game.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinUnoRoom()">Join Room</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start UNO</button>` : ''}${leave}${end}</div></div>`;
+      return;
+    }
+    if (game.type === 'connect4' && game.phase === 'lobby') {
+      content.innerHTML = `<div class="connect4-lobby"><div class="connect4-lobby-banner"><div class="connect4-mini-board">${Array.from({ length: 20 }, () => '<i></i>').join('')}</div><div><small>OPEN TABLE</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s Connect Four table</h2><p>${game.players.length} / 2 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST · RED</b>' : '<b>READY · YELLOW</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for an opponent...' : 'Both players are ready.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinConnectFourRoom()">Join Table</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start Game</button>` : ''}${leave}${end}</div></div>`;
       return;
     }
     if (game.type === 'blackjack' && game.phase !== 'lobby') {
@@ -3536,13 +3558,25 @@
       content.innerHTML = `<div class="call-uno-table"><div class="uno-table-bar"><div><span class="uno-logo">UNO</span><b>UNO Table</b><small>Free call activity</small></div><span>${game.direction === 1 ? 'Clockwise ↻' : 'Counter-clockwise ↺'}</span></div><div class="uno-felt uno-current-${esc(game.currentColor || 'red')}"><div class="uno-opponents">${playerSeats}</div><div class="uno-center"><div class="uno-pile"><div><span class="uno-pile-label">DRAW · ${game.deckCount}</span><button class="uno-card uno-card-back deck-card" onclick="${myTurn && !game.canPass ? "callGameAction('draw')" : ''}" ${myTurn && !game.canPass ? '' : 'disabled'}><i>N</i></button></div><div><span class="uno-pile-label">DISCARD</span>${unoCardHtml(game.topCard || { hidden: true })}</div></div><div class="uno-color-status"><span class="${esc(game.currentColor || 'red')}"></span>Current color: <b>${esc(game.currentColor || 'red')}</b></div></div>${game.message ? `<p class="uno-message">${esc(game.message)}</p>` : ''}<div class="uno-actions">${turnActions}${roundAction}${leave}${end}</div>${colorPicker}</div></div>`;
       return;
     }
+    if (game.type === 'connect4' && game.phase !== 'lobby') {
+      const myTurn = game.phase === 'playing' && game.turnId === currentUser.id;
+      const cells = (game.board || []).flatMap((row, rowIndex) => row.map((piece, column) => {
+        const pieceClass = piece === '🔴' ? ' red' : piece === '🔵' ? ' yellow' : '';
+        return `<div class="connect4-cell${pieceClass}" data-row="${rowIndex}" data-column="${column}"><i></i></div>`;
+      })).join('');
+      const columns = Array.from({ length: 7 }, (_, column) => `<button onclick="dropConnectFour(${column})" ${!myTurn || game.board?.[0]?.[column] !== ' ' ? 'disabled' : ''} title="Drop in column ${column + 1}">▼</button>`).join('');
+      const players = game.players.map(player => `<div class="connect4-player${game.turnId === player.id ? ' turn' : ''}"><span class="${player.piece === '🔴' ? 'red' : 'yellow'}"></span><div><strong>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''}</strong><small>${game.turnId === player.id && game.phase === 'playing' ? 'Taking turn' : player.piece === '🔴' ? 'Red discs' : 'Yellow discs'}</small></div></div>`).join('');
+      const replay = game.phase === 'complete' && game.hostId === currentUser.id ? '<button class="btn-primary" onclick="openCallGame(\'connect4\')">Play Again</button>' : '';
+      content.innerHTML = `<div class="connect4-game"><div class="connect4-game-head"><div><b>Connect Four</b><small>Free call activity</small></div><span>${myTurn ? 'Your turn' : game.phase === 'complete' ? 'Game complete' : `${esc(game.players.find(player => player.id === game.turnId)?.displayName || 'Opponent')}'s turn`}</span></div><div class="connect4-stage"><div class="connect4-players">${players}</div><div class="connect4-board-wrap"><div class="connect4-column-buttons">${columns}</div><div class="connect4-board">${cells}</div></div>${game.message ? `<p class="connect4-message">${esc(game.message)}</p>` : ''}<div class="uno-actions">${replay}${leave}${end}</div></div></div>`;
+      return;
+    }
     content.innerHTML = `<div class="game-table"><div><b>${activityName(game.type)}</b><span style="float:right;color:var(--text-muted)">Round ${game.roundNumber || 1} / ${game.roundsTotal || 1}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}</b><span style="float:right">${p.chips} chips</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? lobby : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : game.phase === 'round_complete' ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Start Next Round</button>' : '<span>Waiting for the host to start the next round.</span>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New Match</button>'}${leave}${end}</div></div>`;
   }
   window.openCallGame = function(type) {
     const roomId = activeGameRoomId();
     if (!roomId || !socket) return toast('Join a call first', 'error');
-    const buyIn = type === 'uno' ? 0 : (parseInt($('call-buyin-input')?.value, 10) || 0);
-    const bet = type === 'uno' ? 0 : (parseInt($('call-bet-input')?.value, 10) || 0);
+    const buyIn = ['uno', 'connect4'].includes(type) ? 0 : (parseInt($('call-buyin-input')?.value, 10) || 0);
+    const bet = ['uno', 'connect4'].includes(type) ? 0 : (parseInt($('call-bet-input')?.value, 10) || 0);
     renderCallGame({ type, phase: 'lobby', hostId: currentUser.id, players: [{ id: currentUser.id, displayName: currentUser.displayName, chips: nexalsToTableTokens(buyIn), buyIn, bet, hand: [] }], dealer: type === 'blackjack' ? { hand: [], score: null } : null, community: [], pot: 0, message: 'Opening table...' });
     socket.emit('call_game_open', { roomId, type, buyIn, bet }, result => { if (result && result.error) { activeCallGame = null; renderCallGame(null); toast(result.error, 'error'); } });
   };
@@ -3551,6 +3585,10 @@
   window.startCallGame = function() { const roomId = activeGameRoomId(); const rounds = parseInt($('call-round-count')?.value, 10) || 3; if (roomId && socket) socket.emit('call_game_start', { roomId, rounds }); };
   window.nextCallGameRound = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_next_round', { roomId }); };
   window.callGameAction = function(action) { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
+  window.dropConnectFour = function(column) {
+    const roomId = activeGameRoomId();
+    if (roomId && socket) socket.emit('call_game_action', { roomId, action: 'drop', column });
+  };
   window.playUnoCard = function(cardId, needsColor) {
     if (needsColor) {
       pendingUnoCardId = cardId;
@@ -3657,7 +3695,7 @@
       pendingActivityInvite = { roomId, type };
       availableCallGame = { type, hostName: host.displayName };
       const label = activityName(type);
-      $('activity-invite-icon').textContent = type === 'uno' ? 'UNO' : '♠';
+      $('activity-invite-icon').textContent = type === 'uno' ? 'UNO' : type === 'connect4' ? '4' : '♠';
       $('activity-invite-title').textContent = `${host.displayName} started ${label}`;
       $('activity-invite-text').textContent = 'Join the activity?';
       $('activity-invite-modal').classList.add('active');

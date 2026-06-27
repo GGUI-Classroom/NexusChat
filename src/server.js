@@ -8,6 +8,7 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const { BoardBase: ConnectFourBoard, BoardPiece: ConnectFourPiece } = require('@kenrick95/c4');
 const { envFlag } = require('./config/env');
 const { pool, initDb } = require('./models/db');
 const { avatarUrl } = require('./utils/avatar');
@@ -450,6 +451,22 @@ function isPlayableUnoCard(game, card) {
   return card.color === 'wild' || card.color === game.currentColor || card.value === top?.value;
 }
 function gameStateFor(game, viewerId) {
+  if (game.type === 'connect4') {
+    return {
+      type: game.type,
+      phase: game.phase,
+      hostId: game.hostId,
+      turnId: game.turnId || null,
+      board: game.connect4Board?.map || Array.from({ length: 6 }, () => Array(7).fill(ConnectFourPiece.EMPTY)),
+      players: game.players.map((player, index) => ({
+        id: player.id,
+        displayName: player.displayName,
+        piece: index === 0 ? ConnectFourPiece.PLAYER_1 : ConnectFourPiece.PLAYER_2
+      })),
+      winnerId: game.winnerId || null,
+      message: game.message || ''
+    };
+  }
   if (game.type === 'uno') {
     return {
       type: game.type,
@@ -487,6 +504,14 @@ function gameStateFor(game, viewerId) {
     players: game.players.map(p => ({ id: p.id, displayName: p.displayName, chips: p.chips, buyIn: p.buyIn || 0, bet: p.bet || 0, folded: !!p.folded, standing: !!p.standing, hand: p.id === viewerId || game.phase === 'complete' ? p.hand : p.hand.map(() => ({ hidden: true })), score: game.type === 'blackjack' ? blackjackScore(p.hand) : null })), winnerId: game.winnerId || null, message: game.message || '' };
 }
 function beginCallGameRound(game) {
+  if (game.type === 'connect4') {
+    game.connect4Board = new ConnectFourBoard();
+    game.phase = 'playing';
+    game.winnerId = null;
+    game.message = '';
+    game.turnId = game.players[0].id;
+    return;
+  }
   if (game.type === 'uno') {
     game.deck = shuffle(unoDeck());
     game.discard = [];
@@ -536,7 +561,7 @@ async function settleCallGame(roomId, reason = 'Activity ended') {
   const game = callGames.get(roomId);
   if (!game || game.settled) return [];
   game.settled = true;
-  if (game.type === 'uno') {
+  if (game.type === 'uno' || game.type === 'connect4') {
     game.message = reason;
     return [];
   }
@@ -1944,13 +1969,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('call_game_open', async ({ roomId, type, buyIn, bet }, ack = () => {}) => {
-    if (!roomId || !['blackjack', 'poker', 'uno'].includes(type)) return ack({ error: 'Choose a valid game.' });
+    if (!roomId || !['blackjack', 'poker', 'uno', 'connect4'].includes(type)) return ack({ error: 'Choose a valid game.' });
     if (!await isInGameRoom(userId, roomId)) return ack({ error: 'Join the call before starting a game.' });
     let game = callGames.get(roomId);
     if (!game || game.phase === 'complete') {
       const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
       let purchase = { buyIn: 0, tokens: 0, nexals: null };
-      if (type !== 'uno') {
+      if (!['uno', 'connect4'].includes(type)) {
         try { purchase = await buyCallTableTokens(userId, buyIn); }
         catch (error) { return ack({ error: error.message }); }
       }
@@ -1971,11 +1996,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('call_game_browse', async ({ roomId, type }, ack = () => {}) => {
-    if (!roomId || type !== 'uno' || !await isInGameRoom(userId, roomId)) {
+    if (!roomId || !['uno', 'connect4'].includes(type) || !await isInGameRoom(userId, roomId)) {
       return ack({ error: 'Join the call before browsing activities.' });
     }
     const game = callGames.get(roomId);
-    if (!game || game.type !== 'uno' || game.phase !== 'lobby') {
+    if (!game || game.type !== type || game.phase !== 'lobby') {
       return ack({ room: null });
     }
     if (game.players.some(player => player.id === userId)) {
@@ -1984,7 +2009,7 @@ io.on('connection', (socket) => {
     const host = game.players.find(player => player.id === game.hostId);
     ack({
       room: {
-        type: 'uno',
+        type,
         hostName: host?.displayName || 'A caller',
         playerCount: game.players.length,
         joined: game.players.some(player => player.id === userId)
@@ -1994,10 +2019,11 @@ io.on('connection', (socket) => {
 
   socket.on('call_game_join', async ({ roomId, buyIn, bet }) => {
     const game = callGames.get(roomId);
-    if (!game || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId) || game.players.some(p => p.id === userId) || game.players.length >= 6) return;
+    const maxPlayers = game?.type === 'connect4' ? 2 : 6;
+    if (!game || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId) || game.players.some(p => p.id === userId) || game.players.length >= maxPlayers) return;
     const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
     let purchase = { buyIn: 0, tokens: 0, nexals: null };
-    if (game.type !== 'uno') {
+    if (!['uno', 'connect4'].includes(game.type)) {
       try { purchase = await buyCallTableTokens(userId, buyIn); }
       catch (error) { socket.emit('call_game_error', { message: error.message }); return; }
     }
@@ -2014,7 +2040,7 @@ io.on('connection', (socket) => {
       socket.emit('call_game_error', { message: 'A call game needs the other person to join first.' });
       return;
     }
-    game.roundsTotal = game.type === 'uno' ? 1 : Math.max(1, Math.min(15, parseInt(rounds, 10) || game.roundsTotal || 3));
+    game.roundsTotal = ['uno', 'connect4'].includes(game.type) ? 1 : Math.max(1, Math.min(15, parseInt(rounds, 10) || game.roundsTotal || 3));
     game.roundNumber = 1;
     if (game.type === 'blackjack') {
       const invalid = game.players.find(p => !p.bet || p.bet <= 0 || p.bet > p.chips);
@@ -2060,12 +2086,44 @@ io.on('connection', (socket) => {
     emitGame(roomId);
   });
 
-  socket.on('call_game_action', async ({ roomId, action, cardId, color }) => {
+  socket.on('call_game_action', async ({ roomId, action, cardId, color, column }) => {
     const game = callGames.get(roomId);
     if (!game || game.phase !== 'playing' || !await isInGameRoom(userId, roomId)) return;
     const player = game.players.find(p => p.id === userId);
     if (!player) return;
-    if (game.type === 'uno') {
+    if (game.type === 'connect4') {
+      if (game.turnId !== userId || action !== 'drop' || game.actionPending) return;
+      const targetColumn = Number.parseInt(column, 10);
+      if (!Number.isInteger(targetColumn) || targetColumn < 0 || targetColumn > 6) return;
+      const playerIndex = game.players.findIndex(item => item.id === userId);
+      const boardPiece = playerIndex === 0 ? ConnectFourPiece.PLAYER_1 : ConnectFourPiece.PLAYER_2;
+      game.actionPending = true;
+      let applied;
+      try {
+        applied = await game.connect4Board.applyPlayerAction({ boardPiece }, targetColumn);
+      } finally {
+        game.actionPending = false;
+      }
+      if (!applied) {
+        socket.emit('call_game_error', { message: 'That column is full.' });
+        return;
+      }
+      const winnerPiece = game.connect4Board.getWinner();
+      if (winnerPiece === boardPiece) {
+        game.phase = 'complete';
+        game.winnerId = userId;
+        game.message = `${player.displayName} connected four and wins!`;
+        await settleCallGame(roomId, game.message);
+      } else if (winnerPiece === ConnectFourPiece.DRAW) {
+        game.phase = 'complete';
+        game.message = 'The board is full. The game is a draw.';
+        await settleCallGame(roomId, game.message);
+      } else {
+        const nextPlayer = game.players[(playerIndex + 1) % game.players.length];
+        game.turnId = nextPlayer.id;
+        game.message = `${nextPlayer.displayName}'s turn.`;
+      }
+    } else if (game.type === 'uno') {
       if (game.turnId !== userId) return;
       if (action === 'draw') {
         if (player.drawnCardId) return;
