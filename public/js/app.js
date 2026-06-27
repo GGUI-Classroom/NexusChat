@@ -3467,12 +3467,30 @@
   function unoCardPlayable(game, card) {
     return !card.hidden && (card.color === 'wild' || card.color === game.currentColor || card.value === game.topCard?.value);
   }
+  function renderUnoBrowser(room = null) {
+    const content = $('call-games-content');
+    const openRoom = room
+      ? `<button class="uno-room" onclick="joinUnoRoom()"><span class="uno-room-mark">OPEN</span><div><strong>${esc(room.hostName)}'s UNO room</strong><small>${room.playerCount || 1} / 6 players · Waiting to start</small></div><b>${room.joined ? 'Rejoin' : 'Join'}</b></button>`
+      : '<div class="uno-room-empty">No open UNO rooms in this call.</div>';
+    content.innerHTML = `<div class="uno-browser"><div class="uno-browser-hero"><span class="uno-browser-logo">UNO</span><div><small>CALL ACTIVITY</small><h2>UNO</h2><p>Match colors and symbols. First player to empty their hand wins.</p></div><button class="btn-primary" onclick="playUno()" ${room ? 'disabled' : ''}>Play</button></div><div class="uno-room-section"><div><span>OPEN ROOMS</span><button class="uno-refresh" onclick="openUnoBrowser()" title="Refresh rooms">↻</button></div>${openRoom}</div></div>`;
+  }
+  window.openUnoBrowser = function() {
+    const roomId = activeGameRoomId();
+    if (!roomId || !socket) return toast('Join a call first', 'error');
+    renderUnoBrowser(null);
+    socket.emit('call_game_browse', { roomId, type: 'uno' }, result => {
+      if (result?.error) return toast(result.error, 'error');
+      if (!activeCallGame) renderUnoBrowser(result?.room || null);
+    });
+  };
+  window.playUno = function() { window.openCallGame('uno'); };
+  window.joinUnoRoom = function() { window.joinCallGame(); };
   function renderCallGame(game) {
     activeCallGame = game;
     const content = $('call-games-content');
     if (!game) {
       const openRoom = availableCallGame ? `<button class="game-choice open" onclick="joinAvailableCallGame()"><strong>${activityName(availableCallGame.type)} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span></button>` : '';
-      content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">Blackjack and Poker use table tokens. UNO is free.</span></div><div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button><button class="game-choice uno-choice" data-game-type="uno"><strong>UNO</strong><span>Match colors and symbols, use action cards, and empty your hand first.</span></button></div>`;
+      content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">Table-token settings apply to Blackjack and Poker only.</span></div><div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button><button class="game-choice uno-choice" onclick="openUnoBrowser()"><strong>UNO</strong><span>Free to play. Open UNO rooms or create a new one.</span><b>Play</b></button></div>`;
       const buyInput = $('call-buyin-input');
       if (buyInput) buyInput.addEventListener('input', () => { const tokens = nexalsToTableTokens(buyInput.value); $('call-token-preview').textContent = `${(parseInt(buyInput.value, 10) || 0).toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens`; });
       return;
@@ -3482,6 +3500,10 @@
     const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for another call participant to join.' : `${game.players.length} players joined. Start when ready.`}</p>${!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : ''}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,10,15].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${activityName(game.type)}</button>` : ''}`;
     const end = game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : '';
     const leave = joined ? '<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>' : '';
+    if (game.type === 'uno' && game.phase === 'lobby') {
+      content.innerHTML = `<div class="uno-lobby"><div class="uno-lobby-banner"><span class="uno-browser-logo">UNO</span><div><small>OPEN ROOM</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s UNO room</h2><p>${game.players.length} / 6 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST</b>' : '<b>READY</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for another caller to join...' : 'Players ready. The host can start the game.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinUnoRoom()">Join Room</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start UNO</button>` : ''}${leave}${end}</div></div>`;
+      return;
+    }
     if (game.type === 'blackjack' && game.phase !== 'lobby') {
       const actionButtons = game.phase === 'playing'
         ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>'
@@ -3502,16 +3524,16 @@
         const isMe = player.id === currentUser.id;
         return `<div class="uno-seat${game.turnId === player.id ? ' turn' : ''}${isMe ? ' me' : ''}"><div class="uno-seat-head"><strong>${esc(player.displayName)}${isMe ? ' (YOU)' : ''}</strong><span>${player.cardCount} card${player.cardCount === 1 ? '' : 's'} · ${player.score || 0} pts</span></div><div class="uno-hand">${(player.hand || []).map(card => unoCardHtml(card, { playable: isMe && myTurn && unoCardPlayable(game, card) })).join('')}</div></div>`;
       }).join('');
-      const roundAction = game.phase === 'round_complete'
-        ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Deal Next Round</button>' : '<span class="uno-waiting">Waiting for the host to deal.</span>')
-        : game.phase === 'complete' ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="openCallGame(\'uno\')">New UNO Match</button>' : '<span class="uno-waiting">Match complete.</span>') : '';
+      const roundAction = game.phase === 'complete'
+        ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="openCallGame(\'uno\')">Play Again</button>' : '<span class="uno-waiting">Game complete.</span>')
+        : '';
       const turnActions = myTurn
         ? `<button class="btn-primary" onclick="callGameAction('draw')" ${game.canPass ? 'disabled' : ''}>Draw Card</button>${game.canPass ? '<button class="btn-secondary" onclick="callGameAction(\'pass\')">Keep Card</button>' : ''}`
         : game.phase === 'playing' ? `<span class="uno-waiting">Waiting for ${esc(game.players.find(player => player.id === game.turnId)?.displayName || 'another player')}...</span>` : '';
       const colorPicker = pendingUnoCardId
         ? `<div class="uno-color-picker"><strong>Choose the wild color</strong><div>${['red','yellow','green','blue'].map(color => `<button class="uno-color ${color}" onclick="confirmUnoColor('${color}')" title="${color}"></button>`).join('')}</div><button class="btn-secondary" onclick="cancelUnoColor()">Cancel</button></div>`
         : '';
-      content.innerHTML = `<div class="call-uno-table"><div class="uno-table-bar"><div><span class="uno-logo">UNO</span><b>UNO Table</b><small>Call activity · Round ${game.roundNumber || 1}/${game.roundsTotal || 1}</small></div><span>${game.direction === 1 ? 'Clockwise ↻' : 'Counter-clockwise ↺'}</span></div><div class="uno-felt uno-current-${esc(game.currentColor || 'red')}"><div class="uno-opponents">${playerSeats}</div><div class="uno-center"><div class="uno-pile"><div><span class="uno-pile-label">DRAW · ${game.deckCount}</span><button class="uno-card uno-card-back deck-card" onclick="${myTurn && !game.canPass ? "callGameAction('draw')" : ''}" ${myTurn && !game.canPass ? '' : 'disabled'}><i>N</i></button></div><div><span class="uno-pile-label">DISCARD</span>${unoCardHtml(game.topCard || { hidden: true })}</div></div><div class="uno-color-status"><span class="${esc(game.currentColor || 'red')}"></span>Current color: <b>${esc(game.currentColor || 'red')}</b></div></div>${game.message ? `<p class="uno-message">${esc(game.message)}</p>` : ''}<div class="uno-actions">${turnActions}${roundAction}${leave}${end}</div>${colorPicker}</div></div>`;
+      content.innerHTML = `<div class="call-uno-table"><div class="uno-table-bar"><div><span class="uno-logo">UNO</span><b>UNO Table</b><small>Free call activity</small></div><span>${game.direction === 1 ? 'Clockwise ↻' : 'Counter-clockwise ↺'}</span></div><div class="uno-felt uno-current-${esc(game.currentColor || 'red')}"><div class="uno-opponents">${playerSeats}</div><div class="uno-center"><div class="uno-pile"><div><span class="uno-pile-label">DRAW · ${game.deckCount}</span><button class="uno-card uno-card-back deck-card" onclick="${myTurn && !game.canPass ? "callGameAction('draw')" : ''}" ${myTurn && !game.canPass ? '' : 'disabled'}><i>N</i></button></div><div><span class="uno-pile-label">DISCARD</span>${unoCardHtml(game.topCard || { hidden: true })}</div></div><div class="uno-color-status"><span class="${esc(game.currentColor || 'red')}"></span>Current color: <b>${esc(game.currentColor || 'red')}</b></div></div>${game.message ? `<p class="uno-message">${esc(game.message)}</p>` : ''}<div class="uno-actions">${turnActions}${roundAction}${leave}${end}</div>${colorPicker}</div></div>`;
       return;
     }
     content.innerHTML = `<div class="game-table"><div><b>${activityName(game.type)}</b><span style="float:right;color:var(--text-muted)">Round ${game.roundNumber || 1} / ${game.roundsTotal || 1}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}</b><span style="float:right">${p.chips} chips</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? lobby : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : game.phase === 'round_complete' ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Start Next Round</button>' : '<span>Waiting for the host to start the next round.</span>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New Match</button>'}${leave}${end}</div></div>`;

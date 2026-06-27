@@ -1970,6 +1970,28 @@ io.on('connection', (socket) => {
     ack({ success: true });
   });
 
+  socket.on('call_game_browse', async ({ roomId, type }, ack = () => {}) => {
+    if (!roomId || type !== 'uno' || !await isInGameRoom(userId, roomId)) {
+      return ack({ error: 'Join the call before browsing activities.' });
+    }
+    const game = callGames.get(roomId);
+    if (!game || game.type !== 'uno' || game.phase !== 'lobby') {
+      return ack({ room: null });
+    }
+    if (game.players.some(player => player.id === userId)) {
+      socket.emit('call_game_state', { roomId, game: gameStateFor(game, userId) });
+    }
+    const host = game.players.find(player => player.id === game.hostId);
+    ack({
+      room: {
+        type: 'uno',
+        hostName: host?.displayName || 'A caller',
+        playerCount: game.players.length,
+        joined: game.players.some(player => player.id === userId)
+      }
+    });
+  });
+
   socket.on('call_game_join', async ({ roomId, buyIn, bet }) => {
     const game = callGames.get(roomId);
     if (!game || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId) || game.players.some(p => p.id === userId) || game.players.length >= 6) return;
@@ -1992,7 +2014,7 @@ io.on('connection', (socket) => {
       socket.emit('call_game_error', { message: 'A call game needs the other person to join first.' });
       return;
     }
-    game.roundsTotal = Math.max(1, Math.min(15, parseInt(rounds, 10) || game.roundsTotal || 3));
+    game.roundsTotal = game.type === 'uno' ? 1 : Math.max(1, Math.min(15, parseInt(rounds, 10) || game.roundsTotal || 3));
     game.roundNumber = 1;
     if (game.type === 'blackjack') {
       const invalid = game.players.find(p => !p.bet || p.bet <= 0 || p.bet > p.chips);
@@ -2095,15 +2117,9 @@ io.on('connection', (socket) => {
             .reduce((sum, remainingCard) => sum + unoCardPoints(remainingCard), 0);
           player.score = (player.score || 0) + points;
           game.winnerId = player.id;
-          if (game.roundNumber >= game.roundsTotal) {
-            const champion = [...game.players].sort((left, right) => (right.score || 0) - (left.score || 0))[0];
-            game.phase = 'complete';
-            game.message = `${player.displayName} won round ${game.roundNumber} for ${points} points. ${champion.displayName} wins the match with ${champion.score || 0} points.`;
-            await settleCallGame(roomId, game.message);
-          } else {
-            game.phase = 'round_complete';
-            game.message = `${player.displayName} won round ${game.roundNumber} for ${points} points.`;
-          }
+          game.phase = 'complete';
+          game.message = `${player.displayName} wins UNO with ${points} points from the remaining hands.`;
+          await settleCallGame(roomId, game.message);
         } else if (card.value === 'reverse') {
           game.direction *= -1;
           advanceUnoTurn(game, game.players.length === 2 ? 2 : 1);
