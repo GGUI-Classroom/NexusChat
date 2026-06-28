@@ -16,6 +16,14 @@ const DECORATION_SELL_PRICES = {
   mythical: 2500,
   ascendent: 6000
 };
+const NAMEPLATE_SELL_PRICES = {
+  common: 250,
+  rare: 550,
+  epic: 1000,
+  legendary: 1600,
+  mythical: 2300,
+  ascendent: 5500
+};
 
 async function syncAchievementFields(userId, fields) {
   try {
@@ -222,19 +230,43 @@ const DECORATIONS = [
   },
 ];
 
+const NAMEPLATES = [
+  { id: 'signal_strip', name: 'Signal Strip', description: 'A crisp graphite plate with a live mint signal.', rarity: 'common', style: 'signal' },
+  { id: 'ember_line', name: 'Ember Line', description: 'Warm copper rails glow behind your name.', rarity: 'common', style: 'ember' },
+  { id: 'polar_label', name: 'Polar Label', description: 'A cool glass label with a clean ice edge.', rarity: 'common', style: 'polar' },
+  { id: 'neon_lane', name: 'Neon Lane', description: 'Electric cyan traffic sweeps across a midnight plate.', rarity: 'rare', style: 'neon' },
+  { id: 'violet_drive', name: 'Violet Drive', description: 'Violet light races through a split chrome frame.', rarity: 'rare', style: 'violet' },
+  { id: 'coral_frequency', name: 'Coral Frequency', description: 'A coral waveform travels behind your display name.', rarity: 'rare', style: 'coral' },
+  { id: 'plasma_frame', name: 'Plasma Frame', description: 'A charged plasma pane flashes at its corners.', rarity: 'epic', style: 'plasma' },
+  { id: 'toxic_matrix', name: 'Toxic Matrix', description: 'Lime matrix cells pulse beneath smoked glass.', rarity: 'epic', style: 'matrix' },
+  { id: 'crystal_wave', name: 'Crystal Wave', description: 'Faceted crystal light refracts through the plate.', rarity: 'epic', style: 'crystal' },
+  { id: 'starforge_plate', name: 'Starforge Crest', description: 'Forged gold segments orbit a deep stellar core.', rarity: 'legendary', style: 'starforge' },
+  { id: 'solar_regalia', name: 'Solar Regalia', description: 'A royal solar flare crowns your name.', rarity: 'legendary', style: 'solar' },
+  { id: 'quantum_banner', name: 'Quantum Banner', description: 'Two phased realities flicker across one banner.', rarity: 'legendary', style: 'quantum' },
+  { id: 'dragon_script', name: 'Dragon Script', description: 'Molten scale patterns curl around a volcanic nameplate.', rarity: 'mythical', style: 'dragon' },
+  { id: 'mistbound_title', name: 'Mistbound Title', description: 'Arcane cyan and violet vapor rolls through glass.', rarity: 'mythical', style: 'mist' },
+  { id: 'chronolock', name: 'Chronolock', description: 'Clockwork marks rewind around a midnight title.', rarity: 'mythical', style: 'chrono' },
+  { id: 'singularity_plate', name: 'Singularity Crown', description: 'Bent starlight collapses toward your name.', rarity: 'ascendent', style: 'singularity' },
+  { id: 'astral_dominion_plate', name: 'Astral Dominion', description: 'Constellation jewels command an aurora field.', rarity: 'ascendent', style: 'dominion' },
+  { id: 'apex_tempest_plate', name: 'Apex Tempest', description: 'A contained superstorm crackles through dark glass.', rarity: 'ascendent', style: 'tempest' }
+];
+
 const DECORATION_PACKS = [
   {
     id: 'starter_pack',
     name: 'Starter Pack',
     price: 500,
     rarity: 'mixed',
-    description: 'Open for one starter decoration. Mostly common, with a rare chase.',
+    description: 'Open for one starter collectible. Mostly common, with a rare chase.',
     items: [
       { decorationId: 'ember_trace', chance: 40 },
       { decorationId: 'mint_signal', chance: 30 },
       { decorationId: 'pixel_pop', chance: 20 },
       { decorationId: 'soft_static', chance: 8 },
-      { decorationId: 'neon_grid', chance: 2 }
+      { decorationId: 'neon_grid', chance: 2 },
+      { nameplateId: 'signal_strip', chance: 8 },
+      { nameplateId: 'ember_line', chance: 6 },
+      { nameplateId: 'polar_label', chance: 4 }
     ]
   },
   {
@@ -242,13 +274,16 @@ const DECORATION_PACKS = [
     name: 'Neon Pack',
     price: 1500,
     rarity: 'mixed',
-    description: 'Open for one neon decoration. Rare-heavy with an epic spark.',
+    description: 'Open for one neon collectible. Rare-heavy with an epic spark.',
     items: [
       { decorationId: 'lime_loop', chance: 34 },
       { decorationId: 'violet_comet', chance: 25 },
       { decorationId: 'signal_wave', chance: 20 },
       { decorationId: 'chrome_edge', chance: 14 },
-      { decorationId: 'plasma_arc', chance: 7 }
+      { decorationId: 'plasma_arc', chance: 7 },
+      { nameplateId: 'neon_lane', chance: 7 },
+      { nameplateId: 'violet_drive', chance: 5 },
+      { nameplateId: 'coral_frequency', chance: 3 }
     ]
   },
   {
@@ -256,13 +291,16 @@ const DECORATION_PACKS = [
     name: 'Rift Pack',
     price: 3500,
     rarity: 'mixed',
-    description: 'Open for one unstable rift decoration. Epics with a legendary hit.',
+    description: 'Open for one unstable rift collectible. Epics with a legendary hit.',
     items: [
       { decorationId: 'solar_flare', chance: 35 },
       { decorationId: 'void_pulse', chance: 25 },
       { decorationId: 'crystal_bloom', chance: 18 },
       { decorationId: 'toxic_slime', chance: 14 },
-      { decorationId: 'ion_crown', chance: 8 }
+      { decorationId: 'ion_crown', chance: 8 },
+      { nameplateId: 'plasma_frame', chance: 6 },
+      { nameplateId: 'toxic_matrix', chance: 4 },
+      { nameplateId: 'crystal_wave', chance: 2 }
     ]
   },
   {
@@ -270,13 +308,16 @@ const DECORATION_PACKS = [
     name: 'Forge Pack',
     price: 8000,
     rarity: 'mixed',
-    description: 'Open for one forged decoration. Legendary odds with a mythical ember.',
+    description: 'Open for one forged collectible. Legendary odds with a mythical ember.',
     items: [
       { decorationId: 'nebula_dust', chance: 36 },
       { decorationId: 'ruby_circuit', chance: 24 },
       { decorationId: 'starforge', chance: 18 },
       { decorationId: 'quantum_ring', chance: 14 },
-      { decorationId: 'dragon_core', chance: 8 }
+      { decorationId: 'dragon_core', chance: 8 },
+      { nameplateId: 'starforge_plate', chance: 5 },
+      { nameplateId: 'solar_regalia', chance: 3 },
+      { nameplateId: 'quantum_banner', chance: 1.5 }
     ]
   },
   {
@@ -284,13 +325,16 @@ const DECORATION_PACKS = [
     name: 'Mythic Pack',
     price: 12000,
     rarity: 'mixed',
-    description: 'Open for one high-power decoration. Mythical pulls are common here.',
+    description: 'Open for one high-power collectible. Mythical pulls are common here.',
     items: [
       { decorationId: 'midnight_sun', chance: 45 },
       { decorationId: 'cosmic_crown', chance: 20 },
       { decorationId: 'phantom_blade', chance: 16 },
       { decorationId: 'time_rift', chance: 12 },
-      { decorationId: 'eternal_flame', chance: 7 }
+      { decorationId: 'eternal_flame', chance: 7 },
+      { nameplateId: 'dragon_script', chance: 3.5 },
+      { nameplateId: 'mistbound_title', chance: 2 },
+      { nameplateId: 'chronolock', chance: 0.75 }
     ]
   },
   {
@@ -298,7 +342,7 @@ const DECORATION_PACKS = [
     name: 'Apex Pack',
     price: 20000,
     rarity: 'ascendent',
-    description: 'Open for one apex decoration. Premium mythical odds with a nearly impossible Ascendent hit.',
+    description: 'Open for one apex collectible. Premium mythical odds with a nearly impossible Ascendent hit.',
     items: [
       { decorationId: 'zero_gravity', chance: 52.05 },
       { decorationId: 'celestial_wings', chance: 22 },
@@ -307,7 +351,10 @@ const DECORATION_PACKS = [
       { decorationId: 'magic_mists', chance: 5 },
       { decorationId: 'apex_storm', chance: 0.5 },
       { decorationId: 'event_horizon', chance: 0.25 },
-      { decorationId: 'singularity', chance: 0.2 }
+      { decorationId: 'singularity', chance: 0.2 },
+      { nameplateId: 'singularity_plate', chance: 0.18 },
+      { nameplateId: 'astral_dominion_plate', chance: 0.12 },
+      { nameplateId: 'apex_tempest_plate', chance: 0.08 }
     ]
   }
 ];
@@ -333,6 +380,22 @@ function toClientDecoration(d, quantityOrOwned = 0) {
     owned: quantity > 0,
     quantity,
     sellPrice: d.packOnly ? (DECORATION_SELL_PRICES[d.rarity] || 0) : null
+  };
+}
+
+function toClientNameplate(nameplate, quantityOrOwned = 0) {
+  const quantity = Math.max(0, Number(quantityOrOwned) || 0);
+  return {
+    id: nameplate.id,
+    collectibleType: 'nameplate',
+    name: nameplate.name,
+    description: nameplate.description,
+    rarity: nameplate.rarity,
+    style: nameplate.style,
+    packOnly: true,
+    owned: quantity > 0,
+    quantity,
+    sellPrice: NAMEPLATE_SELL_PRICES[nameplate.rarity] || 0
   };
 }
 
@@ -363,20 +426,23 @@ async function getGiftForClient(clientOrPool, giftId) {
   return r.rows[0] ? giftPayload(r.rows[0]) : null;
 }
 
-function toClientPack(pack, ownedQuantities) {
+function toClientPack(pack, ownedQuantities, ownedNameplates) {
   const totalChance = pack.items.reduce((sum, item) => sum + item.chance, 0);
-  const decorations = pack.items
+  const collectibles = pack.items
     .map(item => {
-      const d = DECORATIONS.find(deco => deco.id === item.decorationId);
-      if (!d) return null;
+      const decoration = item.decorationId && DECORATIONS.find(deco => deco.id === item.decorationId);
+      const nameplate = item.nameplateId && NAMEPLATES.find(plate => plate.id === item.nameplateId);
+      if (!decoration && !nameplate) return null;
       return {
-        ...toClientDecoration(d, ownedQuantities.get(d.id) || 0),
+        ...(decoration
+          ? { ...toClientDecoration(decoration, ownedQuantities.get(decoration.id) || 0), collectibleType: 'decoration' }
+          : toClientNameplate(nameplate, ownedNameplates.get(nameplate.id) || 0)),
         chance: Math.round((item.chance / totalChance) * 10000) / 100
       };
     })
     .filter(Boolean);
-  const ownedCount = decorations.filter(d => d.owned).length;
-  const raritySummary = [...new Set(decorations.map(d => d.rarity))].join(' / ');
+  const ownedCount = collectibles.filter(item => item.owned).length;
+  const raritySummary = [...new Set(collectibles.map(item => item.rarity))].join(' / ');
   return {
     id: pack.id,
     name: pack.name,
@@ -385,9 +451,11 @@ function toClientPack(pack, ownedQuantities) {
     raritySummary,
     description: pack.description,
     ownedCount,
-    totalCount: decorations.length,
+    totalCount: collectibles.length,
     owned: false,
-    decorations
+    decorations: collectibles.filter(item => item.collectibleType === 'decoration'),
+    nameplates: collectibles.filter(item => item.collectibleType === 'nameplate'),
+    collectibles
   };
 }
 
@@ -403,38 +471,51 @@ function rollPackItem(pack) {
   const candidates = pack.items
     .map(item => ({
       ...item,
-      decoration: DECORATIONS.find(d => d.id === item.decorationId)
+      collectible: item.decorationId
+        ? DECORATIONS.find(d => d.id === item.decorationId)
+        : NAMEPLATES.find(nameplate => nameplate.id === item.nameplateId),
+      collectibleType: item.decorationId ? 'decoration' : 'nameplate'
     }))
-    .filter(item => item.decoration);
+    .filter(item => item.collectible);
   const total = candidates.reduce((sum, item) => sum + item.chance, 0);
   if (!total) return null;
 
   let roll = Math.random() * total;
   for (const item of candidates) {
     roll -= item.chance;
-    if (roll <= 0) return item.decoration;
+    if (roll <= 0) return { collectibleType: item.collectibleType, item: item.collectible };
   }
-  return candidates[candidates.length - 1].decoration;
+  const fallback = candidates[candidates.length - 1];
+  return { collectibleType: fallback.collectibleType, item: fallback.collectible };
 }
 
 // Get all decorations + which ones the user owns
 router.get('/', async (req, res) => {
-  const owned = await pool.query(
-    'SELECT decoration_id, COUNT(*)::int AS quantity FROM user_decorations WHERE user_id=$1 GROUP BY decoration_id',
-    [req.session.userId]
-  );
-  const user = await pool.query(
-    'SELECT active_decoration FROM users WHERE id=$1',
-    [req.session.userId]
-  );
+  const [owned, ownedPlates, user] = await Promise.all([
+    pool.query(
+      'SELECT decoration_id, COUNT(*)::int AS quantity FROM user_decorations WHERE user_id=$1 GROUP BY decoration_id',
+      [req.session.userId]
+    ),
+    pool.query(
+      'SELECT nameplate_id, COUNT(*)::int AS quantity FROM user_nameplates WHERE user_id=$1 GROUP BY nameplate_id',
+      [req.session.userId]
+    ),
+    pool.query(
+      'SELECT active_decoration, active_nameplate FROM users WHERE id=$1',
+      [req.session.userId]
+    )
+  ]);
   const ownedQuantities = new Map(owned.rows.map(r => [r.decoration_id, r.quantity]));
+  const ownedNameplates = new Map(ownedPlates.rows.map(r => [r.nameplate_id, r.quantity]));
   const nexalsRes = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
   res.json({
     decorations: DECORATIONS
       .filter(d => !d.hidden || (d.hidden && ownedQuantities.has(d.id)))
       .map(d => toClientDecoration(d, ownedQuantities.get(d.id) || 0)),
-    packs: DECORATION_PACKS.map(pack => toClientPack(pack, ownedQuantities)),
+    nameplates: NAMEPLATES.map(nameplate => toClientNameplate(nameplate, ownedNameplates.get(nameplate.id) || 0)),
+    packs: DECORATION_PACKS.map(pack => toClientPack(pack, ownedQuantities, ownedNameplates)),
     active: user.rows[0]?.active_decoration || null,
+    activeNameplate: user.rows[0]?.active_nameplate || null,
     nexals: nexalsRes.rows[0]?.nexals || 0
   });
 });
@@ -458,6 +539,22 @@ router.post('/equip', async (req, res) => {
   );
   if (decorationId) await syncAchievementFields(req.session.userId, ['decos_equipped']);
   res.json({ success: true, active: decorationId || null });
+});
+
+router.post('/nameplates/equip', async (req, res) => {
+  const nameplateId = String(req.body.nameplateId || '').trim() || null;
+  if (nameplateId) {
+    if (!NAMEPLATES.some(nameplate => nameplate.id === nameplateId)) {
+      return res.status(404).json({ error: 'Nameplate not found' });
+    }
+    const owned = await pool.query(
+      'SELECT id FROM user_nameplates WHERE user_id=$1 AND nameplate_id=$2 LIMIT 1',
+      [req.session.userId, nameplateId]
+    );
+    if (!owned.rows.length) return res.status(403).json({ error: 'You do not own this nameplate' });
+  }
+  await pool.query('UPDATE users SET active_nameplate=$1 WHERE id=$2', [nameplateId, req.session.userId]);
+  res.json({ success: true, activeNameplate: nameplateId });
 });
 
 router.post('/gift/nexals', async (req, res) => {
@@ -664,7 +761,7 @@ router.post('/packs/buy', async (req, res) => {
   const pack = DECORATION_PACKS.find(p => p.id === packId);
   if (!pack) return res.status(404).json({ error: 'Pack not found' });
 
-  const rolledDecorations = Array.from({ length: quantity }, () => rollPackItem(pack));
+  const rolledCollectibles = Array.from({ length: quantity }, () => rollPackItem(pack)).filter(Boolean);
   const totalPrice = pack.price * quantity;
   const client = await pool.connect();
   try {
@@ -676,11 +773,18 @@ router.post('/packs/buy', async (req, res) => {
       return res.status(400).json({ error: `Not enough Nexals (need ${totalPrice.toLocaleString()}, have ${balance.toLocaleString()})` });
     }
     await client.query('UPDATE users SET nexals = nexals - $1 WHERE id=$2', [totalPrice, req.session.userId]);
-    for (const rolledDeco of rolledDecorations) {
-      await client.query(
-        'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3)',
-        [uuidv4(), req.session.userId, rolledDeco.id]
-      );
+    for (const rolled of rolledCollectibles) {
+      if (rolled.collectibleType === 'nameplate') {
+        await client.query(
+          'INSERT INTO user_nameplates (id, user_id, nameplate_id) VALUES ($1,$2,$3)',
+          [uuidv4(), req.session.userId, rolled.item.id]
+        );
+      } else {
+        await client.query(
+          'INSERT INTO user_decorations (id, user_id, decoration_id) VALUES ($1,$2,$3)',
+          [uuidv4(), req.session.userId, rolled.item.id]
+        );
+      }
     }
     await client.query(`
       INSERT INTO user_pack_stats (user_id, openings) VALUES ($1, $2)
@@ -702,8 +806,54 @@ router.post('/packs/buy', async (req, res) => {
     nexals: updated.rows[0].nexals,
     quantity,
     totalPrice,
-    granted: rolledDecorations.map(deco => toClientDecoration(deco, true))
+    granted: rolledCollectibles.map(rolled => rolled.collectibleType === 'nameplate'
+      ? toClientNameplate(rolled.item, 1)
+      : { ...toClientDecoration(rolled.item, true), collectibleType: 'decoration' })
   });
+});
+
+router.post('/nameplates/sell', async (req, res) => {
+  const nameplateId = String(req.body.nameplateId || '').trim();
+  const nameplate = NAMEPLATES.find(item => item.id === nameplateId);
+  if (!nameplate) return res.status(404).json({ error: 'Nameplate not found' });
+  const sellPrice = NAMEPLATE_SELL_PRICES[nameplate.rarity] || 0;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const removed = await client.query(`
+      WITH one_copy AS (
+        SELECT id FROM user_nameplates
+        WHERE user_id=$1 AND nameplate_id=$2
+        ORDER BY unlocked_at DESC, id DESC
+        LIMIT 1
+      )
+      DELETE FROM user_nameplates WHERE id IN (SELECT id FROM one_copy)
+      RETURNING id
+    `, [req.session.userId, nameplateId]);
+    if (!removed.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'You do not own this nameplate' });
+    }
+    const remaining = await client.query(
+      'SELECT COUNT(*)::int AS quantity FROM user_nameplates WHERE user_id=$1 AND nameplate_id=$2',
+      [req.session.userId, nameplateId]
+    );
+    if (!remaining.rows[0].quantity) {
+      await client.query('UPDATE users SET active_nameplate=NULL WHERE id=$1 AND active_nameplate=$2', [req.session.userId, nameplateId]);
+    }
+    const updated = await client.query(
+      'UPDATE users SET nexals=nexals+$1 WHERE id=$2 RETURNING nexals',
+      [sellPrice, req.session.userId]
+    );
+    await client.query('COMMIT');
+    res.json({ success: true, nexals: updated.rows[0].nexals, quantity: remaining.rows[0].quantity });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Nameplate sale failed:', error.message);
+    res.status(500).json({ error: 'Nameplate sale failed' });
+  } finally {
+    client.release();
+  }
 });
 
 router.post('/sell', async (req, res) => {

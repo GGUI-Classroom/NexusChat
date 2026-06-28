@@ -185,7 +185,7 @@ app.post('/api/nexus-link/inbound-dm', async (req, res) => {
   );
   if (!friendship.rows.length) return res.status(403).json({ error: 'Nexus users must be friends to relay direct messages' });
   const sender = await pool.query(
-    `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_color, u.active_font,
+    `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font,
       u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect,
       ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
      FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
@@ -198,7 +198,7 @@ app.post('/api/nexus-link/inbound-dm', async (req, res) => {
     author: {
       username: user.username, displayName: user.display_name,
       avatarDataUrl: avatarUrl(fromId, !!user.has_avatar),
-      activeDecoration: user.active_decoration || null, activeColor: user.active_color || null, activeFont: user.active_font || null,
+      activeDecoration: user.active_decoration || null, activeNameplate: user.active_nameplate || null, activeColor: user.active_color || null, activeFont: user.active_font || null,
       proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start, proGradientEnd: user.profile_gradient_end, proNameEffect: user.profile_name_effect,
       activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_server_name || null, activeServerTagInviteCode: user.tag_invite_code || null
     }
@@ -227,7 +227,7 @@ app.post('/api/nexus-link/outbound-dm', async (req, res) => {
   if (recipient.id === fromId) return res.status(400).json({ error: 'You cannot send a Nexus DM to yourself' });
 
   const senderResult = await pool.query(
-    `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font,
+    `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font,
       u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect,
       ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
       EXISTS(SELECT 1 FROM friendships f WHERE (f.user1_id=u.id AND f.user2_id=$2) OR (f.user1_id=$2 AND f.user2_id=u.id)) AS friends
@@ -244,7 +244,7 @@ app.post('/api/nexus-link/outbound-dm', async (req, res) => {
     author: {
       username: sender.username, displayName: sender.display_name,
       avatarDataUrl: sender.avatar_data ? `data:${sender.avatar_mime};base64,${sender.avatar_data}` : null,
-      activeDecoration: sender.active_decoration || null, activeColor: sender.active_color || null, activeFont: sender.active_font || null,
+      activeDecoration: sender.active_decoration || null, activeNameplate: sender.active_nameplate || null, activeColor: sender.active_color || null, activeFont: sender.active_font || null,
       proActive: (sender.pro_expires_at || 0) > now, proGradientStart: sender.profile_gradient_start, proGradientEnd: sender.profile_gradient_end, proNameEffect: sender.profile_name_effect,
       activeServerTag: sender.server_tag || null, activeServerTagBackground: sender.tag_background || '#5865f2', activeServerTagServerId: sender.tag_server_id || null, activeServerTagServerName: sender.tag_server_name || null, activeServerTagInviteCode: sender.tag_invite_code || null
     }
@@ -269,7 +269,7 @@ app.post('/api/nexus-link/inbound-channel', async (req, res) => {
   const content = String(req.body.content || '').trim().slice(0, 4000);
   if (!userId || !serverId || !channelId || !content) return res.status(400).json({ error: 'A mapped Nexus channel and message are required' });
   const result = await pool.query(
-    `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration,
+    `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate,
       sm.role, sr.name AS role_name, sr.color AS role_color, sr.gradient_start, sr.gradient_end,
       ch.id AS valid_channel
      FROM server_members sm
@@ -289,7 +289,8 @@ app.post('/api/nexus-link/inbound-channel', async (req, res) => {
       avatarDataUrl: avatarUrl(userId, !!row.has_avatar),
       roleColor: row.role_color || null, roleName: row.role_name || null,
       roleGradientStart: row.gradient_start || null, roleGradientEnd: row.gradient_end || null,
-      activeDecoration: row.active_decoration || null
+      activeDecoration: row.active_decoration || null,
+      activeNameplate: row.active_nameplate || null
     }
   };
   await pool.query('INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)', [msg.id, channelId, userId, content, now]);
@@ -1371,7 +1372,7 @@ io.on('connection', (socket) => {
     if (!trimmed) return;
     // Single query: check friendship AND get sender info at once
     const check = await pool.query(
-      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
+      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
         (SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1) as friend_id
        FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
       [userId, toId]
@@ -1389,6 +1390,7 @@ io.on('connection', (socket) => {
         username: s.username, displayName: s.display_name,
         avatarDataUrl: avatarUrl(userId, !!s.avatar_data),
         activeDecoration: s.active_decoration || null,
+        activeNameplate: s.active_nameplate || null,
         activeColor: s.active_color || null,
         activeFont: s.active_font || null, proActive: (s.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: s.profile_gradient_start, proGradientEnd: s.profile_gradient_end, proNameEffect: s.profile_name_effect,
         activeServerTag: s.server_tag || null, activeServerTagBackground: s.tag_background || '#5865f2', activeServerTagServerId: s.tag_server_id || null, activeServerTagServerName: s.tag_server_name || null, activeServerTagInviteCode: s.tag_invite_code || null
@@ -1473,7 +1475,7 @@ io.on('connection', (socket) => {
     const check = await pool.query(
       `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
         sr.is_admin, sr.can_delete_messages,
-        u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
+        u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
         ch.id as ch_id, ch.locked, ch.private as ch_private, ch.slowmode_seconds, ch.channel_type,
         (SELECT allow_send FROM channel_permissions cp
          WHERE cp.channel_id=$2 AND (cp.role_id=sm.role_id OR cp.role_id IS NULL)
@@ -1615,6 +1617,7 @@ io.on('connection', (socket) => {
         avatarDataUrl: avatarUrl(userId, !!row.avatar_data),
         roleColor: row.role_color || null, roleName: row.role_name || null, roleGradientStart: row.role_gradient_start || null, roleGradientEnd: row.role_gradient_end || null,
         activeDecoration: row.active_decoration || null,
+        activeNameplate: row.active_nameplate || null,
         activeColor: row.active_color || null,
         activeFont: row.active_font || null, proActive: (row.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: row.profile_gradient_start, proGradientEnd: row.profile_gradient_end, proNameEffect: row.profile_name_effect,
         activeServerTag: row.server_tag || null, activeServerTagBackground: row.tag_background || '#5865f2', activeServerTagServerId: row.tag_server_id || null, activeServerTagServerName: row.tag_server_name || null, activeServerTagInviteCode: row.tag_invite_code || null

@@ -1630,7 +1630,7 @@
   function updateSelfCard() {
     if (!currentUser) return;
     $('self-display-name').textContent = currentUser.displayName;
-    $('self-display-name').className = currentUser.proActive && currentUser.proNameEffect !== 'none' ? 'display-name pro-name-effect' : 'display-name';
+    $('self-display-name').className = (currentUser.proActive && currentUser.proNameEffect !== 'none' ? 'display-name pro-name-effect' : 'display-name') + nameplateClass(currentUser);
     $('self-display-name').style.setProperty('--pro-name-start', currentUser.proGradientStart || '#5865f2');
     $('self-display-name').style.setProperty('--pro-name-end', currentUser.proGradientEnd || '#a855f7');
     const tag = $('self-server-tag');
@@ -1868,7 +1868,7 @@
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${normalizedStatus(visibleStatus(m))}${usesDiscordStatus(m) ? ' discord-status' : ''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
+          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}${nameplateClass(m)}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
           ${canManage ? `<div class="member-actions">
             <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
             <button class="member-action-btn kick" onclick="kickMember('${m.id}','${esc(m.displayName)}')">Kick</button>
@@ -2621,6 +2621,15 @@
     const payload = encodeURIComponent(JSON.stringify({ tag: user.activeServerTag, background: user.activeServerTagBackground, serverId: user.activeServerTagServerId, serverName: user.activeServerTagServerName, inviteCode: user.activeServerTagInviteCode })).replace(/'/g, '%27');
     return ` <button class="identity-tag" style="--tag-bg:${esc(user.activeServerTagBackground || '#5865f2')}" onclick="event.stopPropagation();showIdentityTagInvite(event,decodeURIComponent('${payload}'))">[${esc(user.activeServerTag)}]</button>`;
   }
+
+  function nameplateClass(user) {
+    const id = user && user.activeNameplate;
+    return id ? ` nexus-nameplate nameplate-${String(id).replace(/[^a-z0-9_-]/gi, '')}` : '';
+  }
+
+  function nameplatePreviewHtml(nameplate, label = 'Nexus User') {
+    return `<div class="nameplate-preview nameplate-${esc(nameplate.id)}"><span>${esc(label)}</span><i></i></div>`;
+  }
   window.spendBoosts = async function(feature) { const r = await api('POST', '/api/perks/servers/' + activeServerId + '/spend', { feature }); if (r.error) return toast(r.error, 'error'); toast('Boosts allocated', 'success'); await loadServerSidebar(activeServerId); $('server-settings-btn').click(); };
 
   $('server-boost-btn').addEventListener('click', async () => {
@@ -3019,7 +3028,7 @@
           <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="fdot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}${nameplateClass(f)}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
           <div class="username">@${esc(f.username)}</div>
           <div class="status ${f.status === 'online' ? 'online' : ''}" id="fstatus-${f.id}">${f.status === 'online' ? '● Online' : '○ Offline'}</div>
         </div>
@@ -3126,19 +3135,21 @@
   function renderDmList() {
     const list = $('dm-list');
     if (!friends.length) { list.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--text-muted)">No friends yet</div>'; return; }
-    list.innerHTML = friends.map(f => `
+    const query = String($('dm-friend-search')?.value || '').trim().toLowerCase();
+    const visibleFriends = friends.filter(f => !query || `${f.displayName} ${f.username}`.toLowerCase().includes(query));
+    list.innerHTML = visibleFriends.map(f => `
       <div class="dm-item ${activeDmUserId === f.id ? 'active' : ''}" data-id="${f.id}" onclick="railSelect('dms');switchView('dm');openDm(window._friendsMap['${f.id}'])">
         <div class="avatar-wrap">
           <div class="avatar sm" id="dav-${f.id}"></div>
           <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="ddot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
-          <div class="last-msg" id="dlm-${f.id}"></div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}${nameplateClass(f)}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
+          <div class="last-msg" id="dlm-${f.id}">${normalizedStatus(visibleStatus(f)) === 'offline' ? 'Offline' : normalizedStatus(visibleStatus(f))}</div>
         </div>
       </div>
     `).join('');
-    friends.forEach(f => {
+    visibleFriends.forEach(f => {
       const av = $(`dav-${f.id}`);
       if (av) renderAvatar(av, f);
     });
@@ -3146,6 +3157,7 @@
     window._friendsMap = {};
     friends.forEach(f => window._friendsMap[f.id] = f);
   }
+  $('dm-friend-search')?.addEventListener('input', renderDmList);
 
   // ---- DM / Chat ----
   window.openDm = async function (user) {
@@ -3163,9 +3175,12 @@
     // Set header
     renderAvatar($('chat-peer-avatar'), user);
     $('chat-peer-name').textContent = user.displayName;
+    $('chat-peer-name').className = `display-name${nameplateClass(user)}`;
     $('chat-peer-username').textContent = '@' + user.username;
     const statusDot = $('chat-peer-status');
     statusDot.className = `status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}`;
+    renderDmProfilePanel(user);
+    cc.classList.add('has-profile-panel');
 
     setMobileTitle(user.displayName);
     if (isMobile()) closeMobileSidebar();
@@ -3181,6 +3196,26 @@
     activeDmUser = null;
     $('chat-placeholder').style.display = 'flex';
     $('chat-container').style.display = 'none';
+    $('chat-container').classList.remove('has-profile-panel');
+  }
+
+  function renderDmProfilePanel(user) {
+    const panel = $('dm-profile-panel');
+    if (!panel || !user) return;
+    panel.innerHTML = `
+      <div class="dm-profile-banner nameplate-${esc(user.activeNameplate || 'none')}"></div>
+      <div class="dm-profile-avatar avatar-wrap"><div class="avatar" id="dm-profile-avatar"></div><div class="status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}"></div></div>
+      <div class="dm-profile-copy">
+        <div class="dm-profile-name${nameplateClass(user)}">${esc(user.displayName)}${identityTagHtml(user)}</div>
+        <div class="username">@${esc(user.username)}</div>
+        <div class="dm-profile-status">${normalizedStatus(visibleStatus(user)) === 'offline' ? 'Offline' : 'Currently ' + normalizedStatus(visibleStatus(user))}</div>
+      </div>
+      <div class="dm-profile-section">
+        <span>ABOUT</span>
+        <p>${esc(user.bio || 'Nexus friend')}</p>
+      </div>
+      <button class="dm-profile-message" onclick="document.getElementById('message-input').focus()">Message @${esc(user.username)}</button>`;
+    renderAvatar($('dm-profile-avatar'), user);
   }
 
   let dmLoadingOlder = false; // lock to prevent multiple simultaneous loads
@@ -3346,14 +3381,14 @@
     const isMe = msg.fromId === currentUser.id;
     const currentRoleForMessage = isChannelMsg && activeServerData && activeServerData.roles && activeServerData.roles.find(r => { const me = activeServerData.members && activeServerData.members.find(m => m.id === currentUser.id); return me && r.id === me.roleId; });
     const author = isMe
-      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeDecoration: currentUser.activeDecoration || null, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null), proActive: currentUser.proActive, proNameEffect: currentUser.proNameEffect, proGradientStart: currentUser.proGradientStart, proGradientEnd: currentUser.proGradientEnd, activeServerTag: currentUser.activeServerTag, activeServerTagBackground: currentUser.activeServerTagBackground, activeServerTagServerId: currentUser.activeServerTagServerId, activeServerTagServerName: currentUser.activeServerTagServerName, activeServerTagInviteCode: currentUser.activeServerTagInviteCode }
+      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeDecoration: currentUser.activeDecoration || null, activeNameplate: currentUser.activeNameplate || null, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null), proActive: currentUser.proActive, proNameEffect: currentUser.proNameEffect, proGradientStart: currentUser.proGradientStart, proGradientEnd: currentUser.proGradientEnd, activeServerTag: currentUser.activeServerTag, activeServerTagBackground: currentUser.activeServerTagBackground, activeServerTagServerId: currentUser.activeServerTagServerId, activeServerTagServerName: currentUser.activeServerTagServerName, activeServerTagInviteCode: currentUser.activeServerTagInviteCode }
       : msg.author;
 
     const roleColor = author.roleColor || null;
     const roleGradient = author.roleGradientStart && author.roleGradientEnd;
     const proGradient = author.proActive && author.proNameEffect !== 'none';
     const roleStyle = roleGradient ? `style="--role-gradient-start:${author.roleGradientStart};--role-gradient-end:${author.roleGradientEnd}"` : proGradient ? `style="--pro-name-start:${author.proGradientStart};--pro-name-end:${author.proGradientEnd}"` : (roleColor ? `style="color:${roleColor}"` : '');
-    const roleClass = roleGradient ? 'msg-author has-role role-gradient-text' : proGradient ? 'msg-author has-role pro-name-effect' : roleColor ? 'msg-author has-role' : 'msg-author';
+    const roleClass = (roleGradient ? 'msg-author has-role role-gradient-text' : proGradient ? 'msg-author has-role pro-name-effect' : roleColor ? 'msg-author has-role' : 'msg-author') + nameplateClass(author);
     const roleTip = author.roleName ? `title="${esc(author.roleName)}"` : '';
     const profilePayload = encodeURIComponent(JSON.stringify({
       id: author.id || msg.fromId,
@@ -3361,7 +3396,8 @@
       username: author.username,
       avatarDataUrl: author.avatarDataUrl || null,
       status: author.status || 'online',
-      activeDecoration: author.activeDecoration || null
+      activeDecoration: author.activeDecoration || null,
+      activeNameplate: author.activeNameplate || null
     })).replace(/'/g, '%27');
 
     // Check if current user can delete this message
@@ -4714,8 +4750,10 @@
   async function loadAppearanceSettings() {
     const [shop, ringtones] = await Promise.all([api('GET', '/api/shop'), api('GET', '/api/ringtones')]);
     const deco = $('appearance-decoration-select');
+    const nameplate = $('appearance-nameplate-select');
     const ring = $('appearance-ringtone-select');
     if (!shop.error) deco.innerHTML = `<option value="">No decoration</option>${(shop.decorations || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+    if (!shop.error && nameplate) nameplate.innerHTML = `<option value="">No nameplate</option>${(shop.nameplates || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.activeNameplate ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
     if (!ringtones.error) ring.innerHTML = `<option value="">Default ringtone</option>${(ringtones.ringtones || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === ringtones.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
   }
 
@@ -4753,6 +4791,7 @@
   $('theme-light-btn').addEventListener('click', () => applyTheme('light'));
   $('connect-discord-btn').addEventListener('click', () => { window.location.href = '/api/nexus-link/connect'; });
   $('appearance-decoration-select').addEventListener('change', async e => { const r = await api('POST', '/api/shop/equip', { decorationId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeDecoration = e.target.value || null; toast('Decoration updated', 'success'); });
+  $('appearance-nameplate-select').addEventListener('change', async e => { const r = await api('POST', '/api/shop/nameplates/equip', { nameplateId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeNameplate = e.target.value || null; updateSelfCard(); toast('Nameplate updated', 'success'); });
   $('appearance-ringtone-select').addEventListener('change', async e => { const r = await api('POST', '/api/ringtones/equip', { ringtoneId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeRingtone = e.target.value || null; toast('Ringtone updated', 'success'); });
   ['nexus-link-dms', 'nexus-link-attachments', 'nexus-link-status', 'nexus-link-message-notify', 'nexus-link-call-notify'].forEach(id => {
     $(id).addEventListener('change', saveNexusLinkSettings);
@@ -5545,7 +5584,7 @@
     shopData = r;
     updateNexalDisplay(r.nexals || 0);
     renderPackShop(r.packs || []);
-    renderShop(r.decorations, r.active);
+    renderShop(r.decorations, r.active, r.nameplates || [], r.activeNameplate || null);
     await loadRingtones();
   }
 
@@ -5649,14 +5688,14 @@
     await loadAuctionHouse();
   };
 
-  function renderShop(decorations, active) {
+  function renderShop(decorations, active, nameplates = [], activeNameplate = null) {
     const grid = $('shop-grid');
     if (!grid) return;
     const visibleDecorations = decorations || [];
     // Stop any existing storm canvases in the shop before re-rendering
     grid.querySelectorAll('.avatar-wrap').forEach(w => stopStormCanvas(w));
 
-    grid.innerHTML = visibleDecorations.map(d => {
+    const decorationCard = d => {
       const isEquipped = active === d.id;
       const isOwned = d.owned;
       const isMythical = d.rarity === 'mythical';
@@ -5667,7 +5706,7 @@
       const myNexals = (shopData && shopData.nexals) || 0;
       const canBuy = !isOwned && d.nexalPrice && myNexals >= d.nexalPrice;
       const priceLabel = d.nexalPrice ? d.nexalPrice.toLocaleString() + ' Nexals' : null;
-      let btnClass = 'locked', btnText = '🔒 Code Only';
+      let btnClass = 'locked', btnText = 'Pack Only';
       if (isEquipped) { btnClass = 'unequip'; btnText = '✓ Equipped'; }
       else if (isOwned) { btnClass = 'equip'; btnText = 'Equip'; }
       else if (canBuy) { btnClass = 'buy'; btnText = 'Buy'; }
@@ -5681,17 +5720,52 @@
             </div>
           </div>
           <span class="shop-rarity ${rarityClass}">${d.rarity}</span>
+          ${d.packOnly ? '<span class="pack-only-chip">PACK-ONLY</span>' : ''}
           <div class="shop-card-name">${esc(d.name)}</div>
           <div class="shop-card-desc">${esc(d.description)}</div>
           ${isOwned && d.packOnly ? `<div class="shop-card-desc">Owned: ${d.quantity || 1} | Sell: ${(d.sellPrice || 0).toLocaleString()} Nexals</div>` : ''}
           ${(!isOwned && priceLabel) ? `<div class="shop-card-price">${priceLabel}</div>` : ''}
           <button class="shop-card-btn ${btnClass}" onclick="shopAction('${d.id}','${isEquipped ? 'unequip' : isOwned ? 'equip' : canBuy ? 'buy' : 'locked'}')">
-            ${btnText}
+            ${d.packOnly && !isOwned ? 'Pack Only' : btnText}
           </button>
           ${isOwned && d.packOnly ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="sellDecoration('${d.id}','${esc(d.name)}',${d.sellPrice || 0})">Sell One</button>` : ''}
           ${isOwned && !d.packOnly ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="unclaimDeco('${d.id}','${esc(d.name)}')">Remove</button>` : ''}
         </div>`;
-    }).join('');
+    };
+    const nameplateCard = nameplate => {
+      const equipped = activeNameplate === nameplate.id;
+      const owned = nameplate.owned;
+      return `<div class="shop-card nameplate-shop-card ${owned ? 'owned' : ''} ${equipped ? 'equipped' : ''}" id="nameplatecard-${nameplate.id}">
+        ${nameplatePreviewHtml(nameplate)}
+        <div class="nameplate-card-meta">
+          <span class="shop-rarity rarity-${esc(nameplate.rarity)}">${esc(nameplate.rarity)}</span>
+          <span class="pack-only-chip">PACK-ONLY</span>
+        </div>
+        <div class="shop-card-name">${esc(nameplate.name)}</div>
+        <div class="shop-card-desc">${esc(nameplate.description)}</div>
+        ${owned ? `<div class="shop-card-desc">Owned: ${nameplate.quantity} | Sell: ${nameplate.sellPrice.toLocaleString()} Nexals</div>` : ''}
+        <button class="shop-card-btn ${equipped ? 'unequip' : owned ? 'equip' : 'locked'}" onclick="nameplateAction('${nameplate.id}','${equipped ? 'unequip' : owned ? 'equip' : 'locked'}')">${equipped ? 'Equipped' : owned ? 'Equip' : 'Pack Only'}</button>
+        ${owned ? `<button class="shop-card-btn shop-sell-btn" onclick="sellNameplate('${nameplate.id}','${esc(nameplate.name)}',${nameplate.sellPrice})">Sell One</button>` : ''}
+      </div>`;
+    };
+    const directDecorations = visibleDecorations.filter(d => !d.packOnly);
+    const packDecorations = visibleDecorations.filter(d => d.packOnly);
+    grid.innerHTML = `
+      <section class="shop-catalog-section">
+        <div class="shop-section-heading"><div><span>DIRECT SHOP</span><h2>Avatar Decorations</h2></div><b>${directDecorations.length} items</b></div>
+        <div class="shop-grid-inner">${directDecorations.map(decorationCard).join('')}</div>
+      </section>
+      <details class="shop-exclusive-drawer">
+        <summary>
+          <div><span>PACK COLLECTION</span><strong>Pack-only decorations and nameplates</strong></div>
+          <small>${packDecorations.length + nameplates.length} collectibles</small>
+        </summary>
+        <div class="shop-drawer-copy">These collectibles only drop from packs. Open this collection to browse, equip, or sell them.</div>
+        <h3>Avatar Decorations</h3>
+        <div class="shop-grid-inner">${packDecorations.map(decorationCard).join('')}</div>
+        <h3>Nameplates</h3>
+        <div class="shop-grid-inner nameplate-grid">${nameplates.map(nameplateCard).join('')}</div>
+      </details>`;
 
     visibleDecorations.forEach(d => {
       const wrap = document.querySelector(`#shopcard-${d.id} .avatar-wrap`);
@@ -5760,8 +5834,8 @@
     const myNexals = (shopData && shopData.nexals) || 0;
     tabsHost.innerHTML = `
       <div class="shop-subsection shop-pack-section">
-        <h2>Decoration Packs</h2>
-        <p>Open a pack to roll one exclusive decoration. Odds are shown on each item.</p>
+        <h2>Collectible Packs</h2>
+        <p>Open packs for exclusive avatar decorations and nameplates. Every item shows its exact odds.</p>
       </div>
       <div class="shop-pack-grid">
         ${(packs || []).map(pack => {
@@ -5779,10 +5853,10 @@
               <div class="shop-pack-owned">${esc(pack.raritySummary || '')}</div>
               <div class="shop-card-desc">${esc(pack.description)}</div>
               <div class="shop-pack-previews">
-                ${(pack.decorations || []).map(d => `
-                  <div class="avatar-wrap shop-pack-mini ${d.owned ? 'owned' : ''}" data-deco-id="${d.id}" title="${esc(d.name)} - ${d.chance}%${d.quantity ? ' - Owned: ' + d.quantity : ''}">
-                    <div class="avatar">N</div>
-                    <span class="shop-pack-odds">${d.chance}%</span>
+                ${(pack.collectibles || pack.decorations || []).map(item => `
+                  <div class="${item.collectibleType === 'nameplate' ? 'shop-pack-nameplate-mini nameplate-' + esc(item.id) : 'avatar-wrap shop-pack-mini'} ${item.owned ? 'owned' : ''}" ${item.collectibleType === 'nameplate' ? '' : `data-deco-id="${item.id}"`} title="${esc(item.name)} - ${item.chance}%${item.quantity ? ' - Owned: ' + item.quantity : ''}">
+                    ${item.collectibleType === 'nameplate' ? '<b>Nx</b>' : '<div class="avatar">N</div>'}
+                    <span class="shop-pack-odds">${item.chance}%</span>
                   </div>
                 `).join('')}
               </div>
@@ -5818,8 +5892,8 @@
     if (quantity > 1) showPackResults(pack, granted, r.totalPrice || total);
     else {
       const won = granted[0];
-      toast('Pack opened: ' + (won ? won.name : 'new decoration'), 'success', 6500);
-      const premiumHit = granted.find(d => ['ascendent', 'mythical'].includes(d.rarity));
+      toast('Pack opened: ' + (won ? won.name : 'new collectible'), 'success', 6500);
+      const premiumHit = granted.find(d => d.collectibleType !== 'nameplate' && ['ascendent', 'mythical'].includes(d.rarity));
       if (premiumHit) await showClaimAnimation(premiumHit);
     }
     await loadShop();
@@ -5834,7 +5908,7 @@
       document.body.appendChild(overlay);
     }
     const counts = granted.reduce((map, item) => {
-      const key = item.id;
+      const key = `${item.collectibleType || 'decoration'}:${item.id}`;
       map[key] = map[key] || { item, count: 0 };
       map[key].count += 1;
       return map;
@@ -5853,10 +5927,12 @@
         </div>
         <div class="pack-results-grid">
           ${Object.values(counts).map(({ item, count }) => `<div class="pack-result-card rarity-${esc(String(item.rarity || 'common').toLowerCase())}">
-            <div class="avatar-wrap pack-result-preview" data-deco-id="${esc(item.id)}"><div class="avatar">N</div></div>
+            ${item.collectibleType === 'nameplate'
+              ? `<div class="pack-result-nameplate nameplate-${esc(item.id)}"><span>${esc(item.name)}</span></div>`
+              : `<div class="avatar-wrap pack-result-preview" data-deco-id="${esc(item.id)}"><div class="avatar">N</div></div>`}
             <span class="shop-rarity rarity-${esc(String(item.rarity || 'common').toLowerCase())}">${esc(item.rarity)}</span>
             <b>${esc(item.name)}</b>
-            <small>x${count}</small>
+            <small>${item.collectibleType === 'nameplate' ? 'NAMEPLATE · ' : ''}x${count}</small>
           </div>`).join('')}
         </div>
       </div>
@@ -5900,7 +5976,7 @@
     syncSecretAmbient();
     if (shopData) {
       shopData.active = equipId;
-      renderShop(shopData.decorations, equipId);
+      renderShop(shopData.decorations, equipId, shopData.nameplates || [], shopData.activeNameplate || null);
     }
     toast(action === 'equip' ? 'Decoration equipped! ✨' : 'Decoration removed', 'success');
   };
@@ -5916,6 +5992,31 @@
       updateSelfCard();
     }
     toast('Sold one ' + name + ' for ' + r.sellPrice.toLocaleString() + ' Nexals', 'success');
+    await loadShop();
+  };
+
+  window.nameplateAction = async function(nameplateId, action) {
+    if (action === 'locked') return toast('This nameplate only drops from a pack.', 'info');
+    const equipId = action === 'equip' ? nameplateId : null;
+    const r = await api('POST', '/api/shop/nameplates/equip', { nameplateId: equipId });
+    if (r.error) return toast(r.error, 'error');
+    currentUser.activeNameplate = equipId;
+    if (shopData) shopData.activeNameplate = equipId;
+    updateSelfCard();
+    renderShop(shopData.decorations, shopData.active, shopData.nameplates || [], equipId);
+    toast(equipId ? 'Nameplate equipped' : 'Nameplate removed', 'success');
+  };
+
+  window.sellNameplate = async function(nameplateId, name, sellPrice) {
+    if (!confirm(`Sell one "${name}" for ${sellPrice.toLocaleString()} Nexals?`)) return;
+    const r = await api('POST', '/api/shop/nameplates/sell', { nameplateId });
+    if (r.error) return toast(r.error, 'error');
+    updateNexalDisplay(r.nexals);
+    if (currentUser.activeNameplate === nameplateId && r.quantity === 0) {
+      currentUser.activeNameplate = null;
+      updateSelfCard();
+    }
+    toast(`Sold one ${name}`, 'success');
     await loadShop();
   };
 
@@ -6971,6 +7072,7 @@
 
     // Render what we have immediately
     renderAvatar($('popup-avatar'), data);
+    $('popup-name').className = `profile-popup-name${nameplateClass(data)}`;
     $('popup-name').textContent = String(data.displayName || '').replace(/\s*(?:\.\.\.|…)\s*$/, '');
     $('popup-username').textContent = '@' + data.username;
     $('popup-status').className = 'status-dot ' + normalizedStatus(visibleStatus(data)) + (usesDiscordStatus(data) ? ' discord-status' : '');
@@ -7016,6 +7118,7 @@
       popup.classList.toggle('effect-prism', r.profileNameEffect === 'prism');
       popup.style.setProperty('--profile-start', r.profileGradientStart || '#5865f2');
       popup.style.setProperty('--profile-end', r.profileGradientEnd || '#a855f7');
+      $('popup-name').className = `profile-popup-name${nameplateClass(r)}`;
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');

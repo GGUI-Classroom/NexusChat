@@ -22,7 +22,7 @@
           <div id="suspension-reason-label">Reason</div>
           <div id="suspension-reason-text"></div>
         </div>
-        <div id="suspension-footer">You cannot access Nexus until the suspension expires.<br>Contact an administrator if you believe this is a mistake. To appeal the suspension, please DM @_extreembuild_ on Discord.</div>
+        <div id="suspension-footer">You cannot access Nexus until the suspension expires.<br>Contact an administrator if you believe this is a mistake.</div>
         <button class="btn-secondary" onclick="logoutFromSuspension()" style="margin-top:20px">Sign out</button>
       </div>
     </div>
@@ -118,6 +118,9 @@
               <span>NEXUS</span>
             </div>
           </div>
+          <div class="dm-search-wrap">
+            <input id="dm-friend-search" type="search" placeholder="Find a conversation" autocomplete="off">
+          </div>
           <nav class="sidebar-nav">
             <button class="nav-btn active" data-view="friends">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -195,8 +198,8 @@
               <div class="username" id="self-username">–</div>
             </div>
             <div class="user-actions">
-              <button class="icon-btn" id="profile-btn" title="Edit Profile">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              <button class="icon-btn" id="profile-btn" title="Settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.1 2.1-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-3v-.08A1.7 1.7 0 0 0 10.7 18.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.1-2.1.06-.06A1.7 1.7 0 0 0 7.06 14.8 1.7 1.7 0 0 0 5.5 13.77H5v-3h.5A1.7 1.7 0 0 0 7.06 9.74 1.7 1.7 0 0 0 6.72 7.86l-.06-.06 2.1-2.1.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11.73 4.5V4h3v.5a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.1 2.1-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03h.5v3h-.5A1.7 1.7 0 0 0 19.4 15z"/></svg>
               </button>
               <button class="icon-btn" id="logout-btn" title="Sign Out">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="15" height="15"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -259,6 +262,7 @@
               <textarea id="message-input" placeholder="Message…" rows="1" maxlength="4000"></textarea>
               <button class="send-btn" id="send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
             </div>
+            <aside class="dm-profile-panel" id="dm-profile-panel" aria-label="Conversation profile"></aside>
           </div>
         </div>
 
@@ -398,10 +402,11 @@
 
   <!-- Profile Modal -->
   <div class="modal-overlay" id="profile-modal">
-    <div class="modal">
-      <div class="modal-header"><h2>Edit Profile</h2><button class="modal-close" id="profile-modal-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal settings-modal">
+      <div class="modal-header"><h2>Settings</h2><button class="modal-close" id="profile-modal-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
       <div class="modal-body">
-        <div class="avatar-upload-area">
+        <div class="profile-settings-tabs"><button class="profile-settings-tab active" data-ptab="profile">Profile</button><button class="profile-settings-tab" data-ptab="link">Nexus LINK</button><button class="profile-settings-tab" data-ptab="appearance">Appearance</button><button class="profile-settings-tab" data-ptab="account">Account</button></div>
+        <section class="profile-settings-panel active" data-ppanel="profile"><div class="avatar-upload-area">
           <div class="avatar-preview" id="profile-avatar-preview">?</div>
           <div class="avatar-upload-info"><label for="avatar-file-input" class="btn-secondary">Choose Photo</label><input type="file" id="avatar-file-input" accept="image/*" style="display:none" /><p class="field-hint">JPEG, PNG, GIF, WebP – max 2 MB</p></div>
         </div>
@@ -410,17 +415,29 @@
           <label>Bio <span style="color:var(--text-muted);font-weight:400;font-size:10px">— max 300 chars</span></label>
           <textarea id="profile-bio" placeholder="Tell people a bit about yourself…" rows="3" maxlength="300" style="resize:vertical;min-height:70px"></textarea>
         </div>
-        <div class="field-group"><label>Server Tag</label><div id="profile-tag-choices" class="profile-tag-choices"></div></div>
-        <div class="form-error" id="profile-error"></div>
-        <button class="btn-primary" id="save-profile-btn">Save Changes</button>
-
-        <div class="profile-divider"></div>
+        <div class="field-group"><label>Server Tag</label><div id="profile-tag-choices" class="profile-tag-choices"></div></div><div class="form-error" id="profile-error"></div><button class="btn-primary" id="save-profile-btn">Save Changes</button></section>
+        <section class="profile-settings-panel" data-ppanel="link"><div class="profile-divider"></div>
+        <div class="section-label" style="margin-bottom:12px">NEXUS LINK</div>
+        <div id="nexus-link-disconnected" style="display:none">
+          <p class="field-hint" style="margin:0 0 10px">Connect Discord to relay direct messages and use Nexus LINK in Discord servers.</p>
+          <button type="button" class="btn-secondary" id="connect-discord-btn">Connect Discord</button>
+        </div>
+        <div id="nexus-link-settings" style="display:none">
+          <div id="nexus-link-account" class="field-hint" style="margin-bottom:10px"></div>
+          <label class="toggle-row"><input type="checkbox" id="nexus-link-dms" /><span class="toggle-label"><span class="toggle-title">Relay Direct Messages</span><span class="toggle-hint">Send Nexus and Discord DMs through Nexus LINK.</span></span></label>
+          <label class="toggle-row"><input type="checkbox" id="nexus-link-attachments" /><span class="toggle-label"><span class="toggle-title">Include Attachments</span><span class="toggle-hint">Allow image and file attachments in relayed DMs.</span></span></label>
+          <label class="toggle-row"><input type="checkbox" id="nexus-link-status" /><span class="toggle-label"><span class="toggle-title">Mirror Discord Status</span><span class="toggle-hint">Show Discord online, idle, do not disturb, or offline status in Nexus.</span></span></label>
+          <label class="toggle-row"><input type="checkbox" id="nexus-link-message-notify" /><span class="toggle-label"><span class="toggle-title">Discord Message Notifications</span><span class="toggle-hint">Notify me on Discord when a Nexus direct message is relayed.</span></span></label>
+          <label class="toggle-row"><input type="checkbox" id="nexus-link-call-notify" /><span class="toggle-label"><span class="toggle-title">Discord Call Notifications</span><span class="toggle-hint">Notify me on Discord when someone calls on Nexus.</span></span></label>
+          <div class="form-error" id="nexus-link-error"></div>
+        </div>
+        </section><section class="profile-settings-panel" data-ppanel="appearance"><div class="section-label">APPEARANCE</div><p class="field-hint">Choose how Nexus looks on this device.</p><div class="field-group"><label>Decoration</label><select id="appearance-decoration-select"></select></div><div class="field-group"><label>Nameplate</label><select id="appearance-nameplate-select"></select></div><div class="field-group"><label>Phone Ringtone</label><select id="appearance-ringtone-select"></select></div><div class="settings-actions"><button class="btn-secondary" id="theme-dark-btn">Dark Mode</button><button class="btn-secondary" id="theme-light-btn">Light Mode</button></div></section><section class="profile-settings-panel" data-ppanel="account"><div class="profile-divider"></div>
         <div class="section-label" style="margin-bottom:12px">CHANGE PASSWORD</div>
         <div class="field-group"><label>Current Password</label><input type="password" id="profile-old-password" placeholder="••••••••" autocomplete="current-password" /></div>
         <div class="field-group"><label>New Password</label><input type="password" id="profile-new-password" placeholder="••••••••" autocomplete="new-password" /></div>
         <div class="field-group"><label>Confirm New Password</label><input type="password" id="profile-confirm-password" placeholder="••••••••" autocomplete="new-password" /></div>
         <div class="form-error" id="password-error"></div>
-        <button class="btn-primary" id="change-password-btn">Change Password</button>
+        <button class="btn-primary" id="change-password-btn">Change Password</button></section>
       </div>
     </div>
   </div>
@@ -477,6 +494,15 @@
           <div class="field-group"><label>Invite Code</label><div class="invite-code-row"><input type="text" id="settings-invite-code" readonly /><button class="btn-secondary" id="copy-invite-btn">Copy</button></div></div>
           <div class="field-group"><label>Boost Status</label><div id="settings-boost-status" style="color:var(--text-secondary);font-size:13px"></div></div>
           <div class="field-group" id="settings-tag-group"><label>Server Tag (2 boosts required)</label><div class="invite-code-row"><input type="text" id="settings-server-tag" maxlength="4" style="text-transform:uppercase" /><button class="btn-secondary" id="save-server-tag-btn">Save Tag</button></div></div>
+          <div class="invite-customization" id="settings-invite-customization">
+            <div class="section-label">RICH INVITE CARD</div>
+            <div class="field-group"><label>Description</label><input type="text" id="settings-invite-description" maxlength="180" placeholder="What should people know before joining?" /></div>
+            <div class="field-group"><label>Tags</label><input type="text" id="settings-invite-tags" maxlength="100" placeholder="gaming, events, friends" /></div>
+            <div class="field-group"><label>Banner</label><select id="settings-invite-banner-mode"><option value="solid">Solid color</option><option value="gradient">Gradient (2 boosts)</option><option value="image">Image URL (2 boosts)</option></select></div>
+            <div class="invite-banner-controls" id="settings-invite-banner-colors"><input type="color" id="settings-invite-banner-start" value="#5865f2" /><input type="color" id="settings-invite-banner-end" value="#a855f7" /></div>
+            <div class="field-group" id="settings-invite-banner-image-wrap" style="display:none"><label>Secure image URL</label><input type="url" id="settings-invite-banner-image" placeholder="https://..." /></div>
+            <button type="button" class="btn-secondary" id="save-invite-style-btn">Save Invite Card</button>
+          </div>
           <div class="form-error" id="settings-server-error"></div>
           <div class="settings-actions">
             <button class="btn-primary" id="save-server-btn">Save Changes</button>
@@ -668,14 +694,14 @@
   <!-- Call HUD -->
   <div class="call-hud" id="call-hud" style="display:none">
     <div class="call-hud-inner">
-      <div class="call-hud-peer"><div class="avatar sm" id="hud-peer-avatar">?</div><div><div class="call-hud-name" id="hud-peer-name">–</div><div class="call-hud-status" id="hud-status">Connecting…</div></div></div>
+      <div class="call-hud-peer"><div class="call-avatar-viewport"><div class="avatar sm" id="hud-peer-avatar">?</div></div><div><div class="call-hud-name" id="hud-peer-name">–</div><div class="call-hud-status" id="hud-status">Connecting…</div></div></div>
       <div class="call-hud-timer" id="call-timer">0:00</div>
       <div class="call-hud-controls">
         <button class="hud-btn" id="mute-btn" title="Mute mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
         <button class="hud-btn" id="video-toggle-btn" title="Toggle camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="3" y="6" width="13" height="12" rx="2"/><polygon points="16 10 21 7 21 17 16 14"/></svg></button>
         <button class="hud-btn" id="screenshare-btn" title="Share screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M9 9l3-3 3 3M12 6v7"/></svg></button>
         <button class="hud-btn" id="view-screen-btn" title="View shared screen" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10" r="3"/></svg></button>
-        <button class="hud-btn" id="call-games-btn" title="Play call games">&#9824;</button>
+        <button class="hud-btn hud-btn-wide" id="call-games-btn" title="Activities">Activities</button>
         <button class="hud-btn end" id="end-call-btn" title="End Call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg></button>
       </div>
     </div>
@@ -683,8 +709,16 @@
 
   <div class="modal-overlay" id="call-games-modal">
     <div class="modal call-games-modal">
-      <div class="modal-header"><h2>Call Games</h2><button class="modal-close" id="call-games-close">&#215;</button></div>
+      <div class="modal-header"><h2>Activities</h2><button class="modal-close" id="call-games-close">&#215;</button></div>
       <div class="modal-body" id="call-games-content"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="activity-invite-modal">
+    <div class="modal activity-invite-modal">
+      <div class="activity-invite-icon">&#9824;</div>
+      <div class="activity-invite-copy"><div class="section-label">CALL ACTIVITY</div><h2 id="activity-invite-title">Blackjack started</h2><p id="activity-invite-text">Join the table?</p></div>
+      <div class="activity-invite-actions"><button class="btn-secondary" id="activity-invite-ignore">Ignore</button><button class="btn-primary" id="activity-invite-join">Join Activity</button></div>
     </div>
   </div>
 
@@ -731,7 +765,7 @@
 
   <!-- Admin Panel -->
   <div class="modal-overlay" id="admin-overlay" style="z-index:950">
-    <div class="modal modal-wide" id="admin-modal" style="max-width:680px;max-height:85vh;overflow:hidden;display:flex;flex-direction:column">
+    <div class="modal modal-wide admin-modal-full" id="admin-modal">
       <div class="modal-header">
         <div style="display:flex;align-items:center;gap:10px">
           <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" width="18" height="18"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -739,7 +773,7 @@
         </div>
         <button class="modal-close" onclick="closeAdminPanel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
-      <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div class="admin-tabs-wrap">
         <button class="admin-tab active" data-tab="suspend">⛔ Suspend</button>
         <button class="admin-tab" data-tab="servers">🌐 Servers</button>
         <button class="admin-tab" data-tab="userinfo">👤 User Info</button>
@@ -749,7 +783,7 @@
         <button class="admin-tab" data-tab="admins">🛡 Admins</button>
         <button class="admin-tab" data-tab="history">📋 Log</button>
       </div>
-      <div style="flex:1;overflow-y:auto">
+      <div class="admin-content-wrap">
         <!-- Suspend Tab -->
         <div class="admin-pane active" id="admin-pane-suspend">
           <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
@@ -944,6 +978,7 @@
       </div>
       <div class="profile-popup-name" id="popup-name">–</div>
       <div class="profile-popup-username" id="popup-username">–</div>
+      <div class="profile-popup-discord-activity" id="popup-discord-activity" style="display:none"></div>
       <div class="profile-popup-role" id="popup-role" style="display:none"></div>
       <button class="profile-popup-tag" id="popup-server-tag" style="display:none"></button>
       <div class="profile-popup-tag-invite" id="popup-tag-invite" style="display:none"></div>

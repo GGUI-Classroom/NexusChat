@@ -44,7 +44,7 @@ router.get('/avatar/:userId', requireAuth, async (req, res) => {
 // Get any user's public profile
 router.get('/profile/:userId', requireAuth, async (req, res) => {
   const r = await pool.query(
-    'SELECT id, username, display_name, (avatar_data IS NOT NULL) AS has_avatar, bio, active_decoration, pro_expires_at, profile_gradient_start, profile_gradient_end, profile_name_effect, active_server_tag_id FROM users WHERE id=$1',
+    'SELECT id, username, display_name, (avatar_data IS NOT NULL) AS has_avatar, bio, active_decoration, active_nameplate, pro_expires_at, profile_gradient_start, profile_gradient_end, profile_name_effect, active_server_tag_id FROM users WHERE id=$1',
     [req.params.userId]
   );
   if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
@@ -55,6 +55,7 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
     avatarDataUrl: avatarUrl(u.id, !!u.has_avatar),
     bio: u.bio || null,
     activeDecoration: u.active_decoration || null,
+    activeNameplate: u.active_nameplate || null,
     pro: (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileGradientStart: u.profile_gradient_start, profileGradientEnd: u.profile_gradient_end, profileNameEffect: u.profile_name_effect,
     serverTag: tag.rows[0] ? { name: tag.rows[0].name, inviteCode: tag.rows[0].invite_code, tag: tag.rows[0].server_tag, background: tag.rows[0].tag_background, iconDataUrl: tag.rows[0].icon_data ? `data:${tag.rows[0].icon_mime};base64,${tag.rows[0].icon_data}` : null } : null
   });

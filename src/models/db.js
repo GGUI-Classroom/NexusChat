@@ -207,6 +207,13 @@ async function initDb() {
   // Pack drops are inventory entries, so a user may hold duplicate decorations.
   await runSql(`ALTER TABLE user_decorations DROP CONSTRAINT IF EXISTS user_decorations_user_id_decoration_id_key`, 'drop_deco_unique');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_user_decorations_user_deco ON user_decorations(user_id, decoration_id)`, 'idx_user_decorations_user_deco');
+  await runSql(`CREATE TABLE IF NOT EXISTS user_nameplates (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    nameplate_id TEXT NOT NULL,
+    unlocked_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'user_nameplates');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_user_nameplates_user_plate ON user_nameplates(user_id, nameplate_id)`, 'idx_user_nameplates_user_plate');
   await runSql(`CREATE TABLE IF NOT EXISTS decoration_auctions (
     id TEXT PRIMARY KEY,
     seller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -243,6 +250,7 @@ async function initDb() {
   )`, 'app_migrations');
 
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_decoration TEXT DEFAULT NULL`, 'alter_users_decoration');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_nameplate TEXT DEFAULT NULL`, 'alter_users_nameplate');
   await runOnceMigration('remove_existing_singularity_decorations_v1', `
     UPDATE users SET active_decoration=NULL WHERE active_decoration='singularity';
     DELETE FROM user_decorations WHERE decoration_id='singularity';

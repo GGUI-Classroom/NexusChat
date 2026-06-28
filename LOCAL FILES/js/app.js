@@ -25,28 +25,16 @@
   let secretHumNodes = [];
   let pendingGifts = [];
   let selectedGift = null;
-  const LOCAL_API_ORIGIN = String(window.NEXUS_API_URL || '').replace(/\/+$/, '');
+  const externalCallParams = new URLSearchParams(window.location.search);
+  let externalCallJoinPending = externalCallParams.get('nexusCall')
+    ? { roomId: externalCallParams.get('nexusCall'), fromId: externalCallParams.get('from'), callType: externalCallParams.get('type') === 'video' ? 'video' : 'voice' }
+    : null;
 
-  function apiUrl(path) {
-    if (!path || /^https?:\/\//i.test(path)) return path;
-    return LOCAL_API_ORIGIN ? LOCAL_API_ORIGIN + path : path;
+  function normalizedStatus(status) {
+    return ['online', 'idle', 'dnd', 'offline'].includes(status) ? status : 'offline';
   }
-
-  function getDeviceId() {
-    const key = 'nexus.deviceId';
-    let id = localStorage.getItem(key);
-    if (!id) {
-      id = window.crypto && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
-      localStorage.setItem(key, id);
-    }
-    return id;
-  }
-
-  function deviceHeaders(extra = {}) {
-    return { ...extra, 'X-Nexus-Device-Id': getDeviceId() };
-  }
+  function visibleStatus(user) { return user.status === 'offline' && user.discordStatus && user.discordStatus !== 'offline' ? user.discordStatus : user.status; }
+  function usesDiscordStatus(user) { return user.status === 'offline' && user.discordStatus && user.discordStatus !== 'offline'; }
 
   function rememberAuthors(authors) {
     Object.entries(authors || {}).forEach(([id, author]) => {
@@ -68,32 +56,8 @@
 
   function normalizeAssetUrl(url) {
     if (!url || typeof url !== 'string') return url;
-    if (url.startsWith('/api/') && LOCAL_API_ORIGIN) return LOCAL_API_ORIGIN + url;
+    if (url.startsWith('/api/') && window.NEXUS_API_URL) return String(window.NEXUS_API_URL).replace(/\/+$/, '') + url;
     return url;
-  }
-
-  function requestText(method, path, body, headers = {}) {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open(method, apiUrl(path), true);
-      xhr.withCredentials = true;
-      Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
-      xhr.onload = () => resolve({ status: xhr.status, text: xhr.responseText || '' });
-      xhr.onerror = () => reject(new Error('Network request failed'));
-      xhr.ontimeout = () => reject(new Error('Network request timed out'));
-      xhr.timeout = 30000;
-      xhr.send(body || null);
-    });
-  }
-
-  async function requestJson(method, path, body, headers) {
-    const res = await requestText(method, path, body, headers);
-    try {
-      return JSON.parse(res.text);
-    } catch (e) {
-      console.error('Non-JSON response:', res.text);
-      return { error: 'Server returned invalid response: ' + res.text.slice(0, 100) };
-    }
   }
 
   const SECRET_CATEGORY = '???SECRET???';
@@ -1435,12 +1399,41 @@
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
+  function getDeviceId() {
+    const key = 'nexus.deviceId';
+    let id = localStorage.getItem(key);
+    if (!id) {
+      id = window.crypto && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+      localStorage.setItem(key, id);
+    }
+    return id;
+  }
+
+  function deviceHeaders(extra = {}) {
+    return { ...extra, 'X-Nexus-Device-Id': getDeviceId() };
+  }
+
   // ---- Auth ----
   async function api(method, path, data) {
+    const opts = {
+      method,
+      headers: deviceHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include'
+    };
+    if (data) opts.body = JSON.stringify(data);
     try {
-      return await requestJson(method, path, data ? JSON.stringify(data) : null, deviceHeaders({ 'Content-Type': 'application/json' }));
+      const res = await fetch(path, opts);
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        console.error('Non-JSON response:', text);
+        return { error: 'Server returned invalid response: ' + text.slice(0, 100) };
+      }
     } catch (e) {
-      console.error('Network error:', e);
+      console.error('Fetch error:', e);
       return { error: 'Network error: ' + e.message };
     }
   }
@@ -1637,7 +1630,7 @@
   function updateSelfCard() {
     if (!currentUser) return;
     $('self-display-name').textContent = currentUser.displayName;
-    $('self-display-name').className = currentUser.proActive && currentUser.proNameEffect !== 'none' ? 'display-name pro-name-effect' : 'display-name';
+    $('self-display-name').className = (currentUser.proActive && currentUser.proNameEffect !== 'none' ? 'display-name pro-name-effect' : 'display-name') + nameplateClass(currentUser);
     $('self-display-name').style.setProperty('--pro-name-start', currentUser.proGradientStart || '#5865f2');
     $('self-display-name').style.setProperty('--pro-name-end', currentUser.proGradientEnd || '#a855f7');
     const tag = $('self-server-tag');
@@ -1710,16 +1703,27 @@
     $('invite-badge-count').textContent = invites.length;
     badge.style.display = 'flex';
     badge.textContent = invites.length;
-    container.innerHTML = invites.map(inv => `
-      <div class="server-invite-item" id="inv-${inv.id}">
+    container.innerHTML = invites.map(inv => {
+      const mode = ['solid', 'gradient', 'image'].includes(inv.inviteBannerMode) ? inv.inviteBannerMode : 'solid';
+      const bannerStyle = mode === 'image' && inv.inviteBannerImage
+        ? `background-image:linear-gradient(90deg,rgba(10,14,28,.25),rgba(10,14,28,.55)),url('${esc(inv.inviteBannerImage)}')`
+        : mode === 'gradient'
+          ? `background:linear-gradient(135deg,${esc(inv.inviteBannerStart || '#5865f2')},${esc(inv.inviteBannerEnd || '#a855f7')})`
+          : `background:${esc(inv.inviteBannerStart || '#5865f2')}`;
+      const tags = String(inv.inviteTags || '').split(',').map(tag => tag.trim()).filter(Boolean).map(tag => `<span>${esc(tag)}</span>`).join('');
+      return `
+      <div class="server-invite-item rich-server-invite" id="inv-${inv.id}">
+        <div class="rich-invite-banner" style="${bannerStyle}"></div>
         <div class="inv-server-name">${esc(inv.serverName)}</div>
+        ${inv.inviteDescription ? `<div class="inv-description">${esc(inv.inviteDescription)}</div>` : ''}
+        ${tags ? `<div class="inv-tags">${tags}</div>` : ''}
         <div class="inv-from">Invited by ${esc(inv.from.displayName)}</div>
         <div class="inv-actions">
           <button class="inv-accept" onclick="respondServerInvite('${inv.id}','accept','${inv.serverId}')">Accept</button>
           <button class="inv-decline" onclick="respondServerInvite('${inv.id}','decline','${inv.serverId}')">Decline</button>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   }
 
   window.respondServerInvite = async function(inviteId, action, serverId) {
@@ -1862,9 +1866,9 @@
         <div class="server-member-item profile-hover-target" data-profile="${popupData}" onclick="showProfilePopup(event, '${popupData}')">
           <div class="avatar-wrap" style="flex-shrink:0">
             <div class="avatar sm" id="smav-${m.id}"></div>
-            <div class="status-dot ${m.status==='online'?'online':''}" style="border-color:var(--bg-surface)"></div>
+            <div class="status-dot ${normalizedStatus(visibleStatus(m))}${usesDiscordStatus(m) ? ' discord-status' : ''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
+          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}${nameplateClass(m)}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
           ${canManage ? `<div class="member-actions">
             <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
             <button class="member-action-btn kick" onclick="kickMember('${m.id}','${esc(m.displayName)}')">Kick</button>
@@ -2471,8 +2475,8 @@
     if (iconFile) fd.append('icon', iconFile);
     let r;
     try {
-      const res = await requestText('POST', '/api/servers', fd, deviceHeaders());
-      const text = res.text;
+      const res = await fetch('/api/servers', { method: 'POST', body: fd, credentials: 'include', headers: deviceHeaders() });
+      const text = await res.text();
       try { r = JSON.parse(text); } catch(e) {
         return showError('create-server-error', 'Server error: ' + text.slice(0, 120));
       }
@@ -2513,6 +2517,13 @@
     $('settings-invite-code').value = s.inviteCode;
     $('settings-boost-status').textContent = `${s.boostCount || 0} active boosts. Tags and gradients unlock at 2.`;
     $('settings-server-tag').value = s.tag || '';
+    $('settings-invite-description').value = s.inviteDescription || '';
+    $('settings-invite-tags').value = s.inviteTags || '';
+    $('settings-invite-banner-mode').value = s.inviteBannerMode || 'solid';
+    $('settings-invite-banner-start').value = s.inviteBannerStart || '#5865f2';
+    $('settings-invite-banner-end').value = s.inviteBannerEnd || '#a855f7';
+    $('settings-invite-banner-image').value = s.inviteBannerImage || '';
+    updateInviteBannerControls();
     $('settings-tag-group').style.display = (s.boostCount || 0) >= 2 ? 'block' : 'none';
     if (s.iconDataUrl) {
       $('settings-icon-preview').innerHTML = `<img src="${s.iconDataUrl}" alt="">`;
@@ -2534,7 +2545,7 @@
 
   function renderBoostSettings(server) {
     const features = new Set(server.boostFeatures || []);
-    $('boosts-settings-content').innerHTML = `<div class="shop-card"><div class="shop-card-name">${server.boostCount || 0} active boosts</div><div class="shop-card-desc">Allocate two boosts per server feature. Expired boosts automatically disable the feature they funded.</div></div><div class="shop-grid" style="margin-top:12px"><div class="shop-card"><div class="shop-card-name">Server Tag</div><div class="shop-card-desc">A clickable tag card shown beside members across DMs and servers.</div><button class="shop-card-btn ${features.has('tag') ? 'equip' : 'buy'}" onclick="spendBoosts('tag')">${features.has('tag') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Role Gradients</div><div class="shop-card-desc">Unlock animated gradient colors in the role editor.</div><button class="shop-card-btn ${features.has('gradients') ? 'equip' : 'buy'}" onclick="spendBoosts('gradients')">${features.has('gradients') ? 'Allocated' : 'Spend 2 Boosts'}</button></div></div>`;
+    $('boosts-settings-content').innerHTML = `<div class="shop-card"><div class="shop-card-name">${server.boostCount || 0} active boosts</div><div class="shop-card-desc">Allocate two boosts per server feature. Expired boosts automatically disable the feature they funded.</div></div><div class="shop-grid" style="margin-top:12px"><div class="shop-card"><div class="shop-card-name">Server Tag</div><div class="shop-card-desc">A clickable tag card shown beside members across DMs and servers.</div><button class="shop-card-btn ${features.has('tag') ? 'equip' : 'buy'}" onclick="spendBoosts('tag')">${features.has('tag') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Role Gradients</div><div class="shop-card-desc">Unlock animated gradient colors in the role editor.</div><button class="shop-card-btn ${features.has('gradients') ? 'equip' : 'buy'}" onclick="spendBoosts('gradients')">${features.has('gradients') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Invite Banners</div><div class="shop-card-desc">Unlock a gradient or secure image banner for rich server invites.</div><button class="shop-card-btn ${features.has('invite_banner') ? 'equip' : 'buy'}" onclick="spendBoosts('invite_banner')">${features.has('invite_banner') ? 'Allocated' : 'Spend 2 Boosts'}</button></div></div>`;
   }
 
   let serverEconomyData = null;
@@ -2555,19 +2566,40 @@
         <div><div class="section-label">SERVER ECONOMY</div><p class="field-hint">Members buy server perks with Nexals. The server owner receives every purchase.</p></div>
         <div class="nexal-balance"><span>✦</span>${(data.nexals || 0).toLocaleString()} Nexals</div>
       </div>
-      ${data.canManage ? `<div class="economy-create"><input id="economy-name-input" maxlength="40" placeholder="Item name, e.g. VIP Shoutout" /><input id="economy-price-input" type="number" min="1" max="100000000" placeholder="Price" /><input id="economy-desc-input" maxlength="160" placeholder="Description" /><button class="btn-primary" onclick="createServerEconomyItem()">Create Item</button></div>` : ''}
+      ${data.canManage ? `
+        <div class="economy-create">
+          <input id="economy-name-input" maxlength="40" placeholder="Item name, e.g. VIP Shoutout" />
+          <input id="economy-price-input" type="number" min="1" max="100000000" placeholder="Price" />
+          <input id="economy-desc-input" maxlength="160" placeholder="Description" />
+          <button class="btn-primary" onclick="createServerEconomyItem()">Create Item</button>
+        </div>` : ''}
       <div class="economy-grid">
-        ${items.length ? items.map(item => `<div class="economy-card ${item.active ? '' : 'disabled'}"><div><h3>${esc(item.name)}</h3><p>${esc(item.description || 'Server perk')}</p><span>${item.sold.toLocaleString()} sold</span></div><strong>${item.price.toLocaleString()} Nexals</strong><button class="shop-card-btn buy" onclick="buyServerEconomyItem('${item.id}')" ${item.active ? '' : 'disabled'}>Buy</button>${data.canManage ? `<button class="shop-card-btn" onclick="toggleServerEconomyItem('${item.id}',${item.active ? 'false' : 'true'})">${item.active ? 'Disable' : 'Enable'}</button>` : ''}</div>`).join('') : '<div class="empty-state">No server economy items yet.</div>'}
+        ${items.length ? items.map(item => `
+          <div class="economy-card ${item.active ? '' : 'disabled'}">
+            <div>
+              <h3>${esc(item.name)}</h3>
+              <p>${esc(item.description || 'Server perk')}</p>
+              <span>${item.sold.toLocaleString()} sold</span>
+            </div>
+            <strong>${item.price.toLocaleString()} Nexals</strong>
+            <button class="shop-card-btn buy" onclick="buyServerEconomyItem('${item.id}')" ${item.active ? '' : 'disabled'}>Buy</button>
+            ${data.canManage ? `<button class="shop-card-btn" onclick="toggleServerEconomyItem('${item.id}',${item.active ? 'false' : 'true'})">${item.active ? 'Disable' : 'Enable'}</button>` : ''}
+          </div>`).join('') : '<div class="empty-state">No server economy items yet.</div>'}
       </div>`;
   }
 
   window.createServerEconomyItem = async function() {
-    const payload = { name: $('economy-name-input').value, price: parseInt($('economy-price-input').value, 10), description: $('economy-desc-input').value };
+    const payload = {
+      name: $('economy-name-input').value,
+      price: parseInt($('economy-price-input').value, 10),
+      description: $('economy-desc-input').value
+    };
     const r = await api('POST', `/api/servers/${activeServerId}/economy/items`, payload);
     if (r.error) return toast(r.error, 'error');
     toast('Economy item created', 'success');
     await loadServerEconomy();
   };
+
   window.buyServerEconomyItem = async function(itemId) {
     const item = serverEconomyData && (serverEconomyData.items || []).find(x => x.id === itemId);
     if (item && !confirm(`Buy ${item.name} for ${item.price.toLocaleString()} Nexals?`)) return;
@@ -2577,6 +2609,7 @@
     toast('Purchased. The server owner received the Nexals.', 'success');
     await loadServerEconomy();
   };
+
   window.toggleServerEconomyItem = async function(itemId, active) {
     const r = await api('PATCH', `/api/servers/${activeServerId}/economy/items/${itemId}`, { active });
     if (r.error) return toast(r.error, 'error');
@@ -2587,6 +2620,15 @@
     if (!user || !user.activeServerTag || !user.activeServerTagServerId) return '';
     const payload = encodeURIComponent(JSON.stringify({ tag: user.activeServerTag, background: user.activeServerTagBackground, serverId: user.activeServerTagServerId, serverName: user.activeServerTagServerName, inviteCode: user.activeServerTagInviteCode })).replace(/'/g, '%27');
     return ` <button class="identity-tag" style="--tag-bg:${esc(user.activeServerTagBackground || '#5865f2')}" onclick="event.stopPropagation();showIdentityTagInvite(event,decodeURIComponent('${payload}'))">[${esc(user.activeServerTag)}]</button>`;
+  }
+
+  function nameplateClass(user) {
+    const id = user && user.activeNameplate;
+    return id ? ` nexus-nameplate nameplate-${String(id).replace(/[^a-z0-9_-]/gi, '')}` : '';
+  }
+
+  function nameplatePreviewHtml(nameplate, label = 'Nexus User') {
+    return `<div class="nameplate-preview nameplate-${esc(nameplate.id)}"><span>${esc(label)}</span><i></i></div>`;
   }
   window.spendBoosts = async function(feature) { const r = await api('POST', '/api/perks/servers/' + activeServerId + '/spend', { feature }); if (r.error) return toast(r.error, 'error'); toast('Boosts allocated', 'success'); await loadServerSidebar(activeServerId); $('server-settings-btn').click(); };
 
@@ -2606,6 +2648,29 @@
     if (r.error) return toast(r.error, 'error');
     toast('Server tag saved', 'success');
     await loadServerSidebar(activeServerId);
+  });
+
+  function updateInviteBannerControls() {
+    const mode = $('settings-invite-banner-mode')?.value || 'solid';
+    $('settings-invite-banner-colors').style.display = mode === 'image' ? 'none' : 'flex';
+    $('settings-invite-banner-image-wrap').style.display = mode === 'image' ? 'block' : 'none';
+  }
+  $('settings-invite-banner-mode').addEventListener('change', updateInviteBannerControls);
+  $('save-invite-style-btn').addEventListener('click', async () => {
+    if (!activeServerId) return;
+    const r = await api('PATCH', `/api/servers/${activeServerId}/invite-style`, {
+      description: $('settings-invite-description').value,
+      tags: $('settings-invite-tags').value,
+      bannerMode: $('settings-invite-banner-mode').value,
+      bannerStart: $('settings-invite-banner-start').value,
+      bannerEnd: $('settings-invite-banner-end').value,
+      bannerImage: $('settings-invite-banner-image').value
+    });
+    if (r.error) return toast(r.error, 'error');
+    activeServerData.server = { ...activeServerData.server, ...r.server };
+    const index = servers.findIndex(server => server.id === activeServerId);
+    if (index >= 0) servers[index] = { ...servers[index], ...r.server };
+    toast('Invite card saved', 'success');
   });
 
   // Settings tab switching
@@ -2777,8 +2842,8 @@
     if (iconFile) fd.append('icon', iconFile);
     let r;
     try {
-      const res = await requestText('PATCH', `/api/servers/${activeServerId}`, fd, deviceHeaders());
-      const text = res.text;
+      const res = await fetch(`/api/servers/${activeServerId}`, { method: 'PATCH', body: fd, credentials: 'include', headers: deviceHeaders() });
+      const text = await res.text();
       try { r = JSON.parse(text); } catch(e) {
         return showError('settings-server-error', 'Server error: ' + text.slice(0, 120));
       }
@@ -2960,10 +3025,10 @@
       <div class="friend-card" data-id="${f.id}">
         <div class="avatar-wrap">
           <div class="avatar" id="fav-${f.id}"></div>
-          <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="fdot-${f.id}"></div>
+          <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="fdot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}${nameplateClass(f)}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
           <div class="username">@${esc(f.username)}</div>
           <div class="status ${f.status === 'online' ? 'online' : ''}" id="fstatus-${f.id}">${f.status === 'online' ? '● Online' : '○ Offline'}</div>
         </div>
@@ -3070,19 +3135,21 @@
   function renderDmList() {
     const list = $('dm-list');
     if (!friends.length) { list.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--text-muted)">No friends yet</div>'; return; }
-    list.innerHTML = friends.map(f => `
+    const query = String($('dm-friend-search')?.value || '').trim().toLowerCase();
+    const visibleFriends = friends.filter(f => !query || `${f.displayName} ${f.username}`.toLowerCase().includes(query));
+    list.innerHTML = visibleFriends.map(f => `
       <div class="dm-item ${activeDmUserId === f.id ? 'active' : ''}" data-id="${f.id}" onclick="railSelect('dms');switchView('dm');openDm(window._friendsMap['${f.id}'])">
         <div class="avatar-wrap">
           <div class="avatar sm" id="dav-${f.id}"></div>
-          <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="ddot-${f.id}"></div>
+          <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="ddot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
-          <div class="last-msg" id="dlm-${f.id}"></div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}${nameplateClass(f)}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
+          <div class="last-msg" id="dlm-${f.id}">${normalizedStatus(visibleStatus(f)) === 'offline' ? 'Offline' : normalizedStatus(visibleStatus(f))}</div>
         </div>
       </div>
     `).join('');
-    friends.forEach(f => {
+    visibleFriends.forEach(f => {
       const av = $(`dav-${f.id}`);
       if (av) renderAvatar(av, f);
     });
@@ -3090,6 +3157,7 @@
     window._friendsMap = {};
     friends.forEach(f => window._friendsMap[f.id] = f);
   }
+  $('dm-friend-search')?.addEventListener('input', renderDmList);
 
   // ---- DM / Chat ----
   window.openDm = async function (user) {
@@ -3107,9 +3175,12 @@
     // Set header
     renderAvatar($('chat-peer-avatar'), user);
     $('chat-peer-name').textContent = user.displayName;
+    $('chat-peer-name').className = `display-name${nameplateClass(user)}`;
     $('chat-peer-username').textContent = '@' + user.username;
     const statusDot = $('chat-peer-status');
-    statusDot.className = `status-dot ${user.status === 'online' ? 'online' : ''}`;
+    statusDot.className = `status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}`;
+    renderDmProfilePanel(user);
+    cc.classList.add('has-profile-panel');
 
     setMobileTitle(user.displayName);
     if (isMobile()) closeMobileSidebar();
@@ -3125,6 +3196,26 @@
     activeDmUser = null;
     $('chat-placeholder').style.display = 'flex';
     $('chat-container').style.display = 'none';
+    $('chat-container').classList.remove('has-profile-panel');
+  }
+
+  function renderDmProfilePanel(user) {
+    const panel = $('dm-profile-panel');
+    if (!panel || !user) return;
+    panel.innerHTML = `
+      <div class="dm-profile-banner nameplate-${esc(user.activeNameplate || 'none')}"></div>
+      <div class="dm-profile-avatar avatar-wrap"><div class="avatar" id="dm-profile-avatar"></div><div class="status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}"></div></div>
+      <div class="dm-profile-copy">
+        <div class="dm-profile-name${nameplateClass(user)}">${esc(user.displayName)}${identityTagHtml(user)}</div>
+        <div class="username">@${esc(user.username)}</div>
+        <div class="dm-profile-status">${normalizedStatus(visibleStatus(user)) === 'offline' ? 'Offline' : 'Currently ' + normalizedStatus(visibleStatus(user))}</div>
+      </div>
+      <div class="dm-profile-section">
+        <span>ABOUT</span>
+        <p>${esc(user.bio || 'Nexus friend')}</p>
+      </div>
+      <button class="dm-profile-message" onclick="document.getElementById('message-input').focus()">Message @${esc(user.username)}</button>`;
+    renderAvatar($('dm-profile-avatar'), user);
   }
 
   let dmLoadingOlder = false; // lock to prevent multiple simultaneous loads
@@ -3190,7 +3281,7 @@
       const reacted = !!r.reacted;
       return `<button class="msg-reaction-chip${reacted ? ' reacted' : ''}" onclick="toggleChannelReaction('${msgId}','${channelId}','${encodeURIComponent(emoji)}')">${esc(emoji)} ${count}</button>`;
     }).join('');
-    return `${chips}<button class="msg-reaction-add" onclick="promptChannelReaction('${msgId}','${channelId}')">+</button>`;
+    return `${chips}<button class="msg-reaction-add" title="Add reaction" onclick="openChannelEmojiPicker(event,'${msgId}','${channelId}')">+</button>`;
   }
 
   window.reportUser = async function(targetUserId, displayName) {
@@ -3225,6 +3316,33 @@
     const emoji = prompt('React with emoji (examples: 👍 🔥 😂)');
     if (!emoji || !emoji.trim()) return;
     window.toggleChannelReaction(msgId, channelId, encodeURIComponent(emoji.trim().slice(0, 16)));
+  };
+
+  const reactionEmojiSet = ['👍', '👎', '❤️', '🔥', '😂', '😮', '😢', '😡', '🎉', '✨', '👀', '✅', '❌', '💯', '🫡', '🤝', '🚀', '💜'];
+  let activeEmojiPicker = null;
+  function closeChannelEmojiPicker() {
+    if (activeEmojiPicker) activeEmojiPicker.remove();
+    activeEmojiPicker = null;
+  }
+  window.openChannelEmojiPicker = function(event, msgId, channelId) {
+    event?.stopPropagation();
+    closeChannelEmojiPicker();
+    const picker = document.createElement('div');
+    picker.className = 'channel-emoji-picker';
+    picker.setAttribute('role', 'dialog');
+    picker.setAttribute('aria-label', 'Choose a reaction');
+    picker.innerHTML = `<div class="emoji-picker-title">Quick reactions</div><div class="emoji-picker-grid">${reactionEmojiSet.map(emoji => `<button type="button" title="${emoji}">${emoji}</button>`).join('')}</div>`;
+    picker.querySelectorAll('button').forEach((button, index) => button.addEventListener('click', () => {
+      window.toggleChannelReaction(msgId, channelId, encodeURIComponent(reactionEmojiSet[index]));
+      closeChannelEmojiPicker();
+    }));
+    document.body.appendChild(picker);
+    const rect = event?.currentTarget?.getBoundingClientRect();
+    const width = 270;
+    picker.style.left = `${Math.max(10, Math.min((rect?.left || 20), window.innerWidth - width - 10))}px`;
+    picker.style.top = `${Math.max(10, (rect?.bottom || 40) + 8)}px`;
+    activeEmojiPicker = picker;
+    setTimeout(() => document.addEventListener('click', closeChannelEmojiPicker, { once: true }), 0);
   };
 
   window.toggleChannelReaction = function(msgId, channelId, encodedEmoji) {
@@ -3263,14 +3381,14 @@
     const isMe = msg.fromId === currentUser.id;
     const currentRoleForMessage = isChannelMsg && activeServerData && activeServerData.roles && activeServerData.roles.find(r => { const me = activeServerData.members && activeServerData.members.find(m => m.id === currentUser.id); return me && r.id === me.roleId; });
     const author = isMe
-      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeDecoration: currentUser.activeDecoration || null, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null), proActive: currentUser.proActive, proNameEffect: currentUser.proNameEffect, proGradientStart: currentUser.proGradientStart, proGradientEnd: currentUser.proGradientEnd, activeServerTag: currentUser.activeServerTag, activeServerTagBackground: currentUser.activeServerTagBackground, activeServerTagServerId: currentUser.activeServerTagServerId, activeServerTagServerName: currentUser.activeServerTagServerName, activeServerTagInviteCode: currentUser.activeServerTagInviteCode }
+      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeDecoration: currentUser.activeDecoration || null, activeNameplate: currentUser.activeNameplate || null, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null), proActive: currentUser.proActive, proNameEffect: currentUser.proNameEffect, proGradientStart: currentUser.proGradientStart, proGradientEnd: currentUser.proGradientEnd, activeServerTag: currentUser.activeServerTag, activeServerTagBackground: currentUser.activeServerTagBackground, activeServerTagServerId: currentUser.activeServerTagServerId, activeServerTagServerName: currentUser.activeServerTagServerName, activeServerTagInviteCode: currentUser.activeServerTagInviteCode }
       : msg.author;
 
     const roleColor = author.roleColor || null;
     const roleGradient = author.roleGradientStart && author.roleGradientEnd;
     const proGradient = author.proActive && author.proNameEffect !== 'none';
     const roleStyle = roleGradient ? `style="--role-gradient-start:${author.roleGradientStart};--role-gradient-end:${author.roleGradientEnd}"` : proGradient ? `style="--pro-name-start:${author.proGradientStart};--pro-name-end:${author.proGradientEnd}"` : (roleColor ? `style="color:${roleColor}"` : '');
-    const roleClass = roleGradient ? 'msg-author has-role role-gradient-text' : proGradient ? 'msg-author has-role pro-name-effect' : roleColor ? 'msg-author has-role' : 'msg-author';
+    const roleClass = (roleGradient ? 'msg-author has-role role-gradient-text' : proGradient ? 'msg-author has-role pro-name-effect' : roleColor ? 'msg-author has-role' : 'msg-author') + nameplateClass(author);
     const roleTip = author.roleName ? `title="${esc(author.roleName)}"` : '';
     const profilePayload = encodeURIComponent(JSON.stringify({
       id: author.id || msg.fromId,
@@ -3278,7 +3396,8 @@
       username: author.username,
       avatarDataUrl: author.avatarDataUrl || null,
       status: author.status || 'online',
-      activeDecoration: author.activeDecoration || null
+      activeDecoration: author.activeDecoration || null,
+      activeNameplate: author.activeNameplate || null
     })).replace(/'/g, '%27');
 
     // Check if current user can delete this message
@@ -3365,6 +3484,177 @@
     stopTyping();
   }
 
+  let activeCallGame = null;
+  let availableCallGame = null;
+  let pendingActivityInvite = null;
+  let pendingUnoCardId = null;
+  function nexalsToTableTokens(nexals) { return Math.floor(((parseInt(nexals, 10) || 0) * 1000) / 900); }
+  function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
+  function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
+  function activityName(type) { return type === 'poker' ? "Texas Hold'em" : type === 'uno' ? 'UNO' : type === 'connect4' ? 'Connect Four' : 'Blackjack'; }
+  function unoSymbol(value) { return ({ skip: '⊘', reverse: '↻', draw2: '+2', wild: 'W', wild4: '+4' })[value] || value; }
+  function unoCardHtml(card, options = {}) {
+    if (card.hidden) return '<span class="uno-card uno-card-back"><i>N</i></span>';
+    const symbol = unoSymbol(card.value);
+    const classes = `uno-card uno-${card.color}${options.playable ? ' playable' : ''}`;
+    const action = options.playable ? ` onclick="playUnoCard('${esc(card.id)}',${card.color === 'wild'})"` : '';
+    return `<button class="${classes}"${action}${options.playable ? '' : ' disabled'}><span class="uno-corner top">${esc(symbol)}</span><span class="uno-oval"><b>${esc(symbol)}</b></span><span class="uno-corner bottom">${esc(symbol)}</span></button>`;
+  }
+  function unoCardPlayable(game, card) {
+    return !card.hidden && (card.color === 'wild' || card.color === game.currentColor || card.value === game.topCard?.value);
+  }
+  function renderUnoBrowser(room = null) {
+    const content = $('call-games-content');
+    const openRoom = room
+      ? `<button class="uno-room" onclick="joinUnoRoom()"><span class="uno-room-mark">OPEN</span><div><strong>${esc(room.hostName)}'s UNO room</strong><small>${room.playerCount || 1} / 6 players · Waiting to start</small></div><b>${room.joined ? 'Rejoin' : 'Join'}</b></button>`
+      : '<div class="uno-room-empty">No open UNO rooms in this call.</div>';
+    content.innerHTML = `<div class="uno-browser"><div class="uno-browser-hero"><span class="uno-browser-logo">UNO</span><div><small>CALL ACTIVITY</small><h2>UNO</h2><p>Match colors and symbols. First player to empty their hand wins.</p></div><button class="btn-primary" onclick="playUno()" ${room ? 'disabled' : ''}>Play</button></div><div class="uno-room-section"><div><span>OPEN ROOMS</span><button class="uno-refresh" onclick="openUnoBrowser()" title="Refresh rooms">↻</button></div>${openRoom}</div></div>`;
+  }
+  window.openUnoBrowser = function() {
+    const roomId = activeGameRoomId();
+    if (!roomId || !socket) return toast('Join a call first', 'error');
+    renderUnoBrowser(null);
+    socket.emit('call_game_browse', { roomId, type: 'uno' }, result => {
+      if (result?.error) return toast(result.error, 'error');
+      if (!activeCallGame) renderUnoBrowser(result?.room || null);
+    });
+  };
+  window.playUno = function() { window.openCallGame('uno'); };
+  window.joinUnoRoom = function() { window.joinCallGame(); };
+  function renderConnectFourBrowser(room = null) {
+    const content = $('call-games-content');
+    const openRoom = room
+      ? `<button class="connect4-room" onclick="joinConnectFourRoom()"><span class="connect4-room-mark">OPEN</span><div><strong>${esc(room.hostName)}'s table</strong><small>${room.playerCount || 1} / 2 players · Waiting for opponent</small></div><b>${room.joined ? 'Rejoin' : 'Join'}</b></button>`
+      : '<div class="uno-room-empty">No open Connect Four tables in this call.</div>';
+    content.innerHTML = `<div class="connect4-browser"><div class="connect4-browser-hero"><div class="connect4-mini-board">${Array.from({ length: 20 }, (_, index) => `<i class="${[13,14,15,16].includes(index) ? 'red' : [7,12,17].includes(index) ? 'yellow' : ''}"></i>`).join('')}</div><div><small>CALL ACTIVITY</small><h2>Connect Four</h2><p>Drop discs into the grid. First to connect four in any direction wins.</p></div><button class="btn-primary" onclick="playConnectFour()" ${room ? 'disabled' : ''}>Play</button></div><div class="uno-room-section"><div><span>OPEN ROOMS</span><button class="uno-refresh" onclick="openConnectFourBrowser()" title="Refresh rooms">↻</button></div>${openRoom}</div></div>`;
+  }
+  window.openConnectFourBrowser = function() {
+    const roomId = activeGameRoomId();
+    if (!roomId || !socket) return toast('Join a call first', 'error');
+    renderConnectFourBrowser();
+    socket.emit('call_game_browse', { roomId, type: 'connect4' }, result => {
+      if (result?.error) return toast(result.error, 'error');
+      if (!activeCallGame) renderConnectFourBrowser(result?.room || null);
+    });
+  };
+  window.playConnectFour = function() { window.openCallGame('connect4'); };
+  window.joinConnectFourRoom = function() { window.joinCallGame(); };
+  function renderCallGame(game) {
+    activeCallGame = game;
+    const content = $('call-games-content');
+    if (!game) {
+      const openRoom = availableCallGame ? `<button class="game-choice open" onclick="joinAvailableCallGame()"><strong>${activityName(availableCallGame.type)} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span></button>` : '';
+      content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">Table-token settings apply to Blackjack and Poker only.</span></div><div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button><button class="game-choice uno-choice" onclick="openUnoBrowser()"><strong>UNO</strong><span>Free to play. Open UNO rooms or create a new one.</span><b>Play</b></button><button class="game-choice connect4-choice" onclick="openConnectFourBrowser()"><strong>Connect Four</strong><span>Free two-player drop-disc strategy.</span><b>Play</b></button></div>`;
+      const buyInput = $('call-buyin-input');
+      if (buyInput) buyInput.addEventListener('input', () => { const tokens = nexalsToTableTokens(buyInput.value); $('call-token-preview').textContent = `${(parseInt(buyInput.value, 10) || 0).toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens`; });
+      return;
+    }
+    const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
+    const joined = game.players.some(player => player.id === currentUser.id);
+    const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for another call participant to join.' : `${game.players.length} players joined. Start when ready.`}</p>${!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : ''}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,10,15].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${activityName(game.type)}</button>` : ''}`;
+    const end = game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : '';
+    const leave = joined ? '<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>' : '';
+    if (game.type === 'uno' && game.phase === 'lobby') {
+      content.innerHTML = `<div class="uno-lobby"><div class="uno-lobby-banner"><span class="uno-browser-logo">UNO</span><div><small>OPEN ROOM</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s UNO room</h2><p>${game.players.length} / 6 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST</b>' : '<b>READY</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for another caller to join...' : 'Players ready. The host can start the game.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinUnoRoom()">Join Room</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start UNO</button>` : ''}${leave}${end}</div></div>`;
+      return;
+    }
+    if (game.type === 'connect4' && game.phase === 'lobby') {
+      content.innerHTML = `<div class="connect4-lobby"><div class="connect4-lobby-banner"><div class="connect4-mini-board">${Array.from({ length: 20 }, () => '<i></i>').join('')}</div><div><small>OPEN TABLE</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s Connect Four table</h2><p>${game.players.length} / 2 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST · RED</b>' : '<b>READY · YELLOW</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for an opponent...' : 'Both players are ready.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinConnectFourRoom()">Join Table</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start Game</button>` : ''}${leave}${end}</div></div>`;
+      return;
+    }
+    if (game.type === 'blackjack' && game.phase !== 'lobby') {
+      const actionButtons = game.phase === 'playing'
+        ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>'
+        : game.phase === 'complete' ? `<button class="btn-primary" onclick="openCallGame('blackjack')">New Match</button>` : '';
+      const nextRound = game.phase === 'round_complete' && game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Start Next Round</button>' : '';
+      content.innerHTML = `<div class="call-blackjack-table blackjack-window"><div class="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Blackjack Table</b><small>Call activity</small></div><span>Round ${game.roundNumber || 1} / ${game.roundsTotal || 1}</span></div><div class="blackjack-window-body"><div class="blackjack-table-felt"><div class="call-blackjack-dealer"><div class="blackjack-head"><b>Dealer${game.dealer?.score !== null && game.dealer?.score !== undefined ? ' - ' + game.dealer.score : ''}</b><span>Round ${game.roundNumber || 1} of ${game.roundsTotal || 1}</span></div>${blackjackCards(game.dealer?.hand || [])}</div><div class="call-blackjack-players">${game.players.map(player => `<div class="call-blackjack-seat"><div class="blackjack-seat"><span>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''} | Bet ${(player.bet || 0).toLocaleString()}</span><b>${player.score || 0}</b><small>${(player.chips || 0).toLocaleString()} tokens</small></div>${blackjackCards(player.hand || [])}</div>`).join('')}</div>${game.message ? `<p class="blackjack-result">${esc(game.message)}</p>` : ''}<div class="game-actions">${actionButtons}${nextRound}${leave}${end}</div></div></div></div>`;
+      return;
+    }
+    if (game.type === 'poker' && game.phase !== 'lobby') {
+      const pokerActions = game.phase === 'playing' ? '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>' : game.phase === 'round_complete' && game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Start Next Round</button>' : game.phase === 'complete' ? '<button class="btn-primary" onclick="openCallGame(\'poker\')">New Match</button>' : '';
+      content.innerHTML = `<div class="call-poker-table blackjack-window"><div class="blackjack-window-bar"><div><span class="blackjack-table-mark">N</span><b>Texas Hold'em</b><small>Call activity</small></div><span>Round ${game.roundNumber || 1} / ${game.roundsTotal || 1}</span></div><div class="blackjack-window-body"><div class="poker-table-felt"><div class="poker-community"><div class="blackjack-head"><b>Community Cards</b><span>Pot: ${game.pot || 0}</span></div>${blackjackCards(game.community || [])}</div><div class="call-poker-players">${game.players.map(player => `<div class="call-poker-seat${game.turnId === player.id ? ' turn' : ''}"><div class="blackjack-seat"><span>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''}${player.folded ? ' - Folded' : ''}</span><b>${player.chips} chips</b></div>${blackjackCards(player.hand || [])}</div>`).join('')}</div>${game.message ? `<p class="blackjack-result">${esc(game.message)}</p>` : ''}<div class="game-actions">${pokerActions}${leave}${end}</div></div></div></div>`;
+      return;
+    }
+    if (game.type === 'uno' && game.phase !== 'lobby') {
+      const myTurn = game.phase === 'playing' && game.turnId === currentUser.id;
+      const orderedPlayers = [...game.players].sort((left, right) => left.id === currentUser.id ? 1 : right.id === currentUser.id ? -1 : 0);
+      const playerSeats = orderedPlayers.map(player => {
+        const isMe = player.id === currentUser.id;
+        return `<div class="uno-seat${game.turnId === player.id ? ' turn' : ''}${isMe ? ' me' : ''}"><div class="uno-seat-head"><strong>${esc(player.displayName)}${isMe ? ' (YOU)' : ''}</strong><span>${player.cardCount} card${player.cardCount === 1 ? '' : 's'} · ${player.score || 0} pts</span></div><div class="uno-hand">${(player.hand || []).map(card => unoCardHtml(card, { playable: isMe && myTurn && unoCardPlayable(game, card) })).join('')}</div></div>`;
+      }).join('');
+      const roundAction = game.phase === 'complete'
+        ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="openCallGame(\'uno\')">Play Again</button>' : '<span class="uno-waiting">Game complete.</span>')
+        : '';
+      const turnActions = myTurn
+        ? `<button class="btn-primary" onclick="callGameAction('draw')" ${game.canPass ? 'disabled' : ''}>Draw Card</button>${game.canPass ? '<button class="btn-secondary" onclick="callGameAction(\'pass\')">Keep Card</button>' : ''}`
+        : game.phase === 'playing' ? `<span class="uno-waiting">Waiting for ${esc(game.players.find(player => player.id === game.turnId)?.displayName || 'another player')}...</span>` : '';
+      const colorPicker = pendingUnoCardId
+        ? `<div class="uno-color-picker"><strong>Choose the wild color</strong><div>${['red','yellow','green','blue'].map(color => `<button class="uno-color ${color}" onclick="confirmUnoColor('${color}')" title="${color}"></button>`).join('')}</div><button class="btn-secondary" onclick="cancelUnoColor()">Cancel</button></div>`
+        : '';
+      content.innerHTML = `<div class="call-uno-table"><div class="uno-table-bar"><div><span class="uno-logo">UNO</span><b>UNO Table</b><small>Free call activity</small></div><span>${game.direction === 1 ? 'Clockwise ↻' : 'Counter-clockwise ↺'}</span></div><div class="uno-felt uno-current-${esc(game.currentColor || 'red')}"><div class="uno-opponents">${playerSeats}</div><div class="uno-center"><div class="uno-pile"><div><span class="uno-pile-label">DRAW · ${game.deckCount}</span><button class="uno-card uno-card-back deck-card" onclick="${myTurn && !game.canPass ? "callGameAction('draw')" : ''}" ${myTurn && !game.canPass ? '' : 'disabled'}><i>N</i></button></div><div><span class="uno-pile-label">DISCARD</span>${unoCardHtml(game.topCard || { hidden: true })}</div></div><div class="uno-color-status"><span class="${esc(game.currentColor || 'red')}"></span>Current color: <b>${esc(game.currentColor || 'red')}</b></div></div>${game.message ? `<p class="uno-message">${esc(game.message)}</p>` : ''}<div class="uno-actions">${turnActions}${roundAction}${leave}${end}</div>${colorPicker}</div></div>`;
+      return;
+    }
+    if (game.type === 'connect4' && game.phase !== 'lobby') {
+      const myTurn = game.phase === 'playing' && game.turnId === currentUser.id;
+      const cells = (game.board || []).flatMap((row, rowIndex) => row.map((piece, column) => {
+        const pieceClass = piece === '🔴' ? ' red' : piece === '🔵' ? ' yellow' : '';
+        return `<div class="connect4-cell${pieceClass}" data-row="${rowIndex}" data-column="${column}"><i></i></div>`;
+      })).join('');
+      const columns = Array.from({ length: 7 }, (_, column) => `<button onclick="dropConnectFour(${column})" ${!myTurn || game.board?.[0]?.[column] !== ' ' ? 'disabled' : ''} title="Drop in column ${column + 1}">▼</button>`).join('');
+      const players = game.players.map(player => `<div class="connect4-player${game.turnId === player.id ? ' turn' : ''}"><span class="${player.piece === '🔴' ? 'red' : 'yellow'}"></span><div><strong>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''}</strong><small>${game.turnId === player.id && game.phase === 'playing' ? 'Taking turn' : player.piece === '🔴' ? 'Red discs' : 'Yellow discs'}</small></div></div>`).join('');
+      const replay = game.phase === 'complete' && game.hostId === currentUser.id ? '<button class="btn-primary" onclick="openCallGame(\'connect4\')">Play Again</button>' : '';
+      content.innerHTML = `<div class="connect4-game"><div class="connect4-game-head"><div><b>Connect Four</b><small>Free call activity</small></div><span>${myTurn ? 'Your turn' : game.phase === 'complete' ? 'Game complete' : `${esc(game.players.find(player => player.id === game.turnId)?.displayName || 'Opponent')}'s turn`}</span></div><div class="connect4-stage"><div class="connect4-players">${players}</div><div class="connect4-board-wrap"><div class="connect4-column-buttons">${columns}</div><div class="connect4-board">${cells}</div></div>${game.message ? `<p class="connect4-message">${esc(game.message)}</p>` : ''}<div class="uno-actions">${replay}${leave}${end}</div></div></div>`;
+      return;
+    }
+    content.innerHTML = `<div class="game-table"><div><b>${activityName(game.type)}</b><span style="float:right;color:var(--text-muted)">Round ${game.roundNumber || 1} / ${game.roundsTotal || 1}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}</b><span style="float:right">${p.chips} chips</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? lobby : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : game.phase === 'round_complete' ? (game.hostId === currentUser.id ? '<button class="btn-primary" onclick="nextCallGameRound()">Start Next Round</button>' : '<span>Waiting for the host to start the next round.</span>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New Match</button>'}${leave}${end}</div></div>`;
+  }
+  window.openCallGame = function(type) {
+    const roomId = activeGameRoomId();
+    if (!roomId || !socket) return toast('Join a call first', 'error');
+    const buyIn = ['uno', 'connect4'].includes(type) ? 0 : (parseInt($('call-buyin-input')?.value, 10) || 0);
+    const bet = ['uno', 'connect4'].includes(type) ? 0 : (parseInt($('call-bet-input')?.value, 10) || 0);
+    renderCallGame({ type, phase: 'lobby', hostId: currentUser.id, players: [{ id: currentUser.id, displayName: currentUser.displayName, chips: nexalsToTableTokens(buyIn), buyIn, bet, hand: [] }], dealer: type === 'blackjack' ? { hand: [], score: null } : null, community: [], pot: 0, message: 'Opening table...' });
+    socket.emit('call_game_open', { roomId, type, buyIn, bet }, result => { if (result && result.error) { activeCallGame = null; renderCallGame(null); toast(result.error, 'error'); } });
+  };
+  window.joinCallGame = function() { const roomId = activeGameRoomId(); const buyIn = parseInt($('call-buyin-input')?.value, 10) || 0; const bet = parseInt($('call-bet-input')?.value, 10) || 0; if (roomId && socket) socket.emit('call_game_join', { roomId, buyIn, bet }); };
+  window.joinAvailableCallGame = function() { window.joinCallGame(); };
+  window.startCallGame = function() { const roomId = activeGameRoomId(); const rounds = parseInt($('call-round-count')?.value, 10) || 3; if (roomId && socket) socket.emit('call_game_start', { roomId, rounds }); };
+  window.nextCallGameRound = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_next_round', { roomId }); };
+  window.callGameAction = function(action) { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
+  window.dropConnectFour = function(column) {
+    const roomId = activeGameRoomId();
+    if (roomId && socket) socket.emit('call_game_action', { roomId, action: 'drop', column });
+  };
+  window.playUnoCard = function(cardId, needsColor) {
+    if (needsColor) {
+      pendingUnoCardId = cardId;
+      renderCallGame(activeCallGame);
+      return;
+    }
+    const roomId = activeGameRoomId();
+    if (roomId && socket) socket.emit('call_game_action', { roomId, action: 'play', cardId });
+  };
+  window.confirmUnoColor = function(color) {
+    const roomId = activeGameRoomId();
+    if (roomId && socket && pendingUnoCardId) socket.emit('call_game_action', { roomId, action: 'play', cardId: pendingUnoCardId, color });
+    pendingUnoCardId = null;
+  };
+  window.cancelUnoColor = function() { pendingUnoCardId = null; renderCallGame(activeCallGame); };
+  window.endCallGame = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_close', { roomId }); };
+  window.leaveCallGame = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_leave', { roomId }); };
+  $('call-games-btn').addEventListener('click', () => { if (!activeGameRoomId()) return toast('Join a call first', 'error'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); });
+  $('call-games-close').addEventListener('click', () => $('call-games-modal').classList.remove('active'));
+  $('call-games-modal').addEventListener('click', e => { if (e.target === $('call-games-modal')) $('call-games-modal').classList.remove('active'); });
+  $('call-games-content').addEventListener('click', e => { const choice = e.target.closest('[data-game-type]'); if (choice) window.openCallGame(choice.dataset.gameType); });
+  $('activity-invite-join').addEventListener('click', () => {
+    if (!pendingActivityInvite || !socket) return;
+    socket.emit('call_game_join', { roomId: pendingActivityInvite.roomId, buyIn: 900, bet: 100 });
+    $('activity-invite-modal').classList.remove('active');
+    $('call-games-modal').classList.add('active');
+    pendingActivityInvite = null;
+  });
+  $('activity-invite-ignore').addEventListener('click', () => { pendingActivityInvite = null; $('activity-invite-modal').classList.remove('active'); });
+
   function handleTyping() {
     if (!activeDmUserId || !socket) return;
     if (!isTyping) { isTyping = true; socket.emit('typing_start', { toId: activeDmUserId }); }
@@ -3386,8 +3676,7 @@
 
     socketIoLoadPromise = new Promise(resolve => {
       // Reuse existing script tag if present.
-      const socketScriptUrl = apiUrl('/socket.io/socket.io.js');
-      const existing = document.querySelector(`script[src="${socketScriptUrl}"]`);
+      const existing = document.querySelector('script[src="/socket.io/socket.io.js"]');
       if (existing) {
         existing.addEventListener('load', () => resolve(typeof window.io === 'function'), { once: true });
         existing.addEventListener('error', () => resolve(false), { once: true });
@@ -3397,7 +3686,7 @@
       }
 
       const s = document.createElement('script');
-      s.src = socketScriptUrl;
+      s.src = '/socket.io/socket.io.js';
       s.async = true;
       s.onload = () => resolve(typeof window.io === 'function');
       s.onerror = () => resolve(false);
@@ -3422,14 +3711,38 @@
       }
     }
 
-    socket = io(LOCAL_API_ORIGIN || undefined, { transports: ['websocket', 'polling'], withCredentials: true, auth: { deviceId: getDeviceId() } });
+    socket = io({ transports: ['websocket', 'polling'], auth: { deviceId: getDeviceId() } });
+
     socket.on('call_game_state', ({ roomId, game }) => {
       if (roomId !== activeGameRoomId()) return;
       pendingUnoCardId = null;
       activeCallGame = game;
+      availableCallGame = null;
       if ($('call-games-modal').classList.contains('active')) renderCallGame(game);
     });
+    socket.on('call_game_available', ({ roomId, type, hostName }) => {
+      if (roomId !== activeGameRoomId()) return;
+      if (!activeCallGame) availableCallGame = { type, hostName };
+      if ($('call-games-modal').classList.contains('active')) renderCallGame(activeCallGame);
+    });
     socket.on('call_game_error', ({ message }) => toast(message || 'Game action unavailable', 'error'));
+    socket.on('call_game_invite', ({ roomId, type, host }) => {
+      if (roomId !== activeGameRoomId() || !host) return;
+      pendingActivityInvite = { roomId, type };
+      availableCallGame = { type, hostName: host.displayName };
+      const label = activityName(type);
+      $('activity-invite-icon').textContent = type === 'uno' ? 'UNO' : type === 'connect4' ? '4' : '♠';
+      $('activity-invite-title').textContent = `${host.displayName} started ${label}`;
+      $('activity-invite-text').textContent = 'Join the activity?';
+      $('activity-invite-modal').classList.add('active');
+    });
+    socket.on('call_game_closed', ({ roomId, reason }) => {
+      if (roomId !== activeGameRoomId()) return;
+      activeCallGame = null;
+      $('activity-invite-modal').classList.remove('active');
+      if ($('call-games-modal').classList.contains('active')) renderCallGame(null);
+      toast(reason || 'Activity ended', 'info');
+    });
     socket.on('nexals_updated', ({ nexals }) => {
       if (typeof nexals === 'number') updateNexalDisplay(nexals);
     });
@@ -3440,7 +3753,10 @@
       toast(`New gift from @${gift.fromUser?.username || 'someone'}`, 'success');
     });
 
-    socket.on('connect', () => console.log('Socket connected'));
+    socket.on('connect', () => {
+      console.log('Socket connected');
+      joinExternalNexusCall();
+    });
     socket.on('disconnect', () => console.log('Socket disconnected'));
     socket.on('connect_error', err => {
       console.warn('Socket connect error:', err && err.message ? err.message : err);
@@ -3482,18 +3798,22 @@
       if (fromId === activeDmUserId) $('typing-indicator').style.display = 'none';
     });
 
-    socket.on('status_change', ({ userId, status }) => {
+    socket.on('status_change', ({ userId, status, discordStatus, discordActivity }) => {
       const f = friends.find(f => f.id === userId);
-      if (f) f.status = status;
+      if (f && status) f.status = status;
+      if (f && discordStatus) f.discordStatus = discordStatus;
+      if (f && discordActivity !== undefined) f.discordActivity = discordActivity;
+      const shown = f ? visibleStatus(f) : status;
+      const fromDiscord = f ? usesDiscordStatus(f) : false;
       const dot = $(`fdot-${userId}`);
-      if (dot) dot.className = `status-dot ${status === 'online' ? 'online' : ''}`;
+      if (dot) dot.className = `status-dot ${normalizedStatus(shown)}${fromDiscord ? ' discord-status' : ''}`;
       const fstatus = $(`fstatus-${userId}`);
       if (fstatus) { fstatus.textContent = status === 'online' ? '● Online' : '○ Offline'; fstatus.className = `status ${status === 'online' ? 'online' : ''}`; }
       const ddot = $(`ddot-${userId}`);
-      if (ddot) ddot.className = `status-dot ${status === 'online' ? 'online' : ''}`;
+      if (ddot) ddot.className = `status-dot ${normalizedStatus(shown)}${fromDiscord ? ' discord-status' : ''}`;
       if (activeDmUserId === userId) {
         const dot2 = $('chat-peer-status');
-        if (dot2) dot2.className = `status-dot ${status === 'online' ? 'online' : ''}`;
+        if (dot2) dot2.className = `status-dot ${normalizedStatus(shown)}${fromDiscord ? ' discord-status' : ''}`;
       }
     });
 
@@ -4161,10 +4481,13 @@
   }
 
   function showCallHud(peerUser, connected) {
+    const mainBounds = document.querySelector('.main-content')?.getBoundingClientRect();
+    if (mainBounds) $('call-hud').style.left = `${Math.round(mainBounds.left)}px`;
     renderAvatar($('hud-peer-avatar'), peerUser);
     $('hud-peer-name').textContent = peerUser.displayName;
     $('hud-status').textContent = connected ? 'Connecting…' : 'Calling…';
     $('call-hud').style.display = 'block';
+    $('chat-container')?.classList.add('dm-call-active');
 
     // Timer
     let secs = 0;
@@ -4188,6 +4511,7 @@
       callState = null;
     }
     $('call-hud').style.display = 'none';
+    $('chat-container')?.classList.remove('dm-call-active');
     $('call-timer').textContent = '0:00';
     $('call-video-stage').style.display = 'none';
     $('call-local-video').srcObject = null;
@@ -4379,131 +4703,107 @@
     choices.innerHTML = `<button type="button" class="tag-choice${!currentUser.activeServerTag ? ' selected' : ''}" onclick="adoptServerTag('')">No tag</button>${serversWithTags.map(s => `<button type="button" class="tag-choice${currentUser.activeServerTagServerId === s.id ? ' selected' : ''}" style="--tag-bg:${esc(s.tagBackground || '#5865f2')}" onclick="adoptServerTag('${s.id}')">[${esc(s.tag)}] ${esc(s.name)}</button>`).join('')}`;
   }
 
-  let activeCallGame = null;
-  let pendingUnoCardId = null;
-  function nexalsToTableTokens(nexals) { return Math.floor(((parseInt(nexals, 10) || 0) * 1000) / 900); }
-  function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
-  function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
-  function activityName(type) { return type === 'poker' ? "Texas Hold'em" : type === 'uno' ? 'UNO' : type === 'connect4' ? 'Connect Four' : 'Blackjack'; }
-  function unoSymbol(value) { return ({ skip: '⊘', reverse: '↻', draw2: '+2', wild: 'W', wild4: '+4' })[value] || value; }
-  function unoCardHtml(card, playable = false) {
-    if (card.hidden) return '<span class="uno-card uno-card-back"><i>N</i></span>';
-    const symbol = unoSymbol(card.value);
-    const action = playable ? ` onclick="playUnoCard('${esc(card.id)}',${card.color === 'wild'})"` : '';
-    return `<button class="uno-card uno-${card.color}${playable ? ' playable' : ''}"${action}${playable ? '' : ' disabled'}><span class="uno-corner top">${esc(symbol)}</span><span class="uno-oval"><b>${esc(symbol)}</b></span><span class="uno-corner bottom">${esc(symbol)}</span></button>`;
+  async function joinExternalNexusCall() {
+    if (!externalCallJoinPending || !socket || !currentUser || callState) return;
+    const join = externalCallJoinPending;
+    externalCallJoinPending = null;
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('nexusCall');
+    cleanUrl.searchParams.delete('from');
+    cleanUrl.searchParams.delete('type');
+    window.history.replaceState({}, '', cleanUrl);
+    const friend = friends.find(item => item.id === join.fromId) || { id: join.fromId, displayName: 'Nexus caller', username: 'caller' };
+    socket.emit('call_accept', { roomId: join.roomId, toId: join.fromId });
+    try {
+      await startWebRTCCall(join.roomId, join.fromId, friend, false, join.callType);
+    } catch (error) {
+      console.error('Could not join Nexus LINK call', error);
+      toast('Could not join the Nexus call. Check microphone permissions.', 'error');
+    }
   }
-  function unoCardPlayable(game, card) { return !card.hidden && (card.color === 'wild' || card.color === game.currentColor || card.value === game.topCard?.value); }
-  function renderUnoBrowser(room = null) {
-    const openRoom = room ? `<button class="uno-room" onclick="joinUnoRoom()"><span class="uno-room-mark">OPEN</span><div><strong>${esc(room.hostName)}'s UNO room</strong><small>${room.playerCount || 1} / 6 players · Waiting to start</small></div><b>${room.joined ? 'Rejoin' : 'Join'}</b></button>` : '<div class="uno-room-empty">No open UNO rooms in this call.</div>';
-    $('call-games-content').innerHTML = `<div class="uno-browser"><div class="uno-browser-hero"><span class="uno-browser-logo">UNO</span><div><small>CALL ACTIVITY</small><h2>UNO</h2><p>Match colors and symbols. First player to empty their hand wins.</p></div><button class="btn-primary" onclick="playUno()" ${room ? 'disabled' : ''}>Play</button></div><div class="uno-room-section"><div><span>OPEN ROOMS</span><button class="uno-refresh" onclick="openUnoBrowser()">↻</button></div>${openRoom}</div></div>`;
+
+  async function loadNexusLinkSettings() {
+    const disconnected = $('nexus-link-disconnected');
+    const settings = $('nexus-link-settings');
+    const error = $('nexus-link-error');
+    if (!disconnected || !settings) return;
+    const data = await api('GET', '/api/nexus-link/settings');
+    if (data.error) {
+      disconnected.style.display = 'block';
+      settings.style.display = 'none';
+      if (error) error.textContent = data.error;
+      return;
+    }
+    const connected = !!data.connected;
+    disconnected.style.display = connected ? 'none' : 'block';
+    settings.style.display = connected ? 'block' : 'none';
+    if (!connected) return;
+    $('nexus-link-account').textContent = `Connected as ${data.discordGlobalName || data.discordUsername || 'Discord user'}`;
+    $('nexus-link-dms').checked = !!data.dmRelayEnabled;
+    $('nexus-link-attachments').checked = !!data.attachmentsEnabled;
+    $('nexus-link-status').checked = !!data.statusSyncEnabled;
+    $('nexus-link-message-notify').checked = data.messageNotificationsEnabled !== false;
+    $('nexus-link-call-notify').checked = data.callNotificationsEnabled !== false;
+    if (error) error.textContent = '';
   }
-  window.openUnoBrowser = () => {
-    const roomId = activeGameRoomId();
-    if (!roomId || !socket) return toast('Join a call first', 'error');
-    renderUnoBrowser();
-    socket.emit('call_game_browse', { roomId, type: 'uno' }, result => {
-      if (result?.error) return toast(result.error, 'error');
-      if (!activeCallGame) renderUnoBrowser(result?.room || null);
+
+  async function loadAppearanceSettings() {
+    const [shop, ringtones] = await Promise.all([api('GET', '/api/shop'), api('GET', '/api/ringtones')]);
+    const deco = $('appearance-decoration-select');
+    const nameplate = $('appearance-nameplate-select');
+    const ring = $('appearance-ringtone-select');
+    if (!shop.error) deco.innerHTML = `<option value="">No decoration</option>${(shop.decorations || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+    if (!shop.error && nameplate) nameplate.innerHTML = `<option value="">No nameplate</option>${(shop.nameplates || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.activeNameplate ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+    if (!ringtones.error) ring.innerHTML = `<option value="">Default ringtone</option>${(ringtones.ringtones || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === ringtones.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+  }
+
+  async function saveNexusLinkSettings() {
+    const data = await api('PATCH', '/api/nexus-link/settings', {
+      dmRelayEnabled: $('nexus-link-dms').checked,
+      attachmentsEnabled: $('nexus-link-attachments').checked,
+      statusSyncEnabled: $('nexus-link-status').checked,
+      messageNotificationsEnabled: $('nexus-link-message-notify').checked,
+      callNotificationsEnabled: $('nexus-link-call-notify').checked
     });
-  };
-  window.playUno = () => window.openCallGame('uno');
-  window.joinUnoRoom = () => window.joinCallGame();
-  function renderConnectFourBrowser(room = null) {
-    const openRoom = room ? `<button class="connect4-room" onclick="joinConnectFourRoom()"><span class="connect4-room-mark">OPEN</span><div><strong>${esc(room.hostName)}'s table</strong><small>${room.playerCount || 1} / 2 players · Waiting for opponent</small></div><b>${room.joined ? 'Rejoin' : 'Join'}</b></button>` : '<div class="uno-room-empty">No open Connect Four tables in this call.</div>';
-    $('call-games-content').innerHTML = `<div class="connect4-browser"><div class="connect4-browser-hero"><div class="connect4-mini-board">${Array.from({ length: 20 }, (_, index) => `<i class="${[13,14,15,16].includes(index) ? 'red' : [7,12,17].includes(index) ? 'yellow' : ''}"></i>`).join('')}</div><div><small>CALL ACTIVITY</small><h2>Connect Four</h2><p>Drop discs into the grid. First to connect four in any direction wins.</p></div><button class="btn-primary" onclick="playConnectFour()" ${room ? 'disabled' : ''}>Play</button></div><div class="uno-room-section"><div><span>OPEN ROOMS</span><button class="uno-refresh" onclick="openConnectFourBrowser()">↻</button></div>${openRoom}</div></div>`;
+    if (data.error) return showError('nexus-link-error', data.error);
+    showError('nexus-link-error', '');
+    toast('Nexus LINK settings saved', 'success');
   }
-  window.openConnectFourBrowser = () => {
-    const roomId = activeGameRoomId();
-    if (!roomId || !socket) return toast('Join a call first', 'error');
-    renderConnectFourBrowser();
-    socket.emit('call_game_browse', { roomId, type: 'connect4' }, result => {
-      if (result?.error) return toast(result.error, 'error');
-      if (!activeCallGame) renderConnectFourBrowser(result?.room || null);
-    });
-  };
-  window.playConnectFour = () => window.openCallGame('connect4');
-  window.joinConnectFourRoom = () => window.joinCallGame();
-  function renderCallGame(game) {
-    activeCallGame = game; const content = $('call-games-content');
-    if (!game) { content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">Table-token settings apply to Blackjack and Poker only.</span></div><div class="game-picker"><button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button><button class="game-choice uno-choice" onclick="openUnoBrowser()"><strong>UNO</strong><span>Free to play. Open UNO rooms or create a new one.</span><b>Play</b></button><button class="game-choice connect4-choice" onclick="openConnectFourBrowser()"><strong>Connect Four</strong><span>Free two-player drop-disc strategy.</span><b>Play</b></button></div>`; const buyInput = $('call-buyin-input'); if (buyInput) buyInput.addEventListener('input', () => { const tokens = nexalsToTableTokens(buyInput.value); $('call-token-preview').textContent = `${(parseInt(buyInput.value, 10) || 0).toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens`; }); return; }
-    if (game.type === 'uno' && game.phase === 'lobby') {
-      const joined = game.players.some(player => player.id === currentUser.id);
-      content.innerHTML = `<div class="uno-lobby"><div class="uno-lobby-banner"><span class="uno-browser-logo">UNO</span><div><small>OPEN ROOM</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s UNO room</h2><p>${game.players.length} / 6 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST</b>' : '<b>READY</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for another caller to join...' : 'Players ready. The host can start the game.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinUnoRoom()">Join Room</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start UNO</button>` : ''}<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>${game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : ''}</div></div>`;
-      return;
-    }
-    if (game.type === 'connect4' && game.phase === 'lobby') {
-      const joined = game.players.some(player => player.id === currentUser.id);
-      content.innerHTML = `<div class="connect4-lobby"><div class="connect4-lobby-banner"><div class="connect4-mini-board">${Array.from({ length: 20 }, () => '<i></i>').join('')}</div><div><small>OPEN TABLE</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s Connect Four table</h2><p>${game.players.length} / 2 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST · RED</b>' : '<b>READY · YELLOW</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for an opponent...' : 'Both players are ready.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinConnectFourRoom()">Join Table</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start Game</button>` : ''}<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>${game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : ''}</div></div>`;
-      return;
-    }
-    if (game.type === 'uno' && game.phase !== 'lobby') {
-      const myTurn = game.phase === 'playing' && game.turnId === currentUser.id;
-      const orderedPlayers = [...game.players].sort((left, right) => left.id === currentUser.id ? 1 : right.id === currentUser.id ? -1 : 0);
-      const seats = orderedPlayers.map(player => {
-        const isMe = player.id === currentUser.id;
-        return `<div class="uno-seat${game.turnId === player.id ? ' turn' : ''}${isMe ? ' me' : ''}"><div class="uno-seat-head"><strong>${esc(player.displayName)}${isMe ? ' (YOU)' : ''}</strong><span>${player.cardCount} cards · ${player.score || 0} pts</span></div><div class="uno-hand">${(player.hand || []).map(card => unoCardHtml(card, isMe && myTurn && unoCardPlayable(game, card))).join('')}</div></div>`;
-      }).join('');
-      const controls = game.phase === 'playing'
-        ? (myTurn ? `<button class="btn-primary" onclick="callGameAction('draw')" ${game.canPass ? 'disabled' : ''}>Draw Card</button>${game.canPass ? '<button class="btn-secondary" onclick="callGameAction(\'pass\')">Keep Card</button>' : ''}` : `<span class="uno-waiting">Waiting for ${esc(game.players.find(player => player.id === game.turnId)?.displayName || 'another player')}...</span>`)
-        : game.phase === 'complete' && game.hostId === currentUser.id ? '<button class="btn-primary" onclick="openCallGame(\'uno\')">Play Again</button>' : '';
-      const picker = pendingUnoCardId ? `<div class="uno-color-picker"><strong>Choose the wild color</strong><div>${['red','yellow','green','blue'].map(color => `<button class="uno-color ${color}" onclick="confirmUnoColor('${color}')"></button>`).join('')}</div><button class="btn-secondary" onclick="cancelUnoColor()">Cancel</button></div>` : '';
-      content.innerHTML = `<div class="call-uno-table"><div class="uno-table-bar"><div><span class="uno-logo">UNO</span><b>UNO Table</b><small>Free call activity</small></div><span>${game.direction === 1 ? 'Clockwise ↻' : 'Counter-clockwise ↺'}</span></div><div class="uno-felt uno-current-${esc(game.currentColor || 'red')}"><div class="uno-opponents">${seats}</div><div class="uno-center"><div class="uno-pile"><div><span class="uno-pile-label">DRAW · ${game.deckCount}</span><button class="uno-card uno-card-back deck-card" onclick="${myTurn && !game.canPass ? "callGameAction('draw')" : ''}" ${myTurn && !game.canPass ? '' : 'disabled'}><i>N</i></button></div><div><span class="uno-pile-label">DISCARD</span>${unoCardHtml(game.topCard || { hidden: true })}</div></div><div class="uno-color-status"><span class="${esc(game.currentColor || 'red')}"></span>Current color: <b>${esc(game.currentColor || 'red')}</b></div></div>${game.message ? `<p class="uno-message">${esc(game.message)}</p>` : ''}<div class="uno-actions">${controls}<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>${game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : ''}</div>${picker}</div></div>`;
-      return;
-    }
-    if (game.type === 'connect4' && game.phase !== 'lobby') {
-      const myTurn = game.phase === 'playing' && game.turnId === currentUser.id;
-      const cells = (game.board || []).flatMap((row, rowIndex) => row.map((piece, column) => `<div class="connect4-cell${piece === '🔴' ? ' red' : piece === '🔵' ? ' yellow' : ''}" data-row="${rowIndex}" data-column="${column}"><i></i></div>`)).join('');
-      const columns = Array.from({ length: 7 }, (_, column) => `<button onclick="dropConnectFour(${column})" ${!myTurn || game.board?.[0]?.[column] !== ' ' ? 'disabled' : ''}>▼</button>`).join('');
-      const players = game.players.map(player => `<div class="connect4-player${game.turnId === player.id ? ' turn' : ''}"><span class="${player.piece === '🔴' ? 'red' : 'yellow'}"></span><div><strong>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''}</strong><small>${game.turnId === player.id && game.phase === 'playing' ? 'Taking turn' : player.piece === '🔴' ? 'Red discs' : 'Yellow discs'}</small></div></div>`).join('');
-      const replay = game.phase === 'complete' && game.hostId === currentUser.id ? '<button class="btn-primary" onclick="openCallGame(\'connect4\')">Play Again</button>' : '';
-      content.innerHTML = `<div class="connect4-game"><div class="connect4-game-head"><div><b>Connect Four</b><small>Free call activity</small></div><span>${myTurn ? 'Your turn' : game.phase === 'complete' ? 'Game complete' : `${esc(game.players.find(player => player.id === game.turnId)?.displayName || 'Opponent')}'s turn`}</span></div><div class="connect4-stage"><div class="connect4-players">${players}</div><div class="connect4-board-wrap"><div class="connect4-column-buttons">${columns}</div><div class="connect4-board">${cells}</div></div>${game.message ? `<p class="connect4-message">${esc(game.message)}</p>` : ''}<div class="uno-actions">${replay}<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>${game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : ''}</div></div></div>`;
-      return;
-    }
-    const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
-    content.innerHTML = `<div class="game-table"><div><b>${activityName(game.type)}</b><span style="float:right;color:var(--text-muted)">${esc(game.phase)}</span></div>${game.dealer ? `<div class="game-player"><b>Dealer${game.dealer.score !== null ? ' - ' + game.dealer.score : ''}</b>${cards(game.dealer.hand)}</div>` : ''}${game.community.length ? `<div><b>Community</b>${cards(game.community)}</div>` : ''}<div><b>Pot: ${game.pot}</b></div>${game.players.map(p => `<div class="game-player${game.turnId === p.id ? ' turn' : ''}"><b>${esc(p.displayName)}${p.score !== null ? ' - ' + p.score : ''}${p.folded ? ' - Folded' : ''}${p.bet ? ' | Bet ' + p.bet.toLocaleString() : ''}</b><span style="float:right">${(p.chips || 0).toLocaleString()} tokens</span>${cards(p.hand)}</div>`).join('')}<div>${esc(game.message || '')}</div><div class="game-actions">${game.phase === 'lobby' ? `<button class="btn-secondary" onclick="joinCallGame()">Join</button>${game.hostId === currentUser.id ? '<button class="btn-primary" onclick="startCallGame()">Start game</button>' : ''}` : game.phase === 'playing' ? (game.type === 'blackjack' ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>' : '<button class="btn-secondary" onclick="callGameAction(\'check\')">Check</button><button class="btn-primary" onclick="callGameAction(\'call\')">Call</button><button class="btn-secondary" onclick="callGameAction(\'fold\')">Fold</button>') : '<button class="btn-primary" onclick="openCallGame(\'' + game.type + '\')">New round</button>'}</div></div>`;
-  }
-  window.openCallGame = type => {
-    const roomId = activeGameRoomId();
-    if (!roomId || !socket) return toast('Join a call first', 'error');
-    const buyIn = ['uno', 'connect4'].includes(type) ? 0 : (parseInt($('call-buyin-input')?.value, 10) || 0);
-    const bet = ['uno', 'connect4'].includes(type) ? 0 : (parseInt($('call-bet-input')?.value, 10) || 0);
-    renderCallGame({ type, phase: 'lobby', hostId: currentUser.id, players: [{ id: currentUser.id, displayName: currentUser.displayName, chips: nexalsToTableTokens(buyIn), buyIn, bet, hand: [] }], dealer: type === 'blackjack' ? { hand: [], score: null } : null, community: [], pot: 0, message: 'Opening table...' });
-    socket.emit('call_game_open', { roomId, type, buyIn, bet }, result => { if (result && result.error) { activeCallGame = null; renderCallGame(null); toast(result.error, 'error'); } });
-  };
-  window.joinCallGame = () => { const roomId = activeGameRoomId(); const buyIn = parseInt($('call-buyin-input')?.value, 10) || 900; const bet = parseInt($('call-bet-input')?.value, 10) || 100; if (roomId && socket) socket.emit('call_game_join', { roomId, buyIn, bet }); };
-  window.startCallGame = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_start', { roomId }); };
-  window.callGameAction = action => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
-  window.dropConnectFour = column => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action: 'drop', column }); };
-  window.nextCallGameRound = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_next_round', { roomId }); };
-  window.leaveCallGame = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_leave', { roomId }); };
-  window.endCallGame = () => { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_close', { roomId }); };
-  window.playUnoCard = (cardId, needsColor) => {
-    if (needsColor) { pendingUnoCardId = cardId; renderCallGame(activeCallGame); return; }
-    const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action: 'play', cardId });
-  };
-  window.confirmUnoColor = color => { const roomId = activeGameRoomId(); if (roomId && socket && pendingUnoCardId) socket.emit('call_game_action', { roomId, action: 'play', cardId: pendingUnoCardId, color }); pendingUnoCardId = null; };
-  window.cancelUnoColor = () => { pendingUnoCardId = null; renderCallGame(activeCallGame); };
-  $('call-games-btn').addEventListener('click', () => { if (!activeGameRoomId()) return toast('Join a call first', 'error'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); });
-  $('call-games-close').addEventListener('click', () => $('call-games-modal').classList.remove('active'));
-  $('call-games-modal').addEventListener('click', e => { if (e.target === $('call-games-modal')) $('call-games-modal').classList.remove('active'); });
-  $('call-games-content').addEventListener('click', e => { const choice = e.target.closest('[data-game-type]'); if (choice) window.openCallGame(choice.dataset.gameType); });
 
   $('profile-btn').addEventListener('click', () => {
     $('profile-display-name').value = currentUser.displayName;
     $('profile-bio').value = currentUser.bio || '';
     renderAvatar($('profile-avatar-preview'), currentUser);
     loadProfileTagChoices();
+    loadNexusLinkSettings();
+    loadAppearanceSettings();
     $('profile-modal').classList.add('active');
   });
   $('profile-modal-close').addEventListener('click', () => $('profile-modal').classList.remove('active'));
   $('profile-modal').addEventListener('click', e => { if (e.target === $('profile-modal')) $('profile-modal').classList.remove('active'); });
+  document.querySelectorAll('.profile-settings-tab').forEach(button => button.addEventListener('click', () => {
+    document.querySelectorAll('.profile-settings-tab').forEach(item => item.classList.toggle('active', item === button));
+    document.querySelectorAll('.profile-settings-panel').forEach(panel => panel.classList.toggle('active', panel.dataset.ppanel === button.dataset.ptab));
+  }));
+  function applyTheme(theme) { document.body.classList.toggle('light-theme', theme === 'light'); localStorage.setItem('nexus-theme', theme); }
+  applyTheme(localStorage.getItem('nexus-theme') || 'dark');
+  $('theme-dark-btn').addEventListener('click', () => applyTheme('dark'));
+  $('theme-light-btn').addEventListener('click', () => applyTheme('light'));
+  $('connect-discord-btn').addEventListener('click', () => { window.location.href = '/api/nexus-link/connect'; });
+  $('appearance-decoration-select').addEventListener('change', async e => { const r = await api('POST', '/api/shop/equip', { decorationId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeDecoration = e.target.value || null; toast('Decoration updated', 'success'); });
+  $('appearance-nameplate-select').addEventListener('change', async e => { const r = await api('POST', '/api/shop/nameplates/equip', { nameplateId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeNameplate = e.target.value || null; updateSelfCard(); toast('Nameplate updated', 'success'); });
+  $('appearance-ringtone-select').addEventListener('change', async e => { const r = await api('POST', '/api/ringtones/equip', { ringtoneId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeRingtone = e.target.value || null; toast('Ringtone updated', 'success'); });
+  ['nexus-link-dms', 'nexus-link-attachments', 'nexus-link-status', 'nexus-link-message-notify', 'nexus-link-call-notify'].forEach(id => {
+    $(id).addEventListener('change', saveNexusLinkSettings);
+  });
 
   $('avatar-file-input').addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
     const fd = new FormData();
     fd.append('avatar', file);
-    const r = await requestJson('POST', '/api/users/avatar', fd, deviceHeaders());
+    const res = await fetch('/api/users/avatar', { method: 'POST', body: fd, credentials: 'same-origin', headers: deviceHeaders() });
+    const r = await res.json();
     if (r.error) return toast(r.error, 'error');
     currentUser.avatarDataUrl = r.avatarDataUrl;
     $('profile-avatar-preview').innerHTML = `<img src="${r.avatarDataUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
@@ -5284,7 +5584,7 @@
     shopData = r;
     updateNexalDisplay(r.nexals || 0);
     renderPackShop(r.packs || []);
-    renderShop(r.decorations, r.active);
+    renderShop(r.decorations, r.active, r.nameplates || [], r.activeNameplate || null);
     await loadRingtones();
   }
 
@@ -5348,7 +5648,9 @@
                 <p>${esc(a.decoration.description || '')}</p>
                 <div class="auction-seller">Seller: @${esc(a.sellerUsername || a.sellerName || 'user')}</div>
                 <strong>${a.price.toLocaleString()} Nexals</strong>
-                ${a.isMine ? `<button class="shop-card-btn" onclick="cancelAuction('${a.id}')">Cancel Listing</button>` : `<button class="shop-card-btn buy" onclick="buyAuction('${a.id}')">Buy</button>`}
+                ${a.isMine
+                  ? `<button class="shop-card-btn" onclick="cancelAuction('${a.id}')">Cancel Listing</button>`
+                  : `<button class="shop-card-btn buy" onclick="buyAuction('${a.id}')">Buy</button>`}
               </article>`).join('') : '<div class="empty-state">No active listings yet.</div>'}
           </div>
         </section>
@@ -5386,14 +5688,14 @@
     await loadAuctionHouse();
   };
 
-  function renderShop(decorations, active) {
+  function renderShop(decorations, active, nameplates = [], activeNameplate = null) {
     const grid = $('shop-grid');
     if (!grid) return;
     const visibleDecorations = decorations || [];
     // Stop any existing storm canvases in the shop before re-rendering
     grid.querySelectorAll('.avatar-wrap').forEach(w => stopStormCanvas(w));
 
-    grid.innerHTML = visibleDecorations.map(d => {
+    const decorationCard = d => {
       const isEquipped = active === d.id;
       const isOwned = d.owned;
       const isMythical = d.rarity === 'mythical';
@@ -5404,7 +5706,7 @@
       const myNexals = (shopData && shopData.nexals) || 0;
       const canBuy = !isOwned && d.nexalPrice && myNexals >= d.nexalPrice;
       const priceLabel = d.nexalPrice ? d.nexalPrice.toLocaleString() + ' Nexals' : null;
-      let btnClass = 'locked', btnText = '🔒 Code Only';
+      let btnClass = 'locked', btnText = 'Pack Only';
       if (isEquipped) { btnClass = 'unequip'; btnText = '✓ Equipped'; }
       else if (isOwned) { btnClass = 'equip'; btnText = 'Equip'; }
       else if (canBuy) { btnClass = 'buy'; btnText = 'Buy'; }
@@ -5418,17 +5720,52 @@
             </div>
           </div>
           <span class="shop-rarity ${rarityClass}">${d.rarity}</span>
+          ${d.packOnly ? '<span class="pack-only-chip">PACK-ONLY</span>' : ''}
           <div class="shop-card-name">${esc(d.name)}</div>
           <div class="shop-card-desc">${esc(d.description)}</div>
           ${isOwned && d.packOnly ? `<div class="shop-card-desc">Owned: ${d.quantity || 1} | Sell: ${(d.sellPrice || 0).toLocaleString()} Nexals</div>` : ''}
           ${(!isOwned && priceLabel) ? `<div class="shop-card-price">${priceLabel}</div>` : ''}
           <button class="shop-card-btn ${btnClass}" onclick="shopAction('${d.id}','${isEquipped ? 'unequip' : isOwned ? 'equip' : canBuy ? 'buy' : 'locked'}')">
-            ${btnText}
+            ${d.packOnly && !isOwned ? 'Pack Only' : btnText}
           </button>
           ${isOwned && d.packOnly ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="sellDecoration('${d.id}','${esc(d.name)}',${d.sellPrice || 0})">Sell One</button>` : ''}
           ${isOwned && !d.packOnly ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="unclaimDeco('${d.id}','${esc(d.name)}')">Remove</button>` : ''}
         </div>`;
-    }).join('');
+    };
+    const nameplateCard = nameplate => {
+      const equipped = activeNameplate === nameplate.id;
+      const owned = nameplate.owned;
+      return `<div class="shop-card nameplate-shop-card ${owned ? 'owned' : ''} ${equipped ? 'equipped' : ''}" id="nameplatecard-${nameplate.id}">
+        ${nameplatePreviewHtml(nameplate)}
+        <div class="nameplate-card-meta">
+          <span class="shop-rarity rarity-${esc(nameplate.rarity)}">${esc(nameplate.rarity)}</span>
+          <span class="pack-only-chip">PACK-ONLY</span>
+        </div>
+        <div class="shop-card-name">${esc(nameplate.name)}</div>
+        <div class="shop-card-desc">${esc(nameplate.description)}</div>
+        ${owned ? `<div class="shop-card-desc">Owned: ${nameplate.quantity} | Sell: ${nameplate.sellPrice.toLocaleString()} Nexals</div>` : ''}
+        <button class="shop-card-btn ${equipped ? 'unequip' : owned ? 'equip' : 'locked'}" onclick="nameplateAction('${nameplate.id}','${equipped ? 'unequip' : owned ? 'equip' : 'locked'}')">${equipped ? 'Equipped' : owned ? 'Equip' : 'Pack Only'}</button>
+        ${owned ? `<button class="shop-card-btn shop-sell-btn" onclick="sellNameplate('${nameplate.id}','${esc(nameplate.name)}',${nameplate.sellPrice})">Sell One</button>` : ''}
+      </div>`;
+    };
+    const directDecorations = visibleDecorations.filter(d => !d.packOnly);
+    const packDecorations = visibleDecorations.filter(d => d.packOnly);
+    grid.innerHTML = `
+      <section class="shop-catalog-section">
+        <div class="shop-section-heading"><div><span>DIRECT SHOP</span><h2>Avatar Decorations</h2></div><b>${directDecorations.length} items</b></div>
+        <div class="shop-grid-inner">${directDecorations.map(decorationCard).join('')}</div>
+      </section>
+      <details class="shop-exclusive-drawer">
+        <summary>
+          <div><span>PACK COLLECTION</span><strong>Pack-only decorations and nameplates</strong></div>
+          <small>${packDecorations.length + nameplates.length} collectibles</small>
+        </summary>
+        <div class="shop-drawer-copy">These collectibles only drop from packs. Open this collection to browse, equip, or sell them.</div>
+        <h3>Avatar Decorations</h3>
+        <div class="shop-grid-inner">${packDecorations.map(decorationCard).join('')}</div>
+        <h3>Nameplates</h3>
+        <div class="shop-grid-inner nameplate-grid">${nameplates.map(nameplateCard).join('')}</div>
+      </details>`;
 
     visibleDecorations.forEach(d => {
       const wrap = document.querySelector(`#shopcard-${d.id} .avatar-wrap`);
@@ -5497,8 +5834,8 @@
     const myNexals = (shopData && shopData.nexals) || 0;
     tabsHost.innerHTML = `
       <div class="shop-subsection shop-pack-section">
-        <h2>Decoration Packs</h2>
-        <p>Open a pack to roll one exclusive decoration. Odds are shown on each item.</p>
+        <h2>Collectible Packs</h2>
+        <p>Open packs for exclusive avatar decorations and nameplates. Every item shows its exact odds.</p>
       </div>
       <div class="shop-pack-grid">
         ${(packs || []).map(pack => {
@@ -5516,10 +5853,10 @@
               <div class="shop-pack-owned">${esc(pack.raritySummary || '')}</div>
               <div class="shop-card-desc">${esc(pack.description)}</div>
               <div class="shop-pack-previews">
-                ${(pack.decorations || []).map(d => `
-                  <div class="avatar-wrap shop-pack-mini ${d.owned ? 'owned' : ''}" data-deco-id="${d.id}" title="${esc(d.name)} - ${d.chance}%${d.quantity ? ' - Owned: ' + d.quantity : ''}">
-                    <div class="avatar">N</div>
-                    <span class="shop-pack-odds">${d.chance}%</span>
+                ${(pack.collectibles || pack.decorations || []).map(item => `
+                  <div class="${item.collectibleType === 'nameplate' ? 'shop-pack-nameplate-mini nameplate-' + esc(item.id) : 'avatar-wrap shop-pack-mini'} ${item.owned ? 'owned' : ''}" ${item.collectibleType === 'nameplate' ? '' : `data-deco-id="${item.id}"`} title="${esc(item.name)} - ${item.chance}%${item.quantity ? ' - Owned: ' + item.quantity : ''}">
+                    ${item.collectibleType === 'nameplate' ? '<b>Nx</b>' : '<div class="avatar">N</div>'}
+                    <span class="shop-pack-odds">${item.chance}%</span>
                   </div>
                 `).join('')}
               </div>
@@ -5555,8 +5892,8 @@
     if (quantity > 1) showPackResults(pack, granted, r.totalPrice || total);
     else {
       const won = granted[0];
-      toast('Pack opened: ' + (won ? won.name : 'new decoration'), 'success', 6500);
-      const premiumHit = granted.find(d => ['ascendent', 'mythical'].includes(d.rarity));
+      toast('Pack opened: ' + (won ? won.name : 'new collectible'), 'success', 6500);
+      const premiumHit = granted.find(d => d.collectibleType !== 'nameplate' && ['ascendent', 'mythical'].includes(d.rarity));
       if (premiumHit) await showClaimAnimation(premiumHit);
     }
     await loadShop();
@@ -5571,7 +5908,7 @@
       document.body.appendChild(overlay);
     }
     const counts = granted.reduce((map, item) => {
-      const key = item.id;
+      const key = `${item.collectibleType || 'decoration'}:${item.id}`;
       map[key] = map[key] || { item, count: 0 };
       map[key].count += 1;
       return map;
@@ -5590,10 +5927,12 @@
         </div>
         <div class="pack-results-grid">
           ${Object.values(counts).map(({ item, count }) => `<div class="pack-result-card rarity-${esc(String(item.rarity || 'common').toLowerCase())}">
-            <div class="avatar-wrap pack-result-preview" data-deco-id="${esc(item.id)}"><div class="avatar">N</div></div>
+            ${item.collectibleType === 'nameplate'
+              ? `<div class="pack-result-nameplate nameplate-${esc(item.id)}"><span>${esc(item.name)}</span></div>`
+              : `<div class="avatar-wrap pack-result-preview" data-deco-id="${esc(item.id)}"><div class="avatar">N</div></div>`}
             <span class="shop-rarity rarity-${esc(String(item.rarity || 'common').toLowerCase())}">${esc(item.rarity)}</span>
             <b>${esc(item.name)}</b>
-            <small>x${count}</small>
+            <small>${item.collectibleType === 'nameplate' ? 'NAMEPLATE · ' : ''}x${count}</small>
           </div>`).join('')}
         </div>
       </div>
@@ -5637,7 +5976,7 @@
     syncSecretAmbient();
     if (shopData) {
       shopData.active = equipId;
-      renderShop(shopData.decorations, equipId);
+      renderShop(shopData.decorations, equipId, shopData.nameplates || [], shopData.activeNameplate || null);
     }
     toast(action === 'equip' ? 'Decoration equipped! ✨' : 'Decoration removed', 'success');
   };
@@ -5653,6 +5992,31 @@
       updateSelfCard();
     }
     toast('Sold one ' + name + ' for ' + r.sellPrice.toLocaleString() + ' Nexals', 'success');
+    await loadShop();
+  };
+
+  window.nameplateAction = async function(nameplateId, action) {
+    if (action === 'locked') return toast('This nameplate only drops from a pack.', 'info');
+    const equipId = action === 'equip' ? nameplateId : null;
+    const r = await api('POST', '/api/shop/nameplates/equip', { nameplateId: equipId });
+    if (r.error) return toast(r.error, 'error');
+    currentUser.activeNameplate = equipId;
+    if (shopData) shopData.activeNameplate = equipId;
+    updateSelfCard();
+    renderShop(shopData.decorations, shopData.active, shopData.nameplates || [], equipId);
+    toast(equipId ? 'Nameplate equipped' : 'Nameplate removed', 'success');
+  };
+
+  window.sellNameplate = async function(nameplateId, name, sellPrice) {
+    if (!confirm(`Sell one "${name}" for ${sellPrice.toLocaleString()} Nexals?`)) return;
+    const r = await api('POST', '/api/shop/nameplates/sell', { nameplateId });
+    if (r.error) return toast(r.error, 'error');
+    updateNexalDisplay(r.nexals);
+    if (currentUser.activeNameplate === nameplateId && r.quantity === 0) {
+      currentUser.activeNameplate = null;
+      updateSelfCard();
+    }
+    toast(`Sold one ${name}`, 'success');
     await loadShop();
   };
 
@@ -5895,7 +6259,11 @@
 
   function blackjackCards(cards) {
     const suits = { H: { icon: '&hearts;', name: 'Hearts', red: true }, D: { icon: '&diams;', name: 'Diamonds', red: true }, S: { icon: '&spades;', name: 'Spades', red: false }, C: { icon: '&clubs;', name: 'Clubs', red: false } };
-    return `<div class="blackjack-cards">${(cards || []).map(card => { if (card.hidden) return '<span class="playing-card card-back" aria-label="Hidden dealer card"><i></i></span>'; const suit = suits[card.suit] || suits.S; return `<span class="playing-card${suit.red ? ' red' : ''}" aria-label="${esc(card.rank)} of ${suit.name}"><b>${esc(card.rank)}</b><em>${suit.icon}</em><small>${esc(card.rank)} ${suit.icon}</small></span>`; }).join('')}</div>`;
+    return `<div class="blackjack-cards">${(cards || []).map(card => {
+      if (card.hidden) return '<span class="playing-card card-back" aria-label="Hidden dealer card"><i></i></span>';
+      const suit = suits[card.suit] || suits.S;
+      return `<span class="playing-card${suit.red ? ' red' : ''}" aria-label="${esc(card.rank)} of ${suit.name}"><b>${esc(card.rank)}</b><em>${suit.icon}</em><small>${esc(card.rank)} ${suit.icon}</small></span>`;
+    }).join('')}</div>`;
   }
   let lastStatsBlackjackTable = null;
   function updateBlackjackTokenPreview() {
@@ -5934,13 +6302,15 @@
   }
   window.openStatsBlackjack = async function() { const buyIn = parseInt($('blackjack-buyin-input')?.value, 10) || 0; const bet = parseInt($('blackjack-bet-input')?.value, 10) || 0; const r = await api('POST', '/api/games/blackjack/start', { buyIn, bet }); if (r.error) return toast(r.error, 'error'); if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals); renderStatsBlackjack(r.table); };
   window.renderBlackjackSetup = renderBlackjackSetup;
-  window.renderBlackjackSetupFromTable = function() { renderBlackjackSetup(lastStatsBlackjackTable); };
+  window.renderBlackjackSetupFromTable = function() {
+    renderBlackjackSetup(lastStatsBlackjackTable);
+  };
   window.openCallGamesFromHub = function() { if (!activeGameRoomId()) return toast('Start or join a call to open the Poker table', 'info'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); };
   window.statsBlackjackAction = async function(action) { const r = await api('POST', '/api/games/blackjack/action', { action }); if (r.error) return toast(r.error, 'error'); renderStatsBlackjack(r.table); };
   window.cashoutBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/cashout'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); renderStatsBlackjack(r.table); toast(`Cashed out ${r.earned} Nexals`, 'success'); };
   window.closeStatsBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/close'); if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals); lastStatsBlackjackTable = null; $('games-blackjack-table').innerHTML = ''; if (r.earned) toast(`Table closed. Cashed out ${r.earned.toLocaleString()} Nexals.`, 'success'); };
   window.addEventListener('pagehide', () => {
-    if (currentUser && navigator.sendBeacon) navigator.sendBeacon(apiUrl('/api/games/blackjack/close'), new Blob(['{}'], { type: 'application/json' }));
+    if (currentUser && navigator.sendBeacon) navigator.sendBeacon('/api/games/blackjack/close', new Blob(['{}'], { type: 'application/json' }));
   });
 
   async function loadPro() {
@@ -6702,9 +7072,13 @@
 
     // Render what we have immediately
     renderAvatar($('popup-avatar'), data);
+    $('popup-name').className = `profile-popup-name${nameplateClass(data)}`;
     $('popup-name').textContent = String(data.displayName || '').replace(/\s*(?:\.\.\.|…)\s*$/, '');
     $('popup-username').textContent = '@' + data.username;
-    $('popup-status').className = 'status-dot ' + (data.status === 'online' ? 'online' : '');
+    $('popup-status').className = 'status-dot ' + normalizedStatus(visibleStatus(data)) + (usesDiscordStatus(data) ? ' discord-status' : '');
+    const discordActivity = $('popup-discord-activity');
+    discordActivity.style.display = data.discordActivity && usesDiscordStatus(data) ? 'block' : 'none';
+    discordActivity.textContent = data.discordActivity ? `Discord activity: ${data.discordActivity}` : '';
     $('popup-bio-section').style.display = 'none';
     $('popup-bio').textContent = '';
 
@@ -6744,6 +7118,7 @@
       popup.classList.toggle('effect-prism', r.profileNameEffect === 'prism');
       popup.style.setProperty('--profile-start', r.profileGradientStart || '#5865f2');
       popup.style.setProperty('--profile-end', r.profileGradientEnd || '#a855f7');
+      $('popup-name').className = `profile-popup-name${nameplateClass(r)}`;
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');

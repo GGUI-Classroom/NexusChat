@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DynaPuff&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/main.css?v=20260627-c4" />
+  <link rel="stylesheet" href="/css/main.css?v=20260627-nameplates" />
 </head>
 <body>
   <div id="app">
@@ -117,6 +117,9 @@
               <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><polygon points="12,1 23,6.5 23,17.5 12,23 1,17.5 1,6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
               <span>NEXUS</span>
             </div>
+          </div>
+          <div class="dm-search-wrap">
+            <input id="dm-friend-search" type="search" placeholder="Find a conversation" autocomplete="off">
           </div>
           <nav class="sidebar-nav">
             <button class="nav-btn active" data-view="friends">
@@ -259,6 +262,7 @@
               <textarea id="message-input" placeholder="Message…" rows="1" maxlength="4000"></textarea>
               <button class="send-btn" id="send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
             </div>
+            <aside class="dm-profile-panel" id="dm-profile-panel" aria-label="Conversation profile"></aside>
           </div>
         </div>
 
@@ -427,7 +431,7 @@
           <label class="toggle-row"><input type="checkbox" id="nexus-link-call-notify" /><span class="toggle-label"><span class="toggle-title">Discord Call Notifications</span><span class="toggle-hint">Notify me on Discord when someone calls on Nexus.</span></span></label>
           <div class="form-error" id="nexus-link-error"></div>
         </div>
-        </section><section class="profile-settings-panel" data-ppanel="appearance"><div class="section-label">APPEARANCE</div><p class="field-hint">Choose how Nexus looks on this device.</p><div class="field-group"><label>Decoration</label><select id="appearance-decoration-select"></select></div><div class="field-group"><label>Phone Ringtone</label><select id="appearance-ringtone-select"></select></div><div class="settings-actions"><button class="btn-secondary" id="theme-dark-btn">Dark Mode</button><button class="btn-secondary" id="theme-light-btn">Light Mode</button></div></section><section class="profile-settings-panel" data-ppanel="account"><div class="profile-divider"></div>
+        </section><section class="profile-settings-panel" data-ppanel="appearance"><div class="section-label">APPEARANCE</div><p class="field-hint">Choose how Nexus looks on this device.</p><div class="field-group"><label>Decoration</label><select id="appearance-decoration-select"></select></div><div class="field-group"><label>Nameplate</label><select id="appearance-nameplate-select"></select></div><div class="field-group"><label>Phone Ringtone</label><select id="appearance-ringtone-select"></select></div><div class="settings-actions"><button class="btn-secondary" id="theme-dark-btn">Dark Mode</button><button class="btn-secondary" id="theme-light-btn">Light Mode</button></div></section><section class="profile-settings-panel" data-ppanel="account"><div class="profile-divider"></div>
         <div class="section-label" style="margin-bottom:12px">CHANGE PASSWORD</div>
         <div class="field-group"><label>Current Password</label><input type="password" id="profile-old-password" placeholder="••••••••" autocomplete="current-password" /></div>
         <div class="field-group"><label>New Password</label><input type="password" id="profile-new-password" placeholder="••••••••" autocomplete="new-password" /></div>
@@ -690,7 +694,7 @@
   <!-- Call HUD -->
   <div class="call-hud" id="call-hud" style="display:none">
     <div class="call-hud-inner">
-      <div class="call-hud-peer"><div class="avatar sm" id="hud-peer-avatar">?</div><div><div class="call-hud-name" id="hud-peer-name">–</div><div class="call-hud-status" id="hud-status">Connecting…</div></div></div>
+      <div class="call-hud-peer"><div class="call-avatar-viewport"><div class="avatar sm" id="hud-peer-avatar">?</div></div><div><div class="call-hud-name" id="hud-peer-name">–</div><div class="call-hud-status" id="hud-status">Connecting…</div></div></div>
       <div class="call-hud-timer" id="call-timer">0:00</div>
       <div class="call-hud-controls">
         <button class="hud-btn" id="mute-btn" title="Mute mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
@@ -1060,6 +1064,6 @@
   </script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script src="/js/app.js?v=20260627-c4"></script>
+  <script src="/js/app.js?v=20260627-nameplates"></script>
 </body>
 </html>

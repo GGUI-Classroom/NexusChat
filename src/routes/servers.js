@@ -230,7 +230,7 @@ router.get('/:id', async (req, res) => {
     `, [id, req.session.userId]),
     pool.query(
       `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start, sr.gradient_end, sr.gradient_animated, sr.is_admin,
-       u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.discord_status, u.discord_activity, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
+       u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.discord_status, u.discord_activity, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_nameplate, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
@@ -271,6 +271,7 @@ router.get('/:id', async (req, res) => {
       status: m.status, discordStatus: m.discord_status || 'offline', discordActivity: m.discord_activity || null, role: m.role, roleId: m.role_id,
       roleName: m.role_name, roleColor: m.role_color, roleGradientStart: boostRes.has('gradients') ? m.gradient_start : null, roleGradientEnd: boostRes.has('gradients') ? m.gradient_end : null, isAdmin: m.is_admin,
       activeDecoration: m.active_decoration || null,
+      activeNameplate: m.active_nameplate || null,
       activeColor: m.active_color || null,
       activeColor: m.active_color || null,
       activeFont: m.active_font || null,
@@ -763,7 +764,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   if (!channelMeta.rows.length) return res.status(404).json({ error: 'Channel not found' });
   if ((channelMeta.rows[0].channel_type || 'text') === 'voice') return res.json({ messages: [] });
   let q = `SELECT cm.id, cm.channel_id, cm.from_id, cm.content, cm.created_at, cm.reply_to_id,
-    u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
+    u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
     sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
     rm.content as reply_content,
     rm.from_id as reply_from_id,
@@ -811,6 +812,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
         avatarDataUrl: avatarUrl(m.from_id, !!m.has_avatar),
         roleColor: m.role_color || null, roleName: m.role_name || null, roleGradientStart: m.role_gradient_start || null, roleGradientEnd: m.role_gradient_end || null,
         activeDecoration: m.active_decoration || null,
+        activeNameplate: m.active_nameplate || null,
         activeColor: m.active_color || null,
         activeFont: m.active_font || null, proActive: (m.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: m.profile_gradient_start, proGradientEnd: m.profile_gradient_end, proNameEffect: m.profile_name_effect,
         activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_server_name || null, activeServerTagInviteCode: m.tag_invite_code || null
