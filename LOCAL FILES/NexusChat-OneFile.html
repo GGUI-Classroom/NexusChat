@@ -2891,7 +2891,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .nameplate-card-meta { display:flex; justify-content:center; gap:6px; flex-wrap:wrap; }
 .shop-sell-btn { margin-top:2px; background:rgba(240,84,84,.1); color:var(--red); font-size:11px; }
 
-.nexus-nameplate,
+.nameplate-surface,
 .nameplate-preview,
 .shop-pack-nameplate-mini,
 .pack-result-nameplate {
@@ -2903,40 +2903,71 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   isolation: isolate;
   overflow: hidden;
   background: linear-gradient(115deg, var(--np-a), var(--np-b) 48%, var(--np-a));
+  background-size: 220% 100%;
   border: 1px solid var(--np-edge);
   box-shadow: inset 0 1px rgba(255,255,255,.12), 0 0 12px var(--np-glow);
+  animation: nameplate-field 7s ease-in-out infinite alternate;
 }
-.nexus-nameplate {
-  display: inline-flex;
-  align-items: center;
-  width: max-content;
-  max-width: 100%;
-  min-height: 24px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  vertical-align: middle;
+.nameplate-surface {
+  border-radius: 5px;
+  color: var(--text-primary);
+  background: var(--np-background, linear-gradient(115deg, var(--np-a), var(--np-b) 48%, var(--np-a))) !important;
 }
-.nexus-nameplate::before,
+.nameplate-surface > * {
+  position: relative;
+  z-index: 2;
+}
+.nameplate-surface::before,
 .nameplate-preview::before,
 .shop-pack-nameplate-mini::before,
 .pack-result-nameplate::before {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: -1;
-  background: repeating-linear-gradient(105deg, transparent 0 13px, rgba(255,255,255,.08) 14px, transparent 16px 28px);
-  transform: translateX(-30%);
-  animation: nameplate-scan 5s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(100deg, transparent 0 35%, rgba(255,255,255,.14) 46%, transparent 57%),
+    repeating-linear-gradient(105deg, transparent 0 17px, rgba(255,255,255,.06) 18px, transparent 20px 34px);
+  background-size: 220% 100%, auto;
+  animation: nameplate-scan 5.5s linear infinite;
+}
+.nameplate-surface::after,
+.nameplate-preview::after,
+.shop-pack-nameplate-mini::after,
+.pack-result-nameplate::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  border-top: 1px solid rgba(255,255,255,.16);
+  border-bottom: 1px solid rgba(0,0,0,.24);
 }
 .nameplate-preview {
   width: 100%;
   min-height: 56px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 8px 12px;
   border-radius: 5px;
   color: #fff;
   font-size: 14px;
   font-weight: 800;
+}
+.nameplate-preview-avatar {
+  width:34px;
+  height:34px;
+  flex:0 0 34px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#151827;
+  border:2px solid var(--np-edge);
+  box-shadow:0 0 10px var(--np-glow);
 }
 .nameplate-preview i {
   position:absolute;
@@ -2958,7 +2989,8 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 }
 .shop-pack-nameplate-mini .shop-pack-odds { position:absolute; left:0; right:0; bottom:-16px; }
 .pack-result-nameplate { width:116px; min-height:48px; display:grid; place-items:center; border-radius:5px; color:#fff; font-size:11px; font-weight:800; text-align:center; }
-@keyframes nameplate-scan { to { transform:translateX(35%); } }
+@keyframes nameplate-scan { from { background-position:130% 0, 0 0; } to { background-position:-120% 0, 34px 0; } }
+@keyframes nameplate-field { from { background-position:0 50%; } to { background-position:100% 50%; } }
 
 .nameplate-signal_strip { --np-a:#174f46;--np-b:#15211f;--np-edge:#65d7bb;--np-glow:rgba(68,217,174,.25); }
 .nameplate-ember_line { --np-a:#713c26;--np-b:#241815;--np-edge:#f0a064;--np-glow:rgba(240,125,70,.26); }
@@ -2978,6 +3010,122 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .nameplate-singularity_plate { --np-a:#11131f;--np-b:#57318c;--np-edge:#f1d4ff;--np-glow:rgba(157,80,255,.55); }
 .nameplate-astral_dominion_plate { --np-a:#22537b;--np-b:#6a2d79;--np-edge:#fff096;--np-glow:rgba(98,229,255,.52); }
 .nameplate-apex_tempest_plate { --np-a:#174766;--np-b:#18203c;--np-edge:#f8fbff;--np-glow:rgba(75,186,255,.55); }
+
+.nameplate-singularity_plate {
+  --np-background:
+    radial-gradient(ellipse at 88% 50%, #02030a 0 7%, transparent 8%),
+    radial-gradient(ellipse at 88% 50%, transparent 0 10%, #8c54ff 12%, #2c1b5e 19%, transparent 31%),
+    linear-gradient(105deg, #090b15, #241447 54%, #080a12);
+  background:var(--np-background);
+  background-size: 100% 100%;
+  box-shadow: inset 0 0 22px rgba(119,69,220,.45), 0 0 16px rgba(135,78,255,.48);
+}
+.nameplate-singularity_plate::before {
+  inset: -85% -6% -85% 42%;
+  background: conic-gradient(from 0deg, transparent 0 15%, rgba(174,126,255,.82) 19%, transparent 25% 48%, rgba(77,211,255,.58) 53%, transparent 60% 100%);
+  filter: blur(3px);
+  animation: nameplate-singularity 4.2s linear infinite;
+}
+.nameplate-singularity_plate::after {
+  inset: 4px 8px 4px 45%;
+  border: 0;
+  background:
+    radial-gradient(circle at 12% 18%, #fff 0 1px, transparent 2px),
+    radial-gradient(circle at 36% 74%, #b8efff 0 1px, transparent 2px),
+    radial-gradient(circle at 67% 23%, #e8d7ff 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 68%, #fff 0 1px, transparent 2px);
+  animation: nameplate-stars 2.3s ease-in-out infinite alternate;
+}
+@keyframes nameplate-singularity { to { transform:rotate(360deg); } }
+@keyframes nameplate-stars { to { opacity:.34; filter:brightness(1.8); } }
+
+.nameplate-astral_dominion_plate {
+  --np-background:
+    linear-gradient(118deg, #071928, #124a63 28%, #50236e 64%, #211044),
+    linear-gradient(90deg, transparent, #fff);
+  background:var(--np-background);
+  background-size: 180% 100%, 100% 100%;
+  box-shadow: inset 0 0 24px rgba(74,222,255,.34), 0 0 18px rgba(212,106,255,.42);
+}
+.nameplate-astral_dominion_plate::before {
+  inset: -30% -10%;
+  background:
+    repeating-linear-gradient(165deg, transparent 0 15px, rgba(87,236,255,.28) 18px, rgba(219,105,255,.22) 23px, transparent 29px 46px),
+    linear-gradient(90deg, transparent 15%, rgba(255,244,154,.42) 50%, transparent 78%);
+  filter: blur(1px);
+  animation: nameplate-dominion 5s ease-in-out infinite alternate;
+}
+.nameplate-astral_dominion_plate::after {
+  inset: 5px 7px;
+  border-color: rgba(255,240,150,.48);
+  background:
+    linear-gradient(24deg, transparent 0 28%, rgba(255,255,255,.5) 29% 29.5%, transparent 30% 100%),
+    linear-gradient(152deg, transparent 0 61%, rgba(126,236,255,.48) 62% 62.5%, transparent 63% 100%);
+  animation: nameplate-constellation 3.8s ease-in-out infinite;
+}
+@keyframes nameplate-dominion { to { transform:translateX(12%) skewX(-5deg); filter:blur(2px) hue-rotate(24deg); } }
+@keyframes nameplate-constellation { 50% { opacity:.42; filter:brightness(1.7); } }
+
+.nameplate-apex_tempest_plate {
+  --np-background:
+    linear-gradient(105deg, #06101d, #0a4469 34%, #24235d 68%, #07121f);
+  background:var(--np-background);
+  background-size: 220% 100%;
+  box-shadow: inset 0 0 24px rgba(48,169,255,.48), 0 0 18px rgba(65,184,255,.48);
+  animation: nameplate-tempest-field 4.8s ease-in-out infinite alternate;
+}
+.nameplate-apex_tempest_plate::before {
+  inset: 0 -40%;
+  background:
+    linear-gradient(112deg, transparent 0 42%, rgba(228,250,255,.95) 43% 44%, transparent 45% 100%),
+    linear-gradient(68deg, transparent 0 58%, rgba(79,196,255,.7) 59% 60%, transparent 61% 100%),
+    repeating-linear-gradient(90deg, transparent 0 26px, rgba(44,141,212,.2) 28px, transparent 32px);
+  animation: nameplate-lightning 3.4s steps(1,end) infinite;
+}
+.nameplate-apex_tempest_plate::after {
+  inset: 2px;
+  border-color: rgba(202,244,255,.52);
+  background: linear-gradient(90deg, transparent, rgba(110,218,255,.24), transparent);
+  animation: nameplate-thunder-sweep 2.6s linear infinite;
+}
+.nameplate-surface.nameplate-singularity_plate .display-name,
+.nameplate-surface.nameplate-singularity_plate .member-name,
+.nameplate-surface.nameplate-singularity_plate .dm-profile-name {
+  color:#eadcff;
+  text-shadow:0 0 9px rgba(183,126,255,.72);
+}
+.nameplate-surface.nameplate-astral_dominion_plate .display-name,
+.nameplate-surface.nameplate-astral_dominion_plate .member-name,
+.nameplate-surface.nameplate-astral_dominion_plate .dm-profile-name {
+  color:#fff2ad;
+  text-shadow:0 0 10px rgba(80,226,255,.72);
+}
+.nameplate-surface.nameplate-apex_tempest_plate .display-name,
+.nameplate-surface.nameplate-apex_tempest_plate .member-name,
+.nameplate-surface.nameplate-apex_tempest_plate .dm-profile-name {
+  color:#e9fbff;
+  text-shadow:0 0 10px rgba(70,190,255,.8);
+}
+@keyframes nameplate-tempest-field { to { background-position:100% 50%; filter:saturate(1.35); } }
+@keyframes nameplate-lightning {
+  0%, 36%, 43%, 100% { opacity:.08; transform:translateX(-9%); }
+  37% { opacity:1; transform:translateX(0); }
+  39% { opacity:.22; }
+  41% { opacity:.88; transform:translateX(7%); }
+}
+@keyframes nameplate-thunder-sweep { from { transform:translateX(-90%); } to { transform:translateX(90%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .nameplate-surface,
+  .nameplate-preview,
+  .shop-pack-nameplate-mini,
+  .pack-result-nameplate,
+  .nameplate-surface::before,
+  .nameplate-surface::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
 
 /* ===== DM ROSTER + PROFILE ===== */
 .dm-search-wrap { padding:8px 10px 4px; }
@@ -9369,7 +9517,8 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   function updateSelfCard() {
     if (!currentUser) return;
     $('self-display-name').textContent = currentUser.displayName;
-    $('self-display-name').className = (currentUser.proActive && currentUser.proNameEffect !== 'none' ? 'display-name pro-name-effect' : 'display-name') + nameplateClass(currentUser);
+    $('self-display-name').className = currentUser.proActive && currentUser.proNameEffect !== 'none' ? 'display-name pro-name-effect' : 'display-name';
+    applyNameplateSurface($('self-display-name').closest('.user-card'), currentUser);
     $('self-display-name').style.setProperty('--pro-name-start', currentUser.proGradientStart || '#5865f2');
     $('self-display-name').style.setProperty('--pro-name-end', currentUser.proGradientEnd || '#a855f7');
     const tag = $('self-server-tag');
@@ -9602,12 +9751,12 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
         roleName: m.roleName || null, roleColor: m.roleColor || null
       }));
       return `
-        <div class="server-member-item profile-hover-target" data-profile="${popupData}" onclick="showProfilePopup(event, '${popupData}')">
+        <div class="server-member-item profile-hover-target${nameplateSurfaceClass(m)}" data-profile="${popupData}" onclick="showProfilePopup(event, '${popupData}')">
           <div class="avatar-wrap" style="flex-shrink:0">
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${normalizedStatus(visibleStatus(m))}${usesDiscordStatus(m) ? ' discord-status' : ''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}${nameplateClass(m)}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
+          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
           ${canManage ? `<div class="member-actions">
             <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
             <button class="member-action-btn kick" onclick="kickMember('${m.id}','${esc(m.displayName)}')">Kick</button>
@@ -10363,11 +10512,23 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
 
   function nameplateClass(user) {
     const id = user && user.activeNameplate;
-    return id ? ` nexus-nameplate nameplate-${String(id).replace(/[^a-z0-9_-]/gi, '')}` : '';
+    return id ? ` nameplate-${String(id).replace(/[^a-z0-9_-]/gi, '')}` : '';
+  }
+
+  function nameplateSurfaceClass(user) {
+    return user && user.activeNameplate ? ` nameplate-surface${nameplateClass(user)}` : '';
+  }
+
+  function applyNameplateSurface(element, user) {
+    if (!element) return;
+    [...element.classList].filter(name => name.startsWith('nameplate-')).forEach(name => element.classList.remove(name));
+    element.classList.remove('nameplate-surface');
+    if (!user || !user.activeNameplate) return;
+    element.classList.add('nameplate-surface', `nameplate-${String(user.activeNameplate).replace(/[^a-z0-9_-]/gi, '')}`);
   }
 
   function nameplatePreviewHtml(nameplate, label = 'Nexus User') {
-    return `<div class="nameplate-preview nameplate-${esc(nameplate.id)}"><span>${esc(label)}</span><i></i></div>`;
+    return `<div class="nameplate-preview nameplate-${esc(nameplate.id)}"><b class="nameplate-preview-avatar">N</b><span>${esc(label)}</span><i></i></div>`;
   }
   window.spendBoosts = async function(feature) { const r = await api('POST', '/api/perks/servers/' + activeServerId + '/spend', { feature }); if (r.error) return toast(r.error, 'error'); toast('Boosts allocated', 'success'); await loadServerSidebar(activeServerId); $('server-settings-btn').click(); };
 
@@ -10761,13 +10922,13 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     }
     empty.style.display = 'none';
     list.innerHTML = friends.map(f => `
-      <div class="friend-card" data-id="${f.id}">
+      <div class="friend-card${nameplateSurfaceClass(f)}" data-id="${f.id}">
         <div class="avatar-wrap">
           <div class="avatar" id="fav-${f.id}"></div>
           <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="fdot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}${nameplateClass(f)}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
           <div class="username">@${esc(f.username)}</div>
           <div class="status ${f.status === 'online' ? 'online' : ''}" id="fstatus-${f.id}">${f.status === 'online' ? '● Online' : '○ Offline'}</div>
         </div>
@@ -10877,13 +11038,13 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     const query = String($('dm-friend-search')?.value || '').trim().toLowerCase();
     const visibleFriends = friends.filter(f => !query || `${f.displayName} ${f.username}`.toLowerCase().includes(query));
     list.innerHTML = visibleFriends.map(f => `
-      <div class="dm-item ${activeDmUserId === f.id ? 'active' : ''}" data-id="${f.id}" onclick="railSelect('dms');switchView('dm');openDm(window._friendsMap['${f.id}'])">
+      <div class="dm-item ${activeDmUserId === f.id ? 'active' : ''}${nameplateSurfaceClass(f)}" data-id="${f.id}" onclick="railSelect('dms');switchView('dm');openDm(window._friendsMap['${f.id}'])">
         <div class="avatar-wrap">
           <div class="avatar sm" id="dav-${f.id}"></div>
           <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="ddot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}${nameplateClass(f)}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
           <div class="last-msg" id="dlm-${f.id}">${normalizedStatus(visibleStatus(f)) === 'offline' ? 'Offline' : normalizedStatus(visibleStatus(f))}</div>
         </div>
       </div>
@@ -10914,7 +11075,8 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     // Set header
     renderAvatar($('chat-peer-avatar'), user);
     $('chat-peer-name').textContent = user.displayName;
-    $('chat-peer-name').className = `display-name${nameplateClass(user)}`;
+    $('chat-peer-name').className = 'display-name';
+    applyNameplateSurface($('chat-peer-name').closest('.chat-peer-info'), user);
     $('chat-peer-username').textContent = '@' + user.username;
     const statusDot = $('chat-peer-status');
     statusDot.className = `status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}`;
@@ -10944,8 +11106,8 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     panel.innerHTML = `
       <div class="dm-profile-banner nameplate-${esc(user.activeNameplate || 'none')}"></div>
       <div class="dm-profile-avatar avatar-wrap"><div class="avatar" id="dm-profile-avatar"></div><div class="status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}"></div></div>
-      <div class="dm-profile-copy">
-        <div class="dm-profile-name${nameplateClass(user)}">${esc(user.displayName)}${identityTagHtml(user)}</div>
+      <div class="dm-profile-copy${nameplateSurfaceClass(user)}">
+        <div class="dm-profile-name">${esc(user.displayName)}${identityTagHtml(user)}</div>
         <div class="username">@${esc(user.username)}</div>
         <div class="dm-profile-status">${normalizedStatus(visibleStatus(user)) === 'offline' ? 'Offline' : 'Currently ' + normalizedStatus(visibleStatus(user))}</div>
       </div>
@@ -11127,7 +11289,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     const roleGradient = author.roleGradientStart && author.roleGradientEnd;
     const proGradient = author.proActive && author.proNameEffect !== 'none';
     const roleStyle = roleGradient ? `style="--role-gradient-start:${author.roleGradientStart};--role-gradient-end:${author.roleGradientEnd}"` : proGradient ? `style="--pro-name-start:${author.proGradientStart};--pro-name-end:${author.proGradientEnd}"` : (roleColor ? `style="color:${roleColor}"` : '');
-    const roleClass = (roleGradient ? 'msg-author has-role role-gradient-text' : proGradient ? 'msg-author has-role pro-name-effect' : roleColor ? 'msg-author has-role' : 'msg-author') + nameplateClass(author);
+    const roleClass = roleGradient ? 'msg-author has-role role-gradient-text' : proGradient ? 'msg-author has-role pro-name-effect' : roleColor ? 'msg-author has-role' : 'msg-author';
     const roleTip = author.roleName ? `title="${esc(author.roleName)}"` : '';
     const profilePayload = encodeURIComponent(JSON.stringify({
       id: author.id || msg.fromId,
@@ -14811,7 +14973,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
 
     // Render what we have immediately
     renderAvatar($('popup-avatar'), data);
-    $('popup-name').className = `profile-popup-name${nameplateClass(data)}`;
+    $('popup-name').className = 'profile-popup-name';
     $('popup-name').textContent = String(data.displayName || '').replace(/\s*(?:\.\.\.|…)\s*$/, '');
     $('popup-username').textContent = '@' + data.username;
     $('popup-status').className = 'status-dot ' + normalizedStatus(visibleStatus(data)) + (usesDiscordStatus(data) ? ' discord-status' : '');
@@ -14857,7 +15019,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       popup.classList.toggle('effect-prism', r.profileNameEffect === 'prism');
       popup.style.setProperty('--profile-start', r.profileGradientStart || '#5865f2');
       popup.style.setProperty('--profile-end', r.profileGradientEnd || '#a855f7');
-      $('popup-name').className = `profile-popup-name${nameplateClass(r)}`;
+      $('popup-name').className = 'profile-popup-name';
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');

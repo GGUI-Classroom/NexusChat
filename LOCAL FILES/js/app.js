@@ -1630,7 +1630,8 @@
   function updateSelfCard() {
     if (!currentUser) return;
     $('self-display-name').textContent = currentUser.displayName;
-    $('self-display-name').className = (currentUser.proActive && currentUser.proNameEffect !== 'none' ? 'display-name pro-name-effect' : 'display-name') + nameplateClass(currentUser);
+    $('self-display-name').className = currentUser.proActive && currentUser.proNameEffect !== 'none' ? 'display-name pro-name-effect' : 'display-name';
+    applyNameplateSurface($('self-display-name').closest('.user-card'), currentUser);
     $('self-display-name').style.setProperty('--pro-name-start', currentUser.proGradientStart || '#5865f2');
     $('self-display-name').style.setProperty('--pro-name-end', currentUser.proGradientEnd || '#a855f7');
     const tag = $('self-server-tag');
@@ -1863,12 +1864,12 @@
         roleName: m.roleName || null, roleColor: m.roleColor || null
       }));
       return `
-        <div class="server-member-item profile-hover-target" data-profile="${popupData}" onclick="showProfilePopup(event, '${popupData}')">
+        <div class="server-member-item profile-hover-target${nameplateSurfaceClass(m)}" data-profile="${popupData}" onclick="showProfilePopup(event, '${popupData}')">
           <div class="avatar-wrap" style="flex-shrink:0">
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${normalizedStatus(visibleStatus(m))}${usesDiscordStatus(m) ? ' discord-status' : ''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}${nameplateClass(m)}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
+          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
           ${canManage ? `<div class="member-actions">
             <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
             <button class="member-action-btn kick" onclick="kickMember('${m.id}','${esc(m.displayName)}')">Kick</button>
@@ -2624,11 +2625,23 @@
 
   function nameplateClass(user) {
     const id = user && user.activeNameplate;
-    return id ? ` nexus-nameplate nameplate-${String(id).replace(/[^a-z0-9_-]/gi, '')}` : '';
+    return id ? ` nameplate-${String(id).replace(/[^a-z0-9_-]/gi, '')}` : '';
+  }
+
+  function nameplateSurfaceClass(user) {
+    return user && user.activeNameplate ? ` nameplate-surface${nameplateClass(user)}` : '';
+  }
+
+  function applyNameplateSurface(element, user) {
+    if (!element) return;
+    [...element.classList].filter(name => name.startsWith('nameplate-')).forEach(name => element.classList.remove(name));
+    element.classList.remove('nameplate-surface');
+    if (!user || !user.activeNameplate) return;
+    element.classList.add('nameplate-surface', `nameplate-${String(user.activeNameplate).replace(/[^a-z0-9_-]/gi, '')}`);
   }
 
   function nameplatePreviewHtml(nameplate, label = 'Nexus User') {
-    return `<div class="nameplate-preview nameplate-${esc(nameplate.id)}"><span>${esc(label)}</span><i></i></div>`;
+    return `<div class="nameplate-preview nameplate-${esc(nameplate.id)}"><b class="nameplate-preview-avatar">N</b><span>${esc(label)}</span><i></i></div>`;
   }
   window.spendBoosts = async function(feature) { const r = await api('POST', '/api/perks/servers/' + activeServerId + '/spend', { feature }); if (r.error) return toast(r.error, 'error'); toast('Boosts allocated', 'success'); await loadServerSidebar(activeServerId); $('server-settings-btn').click(); };
 
@@ -3022,13 +3035,13 @@
     }
     empty.style.display = 'none';
     list.innerHTML = friends.map(f => `
-      <div class="friend-card" data-id="${f.id}">
+      <div class="friend-card${nameplateSurfaceClass(f)}" data-id="${f.id}">
         <div class="avatar-wrap">
           <div class="avatar" id="fav-${f.id}"></div>
           <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="fdot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}${nameplateClass(f)}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
           <div class="username">@${esc(f.username)}</div>
           <div class="status ${f.status === 'online' ? 'online' : ''}" id="fstatus-${f.id}">${f.status === 'online' ? '● Online' : '○ Offline'}</div>
         </div>
@@ -3138,13 +3151,13 @@
     const query = String($('dm-friend-search')?.value || '').trim().toLowerCase();
     const visibleFriends = friends.filter(f => !query || `${f.displayName} ${f.username}`.toLowerCase().includes(query));
     list.innerHTML = visibleFriends.map(f => `
-      <div class="dm-item ${activeDmUserId === f.id ? 'active' : ''}" data-id="${f.id}" onclick="railSelect('dms');switchView('dm');openDm(window._friendsMap['${f.id}'])">
+      <div class="dm-item ${activeDmUserId === f.id ? 'active' : ''}${nameplateSurfaceClass(f)}" data-id="${f.id}" onclick="railSelect('dms');switchView('dm');openDm(window._friendsMap['${f.id}'])">
         <div class="avatar-wrap">
           <div class="avatar sm" id="dav-${f.id}"></div>
           <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="ddot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}${nameplateClass(f)}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
           <div class="last-msg" id="dlm-${f.id}">${normalizedStatus(visibleStatus(f)) === 'offline' ? 'Offline' : normalizedStatus(visibleStatus(f))}</div>
         </div>
       </div>
@@ -3175,7 +3188,8 @@
     // Set header
     renderAvatar($('chat-peer-avatar'), user);
     $('chat-peer-name').textContent = user.displayName;
-    $('chat-peer-name').className = `display-name${nameplateClass(user)}`;
+    $('chat-peer-name').className = 'display-name';
+    applyNameplateSurface($('chat-peer-name').closest('.chat-peer-info'), user);
     $('chat-peer-username').textContent = '@' + user.username;
     const statusDot = $('chat-peer-status');
     statusDot.className = `status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}`;
@@ -3205,8 +3219,8 @@
     panel.innerHTML = `
       <div class="dm-profile-banner nameplate-${esc(user.activeNameplate || 'none')}"></div>
       <div class="dm-profile-avatar avatar-wrap"><div class="avatar" id="dm-profile-avatar"></div><div class="status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}"></div></div>
-      <div class="dm-profile-copy">
-        <div class="dm-profile-name${nameplateClass(user)}">${esc(user.displayName)}${identityTagHtml(user)}</div>
+      <div class="dm-profile-copy${nameplateSurfaceClass(user)}">
+        <div class="dm-profile-name">${esc(user.displayName)}${identityTagHtml(user)}</div>
         <div class="username">@${esc(user.username)}</div>
         <div class="dm-profile-status">${normalizedStatus(visibleStatus(user)) === 'offline' ? 'Offline' : 'Currently ' + normalizedStatus(visibleStatus(user))}</div>
       </div>
@@ -3388,7 +3402,7 @@
     const roleGradient = author.roleGradientStart && author.roleGradientEnd;
     const proGradient = author.proActive && author.proNameEffect !== 'none';
     const roleStyle = roleGradient ? `style="--role-gradient-start:${author.roleGradientStart};--role-gradient-end:${author.roleGradientEnd}"` : proGradient ? `style="--pro-name-start:${author.proGradientStart};--pro-name-end:${author.proGradientEnd}"` : (roleColor ? `style="color:${roleColor}"` : '');
-    const roleClass = (roleGradient ? 'msg-author has-role role-gradient-text' : proGradient ? 'msg-author has-role pro-name-effect' : roleColor ? 'msg-author has-role' : 'msg-author') + nameplateClass(author);
+    const roleClass = roleGradient ? 'msg-author has-role role-gradient-text' : proGradient ? 'msg-author has-role pro-name-effect' : roleColor ? 'msg-author has-role' : 'msg-author';
     const roleTip = author.roleName ? `title="${esc(author.roleName)}"` : '';
     const profilePayload = encodeURIComponent(JSON.stringify({
       id: author.id || msg.fromId,
@@ -7072,7 +7086,7 @@
 
     // Render what we have immediately
     renderAvatar($('popup-avatar'), data);
-    $('popup-name').className = `profile-popup-name${nameplateClass(data)}`;
+    $('popup-name').className = 'profile-popup-name';
     $('popup-name').textContent = String(data.displayName || '').replace(/\s*(?:\.\.\.|…)\s*$/, '');
     $('popup-username').textContent = '@' + data.username;
     $('popup-status').className = 'status-dot ' + normalizedStatus(visibleStatus(data)) + (usesDiscordStatus(data) ? ' discord-status' : '');
@@ -7118,7 +7132,7 @@
       popup.classList.toggle('effect-prism', r.profileNameEffect === 'prism');
       popup.style.setProperty('--profile-start', r.profileGradientStart || '#5865f2');
       popup.style.setProperty('--profile-end', r.profileGradientEnd || '#a855f7');
-      $('popup-name').className = `profile-popup-name${nameplateClass(r)}`;
+      $('popup-name').className = 'profile-popup-name';
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');
