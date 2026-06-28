@@ -266,6 +266,9 @@ async function initDb() {
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_gradient_start TEXT DEFAULT '#5865f2'`, 'alter_users_profile_gradient_start');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_gradient_end TEXT DEFAULT '#a855f7'`, 'alter_users_profile_gradient_end');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_name_effect TEXT DEFAULT NULL`, 'alter_users_profile_name_effect');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_effect TEXT DEFAULT 'none'`, 'alter_users_profile_effect');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_banner_data TEXT DEFAULT NULL`, 'alter_users_profile_banner_data');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_banner_mime TEXT DEFAULT NULL`, 'alter_users_profile_banner_mime');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_server_tag_id TEXT DEFAULT NULL`, 'alter_users_active_server_tag');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_ringtone TEXT DEFAULT NULL`, 'alter_users_ringtone');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_status TEXT DEFAULT 'offline'`, 'alter_users_discord_status');

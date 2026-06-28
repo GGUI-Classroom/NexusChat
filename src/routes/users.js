@@ -41,10 +41,47 @@ router.get('/avatar/:userId', requireAuth, async (req, res) => {
   res.send(avatar.data);
 });
 
+router.get('/banner/:userId', requireAuth, async (req, res) => {
+  const result = await pool.query(
+    'SELECT profile_banner_data, profile_banner_mime FROM users WHERE id=$1',
+    [req.params.userId]
+  );
+  const row = result.rows[0];
+  if (!row?.profile_banner_data) return res.sendStatus(404);
+  const data = Buffer.from(row.profile_banner_data, 'base64');
+  const etag = `"banner-${req.params.userId}-${data.length}"`;
+  res.setHeader('Content-Type', row.profile_banner_mime || 'image/png');
+  res.setHeader('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800');
+  res.setHeader('ETag', etag);
+  if (req.headers['if-none-match'] === etag) return res.sendStatus(304);
+  res.send(data);
+});
+
+router.post('/profile-banner', requireAuth, upload.single('banner'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Choose a banner image' });
+  const user = await pool.query('SELECT pro_expires_at FROM users WHERE id=$1', [req.session.userId]);
+  if ((user.rows[0]?.pro_expires_at || 0) <= Math.floor(Date.now() / 1000)) {
+    return res.status(403).json({ error: 'Active Pro is required for profile banners' });
+  }
+  await pool.query(
+    'UPDATE users SET profile_banner_data=$1, profile_banner_mime=$2 WHERE id=$3',
+    [req.file.buffer.toString('base64'), req.file.mimetype, req.session.userId]
+  );
+  res.json({ success: true, profileBannerUrl: `/api/users/banner/${req.session.userId}?v=${Date.now()}` });
+});
+
+router.delete('/profile-banner', requireAuth, async (req, res) => {
+  await pool.query(
+    'UPDATE users SET profile_banner_data=NULL, profile_banner_mime=NULL WHERE id=$1',
+    [req.session.userId]
+  );
+  res.json({ success: true });
+});
+
 // Get any user's public profile
 router.get('/profile/:userId', requireAuth, async (req, res) => {
   const r = await pool.query(
-    'SELECT id, username, display_name, (avatar_data IS NOT NULL) AS has_avatar, bio, active_decoration, active_nameplate, pro_expires_at, profile_gradient_start, profile_gradient_end, profile_name_effect, active_server_tag_id FROM users WHERE id=$1',
+    'SELECT id, username, display_name, (avatar_data IS NOT NULL) AS has_avatar, bio, active_decoration, active_nameplate, pro_expires_at, profile_card_style, profile_gradient_start, profile_gradient_end, profile_name_effect, profile_effect, (profile_banner_data IS NOT NULL) AS has_profile_banner, active_server_tag_id FROM users WHERE id=$1',
     [req.params.userId]
   );
   if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
@@ -56,7 +93,13 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
     bio: u.bio || null,
     activeDecoration: u.active_decoration || null,
     activeNameplate: u.active_nameplate || null,
-    pro: (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileGradientStart: u.profile_gradient_start, profileGradientEnd: u.profile_gradient_end, profileNameEffect: u.profile_name_effect,
+    pro: (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000),
+    profileCardStyle: u.profile_card_style || 'soft',
+    profileGradientStart: u.profile_gradient_start,
+    profileGradientEnd: u.profile_gradient_end,
+    profileNameEffect: u.profile_name_effect,
+    profileEffect: u.profile_effect || 'none',
+    profileBannerUrl: u.has_profile_banner ? `/api/users/banner/${u.id}` : null,
     serverTag: tag.rows[0] ? { name: tag.rows[0].name, inviteCode: tag.rows[0].invite_code, tag: tag.rows[0].server_tag, background: tag.rows[0].tag_background, iconDataUrl: tag.rows[0].icon_data ? `data:${tag.rows[0].icon_mime};base64,${tag.rows[0].icon_data}` : null } : null
   });
 });

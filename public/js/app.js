@@ -3189,7 +3189,7 @@
     renderAvatar($('chat-peer-avatar'), user);
     $('chat-peer-name').textContent = user.displayName;
     $('chat-peer-name').className = 'display-name';
-    applyNameplateSurface($('chat-peer-name').closest('.chat-peer-info'), user);
+    applyNameplateSurface($('chat-peer-name').closest('.chat-peer-info'), null);
     $('chat-peer-username').textContent = '@' + user.username;
     const statusDot = $('chat-peer-status');
     statusDot.className = `status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}`;
@@ -3216,17 +3216,26 @@
   function renderDmProfilePanel(user) {
     const panel = $('dm-profile-panel');
     if (!panel || !user) return;
+    const cardStyle = String(user.profileCardStyle || 'soft').replace(/[^a-z0-9_-]/gi, '');
+    const profileEffect = String(user.profileEffect || 'none').replace(/[^a-z0-9_-]/gi, '');
+    panel.className = `dm-profile-panel${user.proActive ? ` pro-profile-card profile-style-${cardStyle} profile-effect-${profileEffect}` : ''}`;
+    panel.style.setProperty('--profile-start', user.proGradientStart || '#5865f2');
+    panel.style.setProperty('--profile-end', user.proGradientEnd || '#a855f7');
+    const bannerStyle = user.proActive && user.profileBannerUrl
+      ? `background-image:linear-gradient(180deg,transparent,rgba(0,0,0,.16)),url('${esc(normalizeAssetUrl(user.profileBannerUrl))}')`
+      : '';
     panel.innerHTML = `
-      <div class="dm-profile-banner nameplate-${esc(user.activeNameplate || 'none')}"></div>
+      <div class="profile-effect-layer"></div>
+      <div class="dm-profile-banner" style="${bannerStyle}"></div>
       <div class="dm-profile-avatar avatar-wrap"><div class="avatar" id="dm-profile-avatar"></div><div class="status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}"></div></div>
-      <div class="dm-profile-copy${nameplateSurfaceClass(user)}">
-        <div class="dm-profile-name">${esc(user.displayName)}${identityTagHtml(user)}</div>
+      <div class="dm-profile-copy">
+        <div class="dm-profile-name${user.proActive && user.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${esc(user.proGradientStart || '#5865f2')};--pro-name-end:${esc(user.proGradientEnd || '#a855f7')}">${esc(user.displayName)}${identityTagHtml(user)}</div>
         <div class="username">@${esc(user.username)}</div>
         <div class="dm-profile-status">${normalizedStatus(visibleStatus(user)) === 'offline' ? 'Offline' : 'Currently ' + normalizedStatus(visibleStatus(user))}</div>
       </div>
       <div class="dm-profile-section">
         <span>ABOUT</span>
-        <p>${esc(user.bio || 'Nexus friend')}</p>
+        <p>${esc(user.bio || 'No bio yet.')}</p>
       </div>
       <button class="dm-profile-message" onclick="document.getElementById('message-input').focus()">Message @${esc(user.username)}</button>`;
     renderAvatar($('dm-profile-avatar'), user);
@@ -6332,14 +6341,132 @@
     if (data.error) return toast(data.error, 'error');
     const count = $('pro-nexal-count'); if (count) count.textContent = data.nexals.toLocaleString();
     const status = data.pro.active ? 'Active until ' + new Date(data.pro.expiresAt * 1000).toLocaleDateString() : 'Inactive';
-    $('pro-content').innerHTML = `<div class="pro-hero"><div><div class="pro-kicker">NEXUS PRO</div><h2>Make your profile unmistakable.</h2><p>${status}. Pro is ${data.pro.price.toLocaleString()} Nexals for 30 days.</p></div><button class="shop-card-btn buy" onclick="subscribePro()">${data.pro.active ? 'Extend Pro' : 'Get Pro'}</button></div><div class="pro-benefits"><div><b>Custom banner</b><span>Choose the exact two-color gradient for your profile popup.</span></div><div><b>Name effects</b><span>Add a shimmer or prismatic sweep to your display name.</span></div><div><b>Premium popup</b><span>Your custom look appears wherever your profile is opened.</span></div></div>${data.pro.active ? `<div class="pro-customizer"><div class="pro-customizer-preview" id="pro-preview"><div class="pro-preview-avatar">N</div><b>${esc(currentUser.displayName || 'You')}</b><span>@${esc(currentUser.username || '')}</span></div><div class="pro-customizer-controls"><label>Banner start <input type="color" id="pro-gradient-start" value="#5865f2"></label><label>Banner end <input type="color" id="pro-gradient-end" value="#a855f7"></label><label>Name effect <select id="pro-name-effect"><option value="none">Clean gradient</option><option value="shimmer">Shimmer</option><option value="prism">Prism sweep</option></select></label><button class="shop-card-btn buy" onclick="saveProCustomization()">Save Popup Look</button></div></div>` : ''}`;
-    return;
-    $('pro-content').innerHTML = `<div class="shop-card" style="max-width:620px"><div class="shop-card-name">Nexus Pro</div><div class="shop-card-desc">${status}. Pro unlocks profile card themes and premium profile styling.</div><div class="shop-card-price">${data.pro.price.toLocaleString()} Nexals / 30 days</div><button class="shop-card-btn buy" onclick="subscribePro()">${data.pro.active ? 'Extend Pro' : 'Get Pro'}</button>${data.pro.active ? `<div style="display:flex;gap:8px;margin-top:10px"><button class="shop-card-btn" onclick="setProStyle('aurora')">Aurora</button><button class="shop-card-btn" onclick="setProStyle('ember')">Ember</button><button class="shop-card-btn" onclick="setProStyle('glacier')">Glacier</button></div>` : ''}</div><div class="shop-subsection"><h2>Server Boosts</h2><p>One boost is 10,000 Nexals for 30 days. Two active boosts unlock a server tag and animated gradient role colors.</p></div><div class="shop-grid">${data.servers.map(s => `<div class="shop-card"><div class="shop-card-name">${esc(s.name)}</div><div class="shop-card-desc">${s.boostCount} active boosts${s.tag ? ' | Tag: ' + esc(s.tag) : ''}</div>${s.tagUnlocked ? `<div style="display:flex;gap:6px;margin:8px 0"><input id="tag-${s.id}" maxlength="4" value="${esc(s.tag || '')}" style="width:68px;text-transform:uppercase"><button class="shop-card-btn" onclick="setServerTag('${s.id}')">Set Tag</button></div>` : ''}<button class="shop-card-btn buy" onclick="boostServer('${s.id}')">Boost for ${data.boostPrice.toLocaleString()}</button></div>`).join('')}</div>`;
+    const pro = data.pro;
+    const selected = (value, expected) => value === expected ? 'selected' : '';
+    $('pro-content').innerHTML = `
+      <div class="pro-hero">
+        <div><div class="pro-kicker">NEXUS PRO</div><h2>Build a profile that feels like yours.</h2><p>${status}. Pro is ${pro.price.toLocaleString()} Nexals for 30 days.</p></div>
+        <button class="shop-card-btn buy" onclick="subscribePro()">${pro.active ? 'Extend Pro' : 'Get Pro'}</button>
+      </div>
+      <div class="pro-benefits">
+        <div><b>Profile theme</b><span>Set primary and accent colors across your complete profile card.</span></div>
+        <div><b>Custom banner</b><span>Upload a PNG, JPG, GIF, or WebP banner up to 2 MB.</span></div>
+        <div><b>Profile effects</b><span>Choose a full-card animation that plays when your profile is viewed.</span></div>
+        <div><b>Display name style</b><span>Apply shimmer or prism motion to your name in profiles and DMs.</span></div>
+      </div>
+      ${pro.active ? `<div class="pro-studio">
+        <div class="pro-studio-preview">
+          <div class="pro-profile-editor-preview pro-profile-card profile-style-${esc(pro.cardStyle)} profile-effect-${esc(pro.profileEffect)}" id="pro-preview" style="--profile-start:${esc(pro.gradientStart)};--profile-end:${esc(pro.gradientEnd)}">
+            <div class="profile-effect-layer"></div>
+            <div class="pro-preview-banner" id="pro-preview-banner" ${pro.bannerUrl ? `style="background-image:linear-gradient(180deg,transparent,rgba(0,0,0,.18)),url('${esc(normalizeAssetUrl(pro.bannerUrl))}')"` : ''}></div>
+            <div class="pro-preview-avatar avatar" id="pro-preview-avatar">N</div>
+            <div class="pro-preview-body">
+              <b class="${pro.nameEffect !== 'none' ? 'pro-name-effect' : ''}" id="pro-preview-name" style="--pro-name-start:${esc(pro.gradientStart)};--pro-name-end:${esc(pro.gradientEnd)}">${esc(currentUser.displayName || 'You')}</b>
+              <span>@${esc(currentUser.username || '')}</span>
+              <p>${esc(currentUser.bio || 'Add a bio in Profile settings.')}</p>
+            </div>
+          </div>
+        </div>
+        <div class="pro-studio-controls">
+          <div class="pro-control-row">
+            <label>Primary color<input type="color" id="pro-gradient-start" value="${esc(pro.gradientStart)}" oninput="updateProPreview()"></label>
+            <label>Accent color<input type="color" id="pro-gradient-end" value="${esc(pro.gradientEnd)}" oninput="updateProPreview()"></label>
+          </div>
+          <label>Card style<select id="pro-card-style" onchange="updateProPreview()">
+            <option value="soft" ${selected(pro.cardStyle, 'soft')}>Soft Gradient</option>
+            <option value="aurora" ${selected(pro.cardStyle, 'aurora')}>Aurora Glass</option>
+            <option value="ember" ${selected(pro.cardStyle, 'ember')}>Ember</option>
+            <option value="glacier" ${selected(pro.cardStyle, 'glacier')}>Glacier</option>
+            <option value="midnight" ${selected(pro.cardStyle, 'midnight')}>Midnight</option>
+            <option value="holo" ${selected(pro.cardStyle, 'holo')}>Holographic</option>
+          </select></label>
+          <label>Profile effect<select id="pro-profile-effect" onchange="updateProPreview()">
+            <option value="none" ${selected(pro.profileEffect, 'none')}>None</option>
+            <option value="aurora" ${selected(pro.profileEffect, 'aurora')}>Aurora Veil</option>
+            <option value="stardust" ${selected(pro.profileEffect, 'stardust')}>Stardust</option>
+            <option value="scanlines" ${selected(pro.profileEffect, 'scanlines')}>Cyber Scan</option>
+            <option value="pulse" ${selected(pro.profileEffect, 'pulse')}>Chromatic Pulse</option>
+          </select></label>
+          <label>Display name<select id="pro-name-effect" onchange="updateProPreview()">
+            <option value="none" ${selected(pro.nameEffect, 'none')}>Theme gradient</option>
+            <option value="shimmer" ${selected(pro.nameEffect, 'shimmer')}>Shimmer</option>
+            <option value="prism" ${selected(pro.nameEffect, 'prism')}>Prism sweep</option>
+          </select></label>
+          <div class="pro-banner-controls">
+            <label class="pro-banner-upload">Choose Banner<input type="file" id="pro-banner-input" accept="image/png,image/jpeg,image/gif,image/webp" onchange="uploadProBanner(this)"></label>
+            <button class="btn-secondary" onclick="removeProBanner()" ${pro.bannerUrl ? '' : 'disabled'}>Remove</button>
+          </div>
+          <button class="btn-primary" onclick="saveProCustomization()">Save Profile Theme</button>
+        </div>
+      </div>` : ''}
+    `;
+    if (pro.active) {
+      renderAvatar($('pro-preview-avatar'), currentUser, false);
+      updateProPreview();
+    }
   }
 
-  window.subscribePro = async function() { const r = await api('POST', '/api/perks/pro/subscribe'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); toast('Pro activated', 'success'); await loadPro(); };
+  window.subscribePro = async function() { const r = await api('POST', '/api/perks/pro/subscribe'); if (r.error) return toast(r.error, 'error'); currentUser.proActive = true; updateNexalDisplay(r.nexals); updateSelfCard(); toast('Pro activated', 'success'); await loadPro(); };
   window.setProStyle = async function(style) { const r = await api('POST', '/api/perks/profile-style', { style }); if (r.error) return toast(r.error, 'error'); const card = document.querySelector('.user-card'); if (card) { card.classList.remove('pro-aurora','pro-ember','pro-glacier'); card.classList.add('pro-' + style); } toast('Profile style updated', 'success'); };
-  window.saveProCustomization = async function() { const start = $('pro-gradient-start').value, end = $('pro-gradient-end').value, nameEffect = $('pro-name-effect').value; const r = await api('PATCH', '/api/perks/profile-customize', { gradientStart:start, gradientEnd:end, nameEffect }); if (r.error) return toast(r.error, 'error'); const preview = $('pro-preview'); if (preview) { preview.style.setProperty('--pro-start', start); preview.style.setProperty('--pro-end', end); } toast('Profile popup customized', 'success'); };
+  window.updateProPreview = function() {
+    const preview = $('pro-preview');
+    if (!preview) return;
+    const start = $('pro-gradient-start')?.value || '#5865f2';
+    const end = $('pro-gradient-end')?.value || '#a855f7';
+    const style = $('pro-card-style')?.value || 'soft';
+    const effect = $('pro-profile-effect')?.value || 'none';
+    const nameEffect = $('pro-name-effect')?.value || 'none';
+    preview.className = `pro-profile-editor-preview pro-profile-card profile-style-${style} profile-effect-${effect}`;
+    preview.style.setProperty('--profile-start', start);
+    preview.style.setProperty('--profile-end', end);
+    const name = $('pro-preview-name');
+    if (name) {
+      name.className = nameEffect === 'none' ? '' : 'pro-name-effect';
+      name.style.setProperty('--pro-name-start', start);
+      name.style.setProperty('--pro-name-end', end);
+    }
+  };
+  window.saveProCustomization = async function() {
+    const payload = {
+      gradientStart: $('pro-gradient-start').value,
+      gradientEnd: $('pro-gradient-end').value,
+      nameEffect: $('pro-name-effect').value,
+      cardStyle: $('pro-card-style').value,
+      profileEffect: $('pro-profile-effect').value
+    };
+    const r = await api('PATCH', '/api/perks/profile-customize', payload);
+    if (r.error) return toast(r.error, 'error');
+    Object.assign(currentUser, {
+      proGradientStart: payload.gradientStart,
+      proGradientEnd: payload.gradientEnd,
+      proNameEffect: payload.nameEffect,
+      profileCardStyle: payload.cardStyle,
+      profileEffect: payload.profileEffect
+    });
+    updateSelfCard();
+    toast('Pro profile theme saved', 'success');
+  };
+  window.uploadProBanner = async function(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append('banner', file);
+    const response = await fetch('/api/users/profile-banner', { method: 'POST', body: form, credentials: 'same-origin', headers: deviceHeaders() });
+    const result = await response.json().catch(() => ({ error: 'Could not upload banner' }));
+    if (!response.ok || result.error) return toast(result.error || 'Could not upload banner', 'error');
+    currentUser.profileBannerUrl = result.profileBannerUrl;
+    const banner = $('pro-preview-banner');
+    if (banner) banner.style.backgroundImage = `linear-gradient(180deg,transparent,rgba(0,0,0,.18)),url('${normalizeAssetUrl(result.profileBannerUrl)}')`;
+    toast('Profile banner uploaded', 'success');
+    await loadPro();
+  };
+  window.removeProBanner = async function() {
+    const result = await api('DELETE', '/api/users/profile-banner');
+    if (result.error) return toast(result.error, 'error');
+    currentUser.profileBannerUrl = null;
+    toast('Profile banner removed', 'info');
+    await loadPro();
+  };
   window.adoptServerTag = async function(serverId) { const r = await api('POST', '/api/perks/adopt-tag', { serverId }); if (r.error) return toast(r.error, 'error'); const me = await api('GET','/api/auth/me'); if (me.user) { currentUser = me.user; updateSelfCard(); } toast('Server tag adopted', 'success'); };
   window.boostServer = async function(serverId) { const r = await api('POST', '/api/perks/servers/' + serverId + '/boost'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); toast('Server boosted', 'success'); await loadPro(); };
   window.setServerTag = async function(serverId) { const input = $('tag-' + serverId); const r = await api('PATCH', '/api/perks/servers/' + serverId + '/tag', { tag: input ? input.value : '' }); if (r.error) return toast(r.error, 'error'); toast('Server tag updated', 'success'); await loadPro(); };
@@ -7083,6 +7210,11 @@
     e.stopPropagation();
     const data = JSON.parse(decodeURIComponent(encodedData));
     const popup = $('profile-popup');
+    popup.className = 'profile-popup';
+    popup.style.removeProperty('--profile-start');
+    popup.style.removeProperty('--profile-end');
+    const popupBanner = popup.querySelector('.profile-popup-banner');
+    if (popupBanner) popupBanner.style.backgroundImage = '';
 
     // Render what we have immediately
     renderAvatar($('popup-avatar'), data);
@@ -7130,8 +7262,17 @@
       popup.classList.toggle('pro-profile', !!r.pro);
       popup.classList.toggle('effect-shimmer', r.profileNameEffect === 'shimmer');
       popup.classList.toggle('effect-prism', r.profileNameEffect === 'prism');
+      if (r.pro) {
+        popup.classList.add(
+          `profile-style-${String(r.profileCardStyle || 'soft').replace(/[^a-z0-9_-]/gi, '')}`,
+          `profile-effect-${String(r.profileEffect || 'none').replace(/[^a-z0-9_-]/gi, '')}`
+        );
+      }
       popup.style.setProperty('--profile-start', r.profileGradientStart || '#5865f2');
       popup.style.setProperty('--profile-end', r.profileGradientEnd || '#a855f7');
+      if (popupBanner && r.pro && r.profileBannerUrl) {
+        popupBanner.style.backgroundImage = `linear-gradient(180deg,transparent,rgba(0,0,0,.18)),url('${normalizeAssetUrl(r.profileBannerUrl)}')`;
+      }
       $('popup-name').className = 'profile-popup-name';
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {

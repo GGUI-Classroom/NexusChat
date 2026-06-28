@@ -27,7 +27,7 @@ async function isServerAdmin(serverId, userId) {
 router.get('/', async (req, res) => {
   const now = nowSeconds();
   const [userRes, serversRes] = await Promise.all([
-    pool.query('SELECT nexals, pro_expires_at, profile_card_style FROM users WHERE id=$1', [req.session.userId]),
+    pool.query('SELECT id, nexals, pro_expires_at, profile_card_style, profile_gradient_start, profile_gradient_end, profile_name_effect, profile_effect, (profile_banner_data IS NOT NULL) AS has_profile_banner FROM users WHERE id=$1', [req.session.userId]),
     pool.query(`
       SELECT s.id, s.name, s.server_tag, s.tag_background, COUNT(sb.id)::int AS boost_count
       FROM servers s
@@ -40,7 +40,19 @@ router.get('/', async (req, res) => {
   const user = userRes.rows[0] || {};
   res.json({
     nexals: user.nexals || 0,
-    pro: { active: (user.pro_expires_at || 0) > now, expiresAt: user.pro_expires_at || 0, price: PRO_PRICE, styles: ['aurora', 'ember', 'glacier'] },
+    pro: {
+      active: (user.pro_expires_at || 0) > now,
+      expiresAt: user.pro_expires_at || 0,
+      price: PRO_PRICE,
+      styles: ['soft', 'aurora', 'ember', 'glacier', 'midnight', 'holo'],
+      effects: ['none', 'aurora', 'stardust', 'scanlines', 'pulse'],
+      cardStyle: user.profile_card_style || 'soft',
+      gradientStart: user.profile_gradient_start || '#5865f2',
+      gradientEnd: user.profile_gradient_end || '#a855f7',
+      nameEffect: user.profile_name_effect || 'none',
+      profileEffect: user.profile_effect || 'none',
+      bannerUrl: user.has_profile_banner ? `/api/users/banner/${user.id}` : null
+    },
     servers: serversRes.rows.map(s => ({ id: s.id, name: s.name, boostCount: s.boost_count, tag: s.boost_count >= 2 ? s.server_tag : null, tagBackground: s.tag_background || '#5865f2', tagUnlocked: s.boost_count >= 2 })),
     boostPrice: BOOST_PRICE,
     boostDurationSeconds: MONTH_SECONDS
@@ -120,7 +132,7 @@ router.post('/servers/:serverId/spend', async (req, res) => {
 
 router.post('/profile-style', async (req, res) => {
   const style = String(req.body.style || '').trim().toLowerCase();
-  if (style && !['aurora', 'ember', 'glacier'].includes(style)) return res.status(400).json({ error: 'Invalid profile style' });
+  if (style && !['soft', 'aurora', 'ember', 'glacier', 'midnight', 'holo'].includes(style)) return res.status(400).json({ error: 'Invalid profile style' });
   const now = nowSeconds();
   const user = await pool.query('SELECT pro_expires_at FROM users WHERE id=$1', [req.session.userId]);
   if ((user.rows[0]?.pro_expires_at || 0) <= now) return res.status(403).json({ error: 'Active Pro is required' });
@@ -143,12 +155,19 @@ router.post('/adopt-tag', async (req, res) => {
 router.patch('/profile-customize', async (req, res) => {
   const start = String(req.body.gradientStart || ''); const end = String(req.body.gradientEnd || '');
   const effect = String(req.body.nameEffect || 'none');
-  if (!/^#[0-9a-f]{6}$/i.test(start) || !/^#[0-9a-f]{6}$/i.test(end) || !['none','shimmer','prism'].includes(effect)) return res.status(400).json({ error: 'Invalid profile customization' });
+  const style = String(req.body.cardStyle || 'soft').toLowerCase();
+  const profileEffect = String(req.body.profileEffect || 'none').toLowerCase();
+  if (!/^#[0-9a-f]{6}$/i.test(start) || !/^#[0-9a-f]{6}$/i.test(end)
+    || !['none','shimmer','prism'].includes(effect)
+    || !['soft','aurora','ember','glacier','midnight','holo'].includes(style)
+    || !['none','aurora','stardust','scanlines','pulse'].includes(profileEffect)) {
+    return res.status(400).json({ error: 'Invalid profile customization' });
+  }
   const now = nowSeconds();
   const user = await pool.query('SELECT pro_expires_at FROM users WHERE id=$1', [req.session.userId]);
   if ((user.rows[0]?.pro_expires_at || 0) <= now) return res.status(403).json({ error: 'Active Pro is required' });
-  await pool.query('UPDATE users SET profile_gradient_start=$1, profile_gradient_end=$2, profile_name_effect=$3 WHERE id=$4', [start, end, effect, req.session.userId]);
-  res.json({ success: true });
+  await pool.query('UPDATE users SET profile_gradient_start=$1, profile_gradient_end=$2, profile_name_effect=$3, profile_card_style=$4, profile_effect=$5 WHERE id=$6', [start, end, effect, style, profileEffect, req.session.userId]);
+  res.json({ success: true, gradientStart: start, gradientEnd: end, nameEffect: effect, cardStyle: style, profileEffect });
 });
 
 module.exports = router;
