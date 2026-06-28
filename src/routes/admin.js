@@ -360,7 +360,7 @@ router.post('/user-reports/:reportId/resolve', async (req, res) => {
 router.get('/users/:userId', async (req, res) => {
   const { userId } = req.params;
   const userRes = await pool.query(
-    'SELECT id, username, display_name, nexals, active_font, last_ip FROM users WHERE id=$1', [userId]
+    'SELECT id, username, display_name, nexals, active_font, active_nameplate, pro_expires_at, last_ip FROM users WHERE id=$1', [userId]
   );
   if (!userRes.rows.length) return res.status(404).json({ error: 'User not found' });
   const u = userRes.rows[0];
@@ -381,7 +381,9 @@ router.get('/users/:userId', async (req, res) => {
 
   const ownedDecos = await pool.query('SELECT decoration_id FROM user_decorations WHERE user_id=$1', [userId]);
   const ownedSet = new Set(ownedDecos.rows.map(r => r.decoration_id));
-  const { DECORATIONS } = require('./shop');
+  const ownedNameplates = await pool.query('SELECT DISTINCT nameplate_id FROM user_nameplates WHERE user_id=$1', [userId]);
+  const ownedNameplateSet = new Set(ownedNameplates.rows.map(r => r.nameplate_id));
+  const { DECORATIONS, NAMEPLATES } = require('./shop');
   const ownedFonts = await pool.query('SELECT font_id FROM user_fonts WHERE user_id=$1', [userId]);
   const ownedFontSet = new Set(ownedFonts.rows.map(r => r.font_id));
   const { FONTS } = require('./colors');
@@ -389,6 +391,8 @@ router.get('/users/:userId', async (req, res) => {
   res.json({
     id: u.id, username: u.username, displayName: u.display_name,
     nexals: u.nexals,
+    proActive: (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000),
+    proExpiresAt: parseInt(u.pro_expires_at || 0),
     lastIp: u.last_ip || null,
     suspendedUntil: suspRes.rows[0] ? parseInt(suspRes.rows[0].suspended_until) : null,
     suspendReason: suspRes.rows[0]?.reason || null,
@@ -397,6 +401,13 @@ router.get('/users/:userId', async (req, res) => {
       iconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
     })),
     decorations: DECORATIONS.map(d => ({ id: d.id, name: d.name, rarity: d.rarity, owned: ownedSet.has(d.id) })),
+    nameplates: NAMEPLATES.map(nameplate => ({
+      id: nameplate.id,
+      name: nameplate.name,
+      rarity: nameplate.rarity,
+      owned: ownedNameplateSet.has(nameplate.id),
+      active: u.active_nameplate === nameplate.id
+    })),
     fonts: FONTS.map(f => ({ id: f.id, name: f.name, owned: ownedFontSet.has(f.id), active: u.active_font === f.id })),
   });
 });
@@ -445,6 +456,71 @@ router.delete('/users/:userId/decorations/:decorationId', async (req, res) => {
   await pool.query('UPDATE users SET active_decoration=NULL WHERE id=$1 AND active_decoration=$2', [userId, decorationId]);
   await pool.query('DELETE FROM user_decorations WHERE user_id=$1 AND decoration_id=$2', [userId, decorationId]);
   res.json({ success: true });
+});
+
+router.post('/users/:userId/nameplates', requireCoreAdmin, async (req, res) => {
+  const { userId } = req.params;
+  const nameplateId = String(req.body.nameplateId || '').trim();
+  const { NAMEPLATES } = require('./shop');
+  if (!NAMEPLATES.some(nameplate => nameplate.id === nameplateId)) {
+    return res.status(404).json({ error: 'Unknown nameplate' });
+  }
+  const target = await pool.query('SELECT id FROM users WHERE id=$1', [userId]);
+  if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
+  const owned = await pool.query(
+    'SELECT id FROM user_nameplates WHERE user_id=$1 AND nameplate_id=$2 LIMIT 1',
+    [userId, nameplateId]
+  );
+  if (owned.rows.length) return res.status(409).json({ error: 'User already owns this nameplate' });
+  await pool.query(
+    'INSERT INTO user_nameplates (id, user_id, nameplate_id) VALUES ($1,$2,$3)',
+    [uuidv4(), userId, nameplateId]
+  );
+  res.json({ success: true, nameplateId });
+});
+
+router.delete('/users/:userId/nameplates/:nameplateId', requireCoreAdmin, async (req, res) => {
+  const { userId, nameplateId } = req.params;
+  await pool.query(
+    'UPDATE users SET active_nameplate=NULL WHERE id=$1 AND active_nameplate=$2',
+    [userId, nameplateId]
+  );
+  await pool.query(
+    'DELETE FROM user_nameplates WHERE user_id=$1 AND nameplate_id=$2',
+    [userId, nameplateId]
+  );
+  res.json({ success: true });
+});
+
+router.post('/users/:userId/pro', requireCoreAdmin, async (req, res) => {
+  const { userId } = req.params;
+  const days = Math.min(365, Math.max(1, parseInt(req.body.days, 10) || 30));
+  const now = Math.floor(Date.now() / 1000);
+  const target = await pool.query(
+    'SELECT id, username, pro_expires_at FROM users WHERE id=$1',
+    [userId]
+  );
+  if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
+  const expiresAt = Math.max(now, parseInt(target.rows[0].pro_expires_at || 0)) + days * 86400;
+  await pool.query('UPDATE users SET pro_expires_at=$1 WHERE id=$2', [expiresAt, userId]);
+  await sendNexusGuardDM(
+    req,
+    userId,
+    `[NexusGuard] A Core admin granted your account ${days} days of Nexus Pro. Pro is active until ${new Date(expiresAt * 1000).toLocaleDateString()}.`
+  );
+  if (req.io) req.io.to(`user:${userId}`).emit('pro_updated', { active: true, expiresAt });
+  res.json({ success: true, expiresAt, days });
+});
+
+router.delete('/users/:userId/pro', requireCoreAdmin, async (req, res) => {
+  const { userId } = req.params;
+  const updated = await pool.query(
+    'UPDATE users SET pro_expires_at=0 WHERE id=$1 RETURNING id',
+    [userId]
+  );
+  if (!updated.rows.length) return res.status(404).json({ error: 'User not found' });
+  if (req.io) req.io.to(`user:${userId}`).emit('pro_updated', { active: false, expiresAt: 0 });
+  res.json({ success: true, expiresAt: 0 });
 });
 
 router.post('/users/:userId/fonts', async (req, res) => {

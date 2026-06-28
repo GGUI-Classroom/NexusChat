@@ -1007,3 +1007,4 @@ router.delete('/unclaim/:decorationId', async (req, res) => {
 module.exports = router;
 module.exports.DECORATIONS = DECORATIONS;
 module.exports.DECORATION_PACKS = DECORATION_PACKS;
+module.exports.NAMEPLATES = NAMEPLATES;
