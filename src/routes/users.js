@@ -86,7 +86,8 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
   );
   if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
   const u = r.rows[0];
-  const tag = await pool.query(`SELECT s.name, s.invite_code, s.server_tag, s.tag_background, s.icon_data, s.icon_mime FROM servers s JOIN server_boost_allocations a ON a.server_id=s.id AND a.feature='tag' WHERE s.id=$1`, [u.active_server_tag_id]);
+  const tag = await pool.query(`SELECT s.name, s.invite_code, s.server_tag, s.tag_background, s.icon_data, s.icon_mime, s.tag_private FROM servers s JOIN server_boost_allocations a ON a.server_id=s.id AND a.feature='tag' WHERE s.id=$1`, [u.active_server_tag_id]);
+  const tagRow = tag.rows[0];
   res.json({
     id: u.id, username: u.username, displayName: u.display_name,
     avatarDataUrl: avatarUrl(u.id, !!u.has_avatar),
@@ -100,7 +101,14 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
     profileNameEffect: u.profile_name_effect,
     profileEffect: u.profile_effect || 'none',
     profileBannerUrl: u.has_profile_banner ? `/api/users/banner/${u.id}` : null,
-    serverTag: tag.rows[0] ? { name: tag.rows[0].name, inviteCode: tag.rows[0].invite_code, tag: tag.rows[0].server_tag, background: tag.rows[0].tag_background, iconDataUrl: tag.rows[0].icon_data ? `data:${tag.rows[0].icon_mime};base64,${tag.rows[0].icon_data}` : null } : null
+    serverTag: tagRow ? {
+      name: tagRow.tag_private ? null : tagRow.name,
+      inviteCode: tagRow.tag_private ? null : tagRow.invite_code,
+      tag: tagRow.server_tag,
+      background: tagRow.tag_background,
+      iconDataUrl: !tagRow.tag_private && tagRow.icon_data ? `data:${tagRow.icon_mime};base64,${tagRow.icon_data}` : null,
+      private: !!tagRow.tag_private
+    } : null
   });
 });
 

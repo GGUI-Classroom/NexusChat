@@ -44,6 +44,7 @@ function fmtServer(s) {
     iconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
     inviteCode: s.invite_code, createdAt: s.created_at,
     tag: s.server_tag || null,
+    tagPrivate: !!s.tag_private,
     inviteDescription: s.invite_description || '',
     inviteTags: s.invite_tags || '',
     inviteBannerMode: s.invite_banner_mode || 'solid',
@@ -230,7 +231,7 @@ router.get('/:id', async (req, res) => {
     `, [id, req.session.userId]),
     pool.query(
       `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start, sr.gradient_end, sr.gradient_animated, sr.is_admin,
-       u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.discord_status, u.discord_activity, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_nameplate, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
+       u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.discord_status, u.discord_activity, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_nameplate, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
        LEFT JOIN server_roles sr ON sr.id=sm.role_id
@@ -275,7 +276,7 @@ router.get('/:id', async (req, res) => {
       activeColor: m.active_color || null,
       activeColor: m.active_color || null,
       activeFont: m.active_font || null,
-      activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_server_name || null, activeServerTagInviteCode: m.tag_invite_code || null
+      activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_private ? null : (m.tag_server_name || null), activeServerTagInviteCode: m.tag_private ? null : (m.tag_invite_code || null), activeServerTagPrivate: !!m.tag_private
     })),
     roles: roleRes.rows.map(r => roleForClient(r, boostRes.has('gradients')))
   });
@@ -404,6 +405,7 @@ router.patch('/:id/invite-style', async (req, res) => {
   const start = /^#[0-9a-f]{6}$/i.test(String(req.body.bannerStart || '')) ? req.body.bannerStart : '#5865f2';
   const end = /^#[0-9a-f]{6}$/i.test(String(req.body.bannerEnd || '')) ? req.body.bannerEnd : '#a855f7';
   const image = String(req.body.bannerImage || '').trim().slice(0, 2000);
+  const tagPrivate = req.body.tagPrivate === true;
   if (!['solid', 'gradient', 'image'].includes(mode)) return res.status(400).json({ error: 'Invalid invite banner mode' });
   if (mode === 'image' && !/^https:\/\/.+/i.test(image)) return res.status(400).json({ error: 'Banner image must use a secure https URL' });
   if (mode !== 'solid') {
@@ -411,8 +413,8 @@ router.patch('/:id/invite-style', async (req, res) => {
     if (!features.has('invite_banner')) return res.status(403).json({ error: 'Spend two boosts on Invite Banners before using gradients or images' });
   }
   await pool.query(`UPDATE servers SET invite_description=$1, invite_tags=$2, invite_banner_mode=$3,
-    invite_banner_start=$4, invite_banner_end=$5, invite_banner_image=$6 WHERE id=$7`,
-  [description || null, tags, mode, start, end, mode === 'image' ? image : null, id]);
+    invite_banner_start=$4, invite_banner_end=$5, invite_banner_image=$6, tag_private=$7 WHERE id=$8`,
+  [description || null, tags, mode, start, end, mode === 'image' ? image : null, tagPrivate, id]);
   const updated = await pool.query('SELECT * FROM servers WHERE id=$1', [id]);
   res.json({ success: true, server: fmtServer(updated.rows[0]) });
 });
@@ -764,7 +766,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   if (!channelMeta.rows.length) return res.status(404).json({ error: 'Channel not found' });
   if ((channelMeta.rows[0].channel_type || 'text') === 'voice') return res.json({ messages: [] });
   let q = `SELECT cm.id, cm.channel_id, cm.from_id, cm.content, cm.created_at, cm.reply_to_id,
-    u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
+    u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
     sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
     rm.content as reply_content,
     rm.from_id as reply_from_id,
@@ -815,7 +817,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
         activeNameplate: m.active_nameplate || null,
         activeColor: m.active_color || null,
         activeFont: m.active_font || null, proActive: (m.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: m.profile_gradient_start, proGradientEnd: m.profile_gradient_end, proNameEffect: m.profile_name_effect,
-        activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_server_name || null, activeServerTagInviteCode: m.tag_invite_code || null
+        activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_private ? null : (m.tag_server_name || null), activeServerTagInviteCode: m.tag_private ? null : (m.tag_invite_code || null), activeServerTagPrivate: !!m.tag_private
       };
     }
   });

@@ -2002,6 +2002,9 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .profile-popup-tag { display:flex;align-items:center;gap:7px;border:0;border-radius:6px;padding:6px 8px;margin:4px 0 10px;color:#fff;background:var(--tag-background,#5865f2);cursor:pointer;font:inherit;font-size:11px;font-weight:800; }
 .profile-popup-tag img { width:18px;height:18px;border-radius:50%;object-fit:cover; }
 .profile-popup-tag-invite { margin:2px 0 10px;padding:10px;border:1px solid var(--border-bright);background:var(--bg-surface);font-size:12px;color:var(--text-secondary); }.profile-popup-tag-invite strong { display:block;color:var(--text-primary);margin-bottom:3px; }.profile-popup-tag-invite button { margin-top:8px;width:100%;padding:7px;border:0;background:var(--accent);color:#fff;font-weight:800;cursor:pointer; }
+.profile-popup.server-tag-card .profile-popup-banner { height:42px;background:var(--tag-card-color,#5865f2); }
+.profile-popup.server-tag-card .profile-popup-body { padding-top:14px; }
+.profile-popup.server-tag-card .profile-popup-tag-invite { margin-top:12px;border-left:3px solid var(--tag-card-color,#5865f2);border-radius:6px;line-height:1.45; }
 .profile-popup-discord-activity { margin:8px 0 2px; padding:7px 9px; border-left:3px solid #5865f2; background:rgba(88,101,242,.12); color:var(--text-secondary); font-size:12px; line-height:1.35; }
 #popup-gift-actions { display:flex; }
 .tutorial-modal { max-width:620px; }
@@ -6840,6 +6843,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .auction-sell-row select,
 .auction-sell-row input,
 .economy-create input,
+.economy-create select,
 .call-token-panel input,
 .blackjack-buyin-panel input {
   background: var(--bg-void);
@@ -6849,6 +6853,22 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   padding: 10px 12px;
   font: inherit;
 }
+.economy-create { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.economy-create .btn-primary { grid-column:1 / -1; }
+.economy-role-reward {
+  display:inline-flex!important;
+  width:max-content;
+  max-width:100%;
+  padding:3px 7px;
+  border:1px solid color-mix(in srgb,var(--reward-role) 58%,transparent);
+  border-radius:4px;
+  color:var(--reward-role)!important;
+  background:color-mix(in srgb,var(--reward-role) 12%,transparent);
+  font-size:10px!important;
+  font-weight:800;
+}
+.server-economy-modal { max-width:860px; }
+.server-economy-modal .modal-body { max-height:min(72vh,680px);overflow-y:auto; }
 .auction-grid,
 .economy-grid {
   display: grid;
@@ -6911,6 +6931,11 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 }
 .economy-card.disabled {
   opacity: 0.6;
+}
+@media(max-width:620px) {
+  .economy-create { grid-template-columns:1fr; }
+  .economy-create .btn-primary { grid-column:auto; }
+  .economy-header-card { align-items:flex-start;flex-direction:column; }
 }
 .call-token-panel {
   margin-bottom: 14px;
@@ -7172,6 +7197,9 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
           <div class="server-sidebar-header" id="server-sidebar-header">
             <span id="server-sidebar-name">Server</span>
             <div style="display:flex;gap:2px">
+              <button class="icon-btn" id="server-economy-btn" title="Server Shop">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M4 7h16l-1 14H5L4 7z"/><path d="M8 7a4 4 0 0 1 8 0"/><path d="M9 12h6"/></svg>
+              </button>
               <button class="icon-btn" id="server-boost-btn" title="Boost this server">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>
               </button>
@@ -7501,7 +7529,11 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
           <div class="field-group"><label>Server Name</label><input type="text" id="settings-server-name" /></div>
           <div class="field-group"><label>Invite Code</label><div class="invite-code-row"><input type="text" id="settings-invite-code" readonly /><button class="btn-secondary" id="copy-invite-btn">Copy</button></div></div>
           <div class="field-group"><label>Boost Status</label><div id="settings-boost-status" style="color:var(--text-secondary);font-size:13px"></div></div>
-          <div class="field-group" id="settings-tag-group"><label>Server Tag (2 boosts required)</label><div class="invite-code-row"><input type="text" id="settings-server-tag" maxlength="4" style="text-transform:uppercase" /><button class="btn-secondary" id="save-server-tag-btn">Save Tag</button></div></div>
+          <div class="field-group" id="settings-tag-group">
+            <label>Server Tag (2 boosts required)</label>
+            <div class="invite-code-row"><input type="text" id="settings-server-tag" maxlength="4" style="text-transform:uppercase" /><button class="btn-secondary" id="save-server-tag-btn">Save Tag</button></div>
+            <label class="toggle-row" style="margin-top:9px"><input type="checkbox" id="settings-tag-private" /><span class="toggle-label"><span class="toggle-title">Private server tag</span><span class="toggle-hint">The tag remains visible, but its card hides the server identity and cannot be used to join.</span></span></label>
+          </div>
           <div class="invite-customization" id="settings-invite-customization">
             <div class="section-label">RICH INVITE CARD</div>
             <div class="field-group"><label>Description</label><input type="text" id="settings-invite-description" maxlength="180" placeholder="What should people know before joining?" /></div>
@@ -7603,6 +7635,14 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
           <div id="bans-list"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Member-facing Server Economy -->
+  <div class="modal-overlay" id="server-economy-modal">
+    <div class="modal modal-wide server-economy-modal">
+      <div class="modal-header"><h2>Server Shop</h2><button class="modal-close" id="server-economy-close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div class="modal-body"><div id="member-server-economy-content"></div></div>
     </div>
   </div>
 
@@ -10592,6 +10632,17 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   });
 
   // ---- Server Settings ----
+  $('server-economy-btn').addEventListener('click', async () => {
+    if (!activeServerId) return;
+    $('member-server-economy-content').innerHTML = '<div class="loading">Loading server shop...</div>';
+    $('server-economy-modal').classList.add('active');
+    await loadServerEconomy('member-server-economy-content');
+  });
+  $('server-economy-close').addEventListener('click', () => $('server-economy-modal').classList.remove('active'));
+  $('server-economy-modal').addEventListener('click', e => {
+    if (e.target === $('server-economy-modal')) $('server-economy-modal').classList.remove('active');
+  });
+
   $('server-settings-btn').addEventListener('click', async () => {
     if (!activeServerData) return;
     const s = activeServerData.server;
@@ -10599,6 +10650,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     $('settings-invite-code').value = s.inviteCode;
     $('settings-boost-status').textContent = `${s.boostCount || 0} active boosts. Tags and gradients unlock at 2.`;
     $('settings-server-tag').value = s.tag || '';
+    $('settings-tag-private').checked = !!s.tagPrivate;
     $('settings-invite-description').value = s.inviteDescription || '';
     $('settings-invite-tags').value = s.inviteTags || '';
     $('settings-invite-banner-mode').value = s.inviteBannerMode || 'solid';
@@ -10631,28 +10683,34 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
   }
 
   let serverEconomyData = null;
-  async function loadServerEconomy() {
-    const host = $('server-economy-content');
+  async function loadServerEconomy(targetId = 'server-economy-content') {
+    const host = $(targetId);
     if (!host || !activeServerId) return;
     const r = await api('GET', `/api/servers/${activeServerId}/economy`);
     if (r.error) { host.innerHTML = `<div class="form-error">${esc(r.error)}</div>`; return; }
     serverEconomyData = r;
-    renderServerEconomy(r);
+    renderServerEconomy(r, targetId);
   }
 
-  function renderServerEconomy(data) {
-    const host = $('server-economy-content');
+  function renderServerEconomy(data, targetId = 'server-economy-content') {
+    const host = $(targetId);
     const items = data.items || [];
+    const roles = data.roles || [];
+    const managementView = data.canManage && targetId === 'server-economy-content';
     host.innerHTML = `
       <div class="economy-header-card">
-        <div><div class="section-label">SERVER ECONOMY</div><p class="field-hint">Members buy server perks with Nexals. The server owner receives every purchase.</p></div>
+        <div><div class="section-label">SERVER SHOP</div><p class="field-hint">Buy server perks with Nexals. A role reward replaces your current non-admin role, and the server owner receives the payment.</p></div>
         <div class="nexal-balance"><span>✦</span>${(data.nexals || 0).toLocaleString()} Nexals</div>
       </div>
-      ${data.canManage ? `
+      ${managementView ? `
         <div class="economy-create">
           <input id="economy-name-input" maxlength="40" placeholder="Item name, e.g. VIP Shoutout" />
           <input id="economy-price-input" type="number" min="1" max="100000000" placeholder="Price" />
           <input id="economy-desc-input" maxlength="160" placeholder="Description" />
+          <select id="economy-role-input">
+            <option value="">No role reward</option>
+            ${roles.map(role => `<option value="${esc(role.id)}">${esc(role.name)}</option>`).join('')}
+          </select>
           <button class="btn-primary" onclick="createServerEconomyItem()">Create Item</button>
         </div>` : ''}
       <div class="economy-grid">
@@ -10661,11 +10719,12 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
             <div>
               <h3>${esc(item.name)}</h3>
               <p>${esc(item.description || 'Server perk')}</p>
+              ${item.rewardRole ? `<span class="economy-role-reward" style="--reward-role:${esc(item.rewardRole.color)}">Includes role: ${esc(item.rewardRole.name)}</span>` : ''}
               <span>${item.sold.toLocaleString()} sold</span>
             </div>
             <strong>${item.price.toLocaleString()} Nexals</strong>
-            <button class="shop-card-btn buy" onclick="buyServerEconomyItem('${item.id}')" ${item.active ? '' : 'disabled'}>Buy</button>
-            ${data.canManage ? `<button class="shop-card-btn" onclick="toggleServerEconomyItem('${item.id}',${item.active ? 'false' : 'true'})">${item.active ? 'Disable' : 'Enable'}</button>` : ''}
+            <button class="shop-card-btn buy" onclick="buyServerEconomyItem('${item.id}')" ${item.active && !data.isOwner ? '' : 'disabled'}>${data.isOwner ? 'Owner storefront' : 'Buy'}</button>
+            ${managementView ? `<button class="shop-card-btn" onclick="toggleServerEconomyItem('${item.id}',${item.active ? 'false' : 'true'})">${item.active ? 'Disable' : 'Enable'}</button>` : ''}
           </div>`).join('') : '<div class="empty-state">No server economy items yet.</div>'}
       </div>`;
   }
@@ -10674,7 +10733,8 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     const payload = {
       name: $('economy-name-input').value,
       price: parseInt($('economy-price-input').value, 10),
-      description: $('economy-desc-input').value
+      description: $('economy-desc-input').value,
+      rewardRoleId: $('economy-role-input')?.value || null
     };
     const r = await api('POST', `/api/servers/${activeServerId}/economy/items`, payload);
     if (r.error) return toast(r.error, 'error');
@@ -10688,8 +10748,10 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     const r = await api('POST', `/api/servers/${activeServerId}/economy/items/${itemId}/buy`);
     if (r.error) return toast(r.error, 'error');
     updateNexalDisplay(r.nexals);
-    toast('Purchased. The server owner received the Nexals.', 'success');
-    await loadServerEconomy();
+    toast(r.roleGranted ? `Purchased and received the ${r.roleGranted.name} role` : 'Purchased. The server owner received the Nexals.', 'success');
+    if (r.roleGranted) await loadServerSidebar(activeServerId);
+    const targetId = $('server-economy-modal')?.classList.contains('active') ? 'member-server-economy-content' : 'server-economy-content';
+    await loadServerEconomy(targetId);
   };
 
   window.toggleServerEconomyItem = async function(itemId, active) {
@@ -10700,7 +10762,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
 
   function identityTagHtml(user) {
     if (!user || !user.activeServerTag || !user.activeServerTagServerId) return '';
-    const payload = encodeURIComponent(JSON.stringify({ tag: user.activeServerTag, background: user.activeServerTagBackground, serverId: user.activeServerTagServerId, serverName: user.activeServerTagServerName, inviteCode: user.activeServerTagInviteCode })).replace(/'/g, '%27');
+    const payload = encodeURIComponent(JSON.stringify({ tag: user.activeServerTag, background: user.activeServerTagBackground, serverId: user.activeServerTagServerId, serverName: user.activeServerTagServerName, inviteCode: user.activeServerTagInviteCode, private: !!user.activeServerTagPrivate })).replace(/'/g, '%27');
     return ` <button class="identity-tag" style="--tag-bg:${esc(user.activeServerTagBackground || '#5865f2')}" onclick="event.stopPropagation();showIdentityTagInvite(event,decodeURIComponent('${payload}'))">[${esc(user.activeServerTag)}]</button>`;
   }
 
@@ -10738,7 +10800,10 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
 
   $('save-server-tag-btn').addEventListener('click', async () => {
     if (!activeServerId) return;
-    const r = await api('PATCH', '/api/perks/servers/' + activeServerId + '/tag', { tag: $('settings-server-tag').value });
+    const r = await api('PATCH', '/api/perks/servers/' + activeServerId + '/tag', {
+      tag: $('settings-server-tag').value,
+      tagPrivate: $('settings-tag-private').checked
+    });
     if (r.error) return toast(r.error, 'error');
     toast('Server tag saved', 'success');
     await loadServerSidebar(activeServerId);
@@ -10758,7 +10823,8 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       bannerMode: $('settings-invite-banner-mode').value,
       bannerStart: $('settings-invite-banner-start').value,
       bannerEnd: $('settings-invite-banner-end').value,
-      bannerImage: $('settings-invite-banner-image').value
+      bannerImage: $('settings-invite-banner-image').value,
+      tagPrivate: $('settings-tag-private').checked
     });
     if (r.error) return toast(r.error, 'error');
     activeServerData.server = { ...activeServerData.server, ...r.server };
@@ -11485,7 +11551,7 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     const isMe = msg.fromId === currentUser.id;
     const currentRoleForMessage = isChannelMsg && activeServerData && activeServerData.roles && activeServerData.roles.find(r => { const me = activeServerData.members && activeServerData.members.find(m => m.id === currentUser.id); return me && r.id === me.roleId; });
     const author = isMe
-      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeDecoration: currentUser.activeDecoration || null, activeNameplate: currentUser.activeNameplate || null, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null), proActive: currentUser.proActive, proNameEffect: currentUser.proNameEffect, proGradientStart: currentUser.proGradientStart, proGradientEnd: currentUser.proGradientEnd, activeServerTag: currentUser.activeServerTag, activeServerTagBackground: currentUser.activeServerTagBackground, activeServerTagServerId: currentUser.activeServerTagServerId, activeServerTagServerName: currentUser.activeServerTagServerName, activeServerTagInviteCode: currentUser.activeServerTagInviteCode }
+      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeDecoration: currentUser.activeDecoration || null, activeNameplate: currentUser.activeNameplate || null, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null), proActive: currentUser.proActive, proNameEffect: currentUser.proNameEffect, proGradientStart: currentUser.proGradientStart, proGradientEnd: currentUser.proGradientEnd, activeServerTag: currentUser.activeServerTag, activeServerTagBackground: currentUser.activeServerTagBackground, activeServerTagServerId: currentUser.activeServerTagServerId, activeServerTagServerName: currentUser.activeServerTagServerName, activeServerTagInviteCode: currentUser.activeServerTagInviteCode, activeServerTagPrivate: !!currentUser.activeServerTagPrivate }
       : msg.author;
 
     const roleColor = author.roleColor || null;
@@ -15369,7 +15435,13 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
     popup.style.removeProperty('--profile-start');
     popup.style.removeProperty('--profile-end');
     const popupBanner = popup.querySelector('.profile-popup-banner');
-    if (popupBanner) popupBanner.style.backgroundImage = '';
+    if (popupBanner) {
+      popupBanner.style.display = 'block';
+      popupBanner.style.backgroundImage = '';
+    }
+    popup.querySelector('.profile-popup-avatar-wrap').style.display = 'inline-block';
+    popup.querySelector('.profile-popup-divider').style.display = 'block';
+    $('popup-discord-activity').style.display = 'none';
 
     // Render what we have immediately
     renderAvatar($('popup-avatar'), data);
@@ -15432,9 +15504,21 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');
-        tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${r.serverTag.iconDataUrl}" alt="">` : ''}<span>${esc(r.serverTag.tag)} | ${esc(r.serverTag.name)}</span>`;
+        tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${r.serverTag.iconDataUrl}" alt="">` : ''}<span>${esc(r.serverTag.tag)}${r.serverTag.private ? '' : ` | ${esc(r.serverTag.name)}`}</span>`;
         const invite = $('popup-tag-invite');
-        tag.onclick = () => { invite.style.display = invite.style.display === 'none' ? 'block' : 'none'; invite.innerHTML = `<strong>${esc(r.serverTag.name)}</strong><span>Server invite from ${esc(data.displayName)}</span><button type="button">Join Server</button>`; invite.querySelector('button').onclick = async () => { const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); }; };
+        tag.onclick = () => {
+          invite.style.display = invite.style.display === 'none' ? 'block' : 'none';
+          if (r.serverTag.private) {
+            invite.innerHTML = '<strong>Private Server</strong><span>This server hides its identity and does not accept joins through its tag.</span>';
+            return;
+          }
+          invite.innerHTML = `<strong>${esc(r.serverTag.name)}</strong><span>Server invite from ${esc(data.displayName)}</span><button type="button">Join Server</button>`;
+          invite.querySelector('button').onclick = async () => {
+            const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode);
+            if (joined.error) return toast(joined.error, 'error');
+            toast('Joined server', 'success');
+          };
+        };
       } else { tag.style.display = 'none'; $('popup-tag-invite').style.display = 'none'; }
     } catch(err) {}
   };
@@ -15459,17 +15543,41 @@ window.NEXUS_API_URL = 'https://nexus-chat-kzvx.onrender.com';
 
   window.showIdentityTagInvite = function(e, tagData) {
     e.stopPropagation();
-    const tag = typeof tagData === 'string' ? JSON.parse(tagData) : tagData;
+    const rawTag = typeof tagData === 'string' ? JSON.parse(tagData) : tagData;
+    const tag = rawTag?.activeServerTag ? {
+      tag: rawTag.activeServerTag,
+      background: rawTag.activeServerTagBackground,
+      serverId: rawTag.activeServerTagServerId,
+      serverName: rawTag.activeServerTagServerName,
+      inviteCode: rawTag.activeServerTagInviteCode,
+      private: !!rawTag.activeServerTagPrivate
+    } : rawTag;
     if (!tag || !tag.serverId) return;
     const popup = $('profile-popup');
-    $('popup-name').textContent = tag.serverName || 'Server';
-    $('popup-username').textContent = 'Server invite';
+    popup.className = 'profile-popup server-tag-card';
+    popup.style.setProperty('--tag-card-color', tag.background || '#5865f2');
+    popup.querySelector('.profile-popup-banner').style.display = tag.private ? 'none' : 'block';
+    popup.querySelector('.profile-popup-avatar-wrap').style.display = 'none';
+    popup.querySelector('.profile-popup-divider').style.display = 'none';
+    $('popup-name').textContent = tag.private ? 'Private Server' : (tag.serverName || 'Server');
+    $('popup-username').textContent = tag.private ? `[${tag.tag}]` : 'Server invite';
     $('popup-role').style.display = 'none'; $('popup-bio-section').style.display = 'none';
+    $('popup-discord-activity').style.display = 'none';
     $('popup-server-tag').style.display = 'none';
     if ($('popup-report-user')) $('popup-report-user').style.display = 'none';
+    if ($('popup-gift-actions')) $('popup-gift-actions').style.display = 'none';
     $('popup-tag-invite').style.display = 'block';
-    $('popup-tag-invite').innerHTML = `<strong>${esc(tag.serverName || 'Server')}</strong><span>[${esc(tag.tag)}] Server invite</span><button type="button">Join Server</button>`;
-    $('popup-tag-invite').querySelector('button').onclick = async () => { if (!tag.inviteCode) return; const joined = await api('POST', '/api/servers/join/' + tag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); };
+    if (tag.private) {
+      $('popup-tag-invite').innerHTML = '<strong>Private Server</strong><span>Its identity, artwork, and invite are hidden by the server administrators.</span>';
+    } else {
+      $('popup-tag-invite').innerHTML = `<strong>${esc(tag.serverName || 'Server')}</strong><span>[${esc(tag.tag)}] Server invite</span><button type="button">Join Server</button>`;
+      $('popup-tag-invite').querySelector('button').onclick = async () => {
+        if (!tag.inviteCode) return;
+        const joined = await api('POST', '/api/servers/join/' + tag.inviteCode);
+        if (joined.error) return toast(joined.error, 'error');
+        toast('Joined server', 'success');
+      };
+    }
     popup.style.display = 'block'; popup.style.left = Math.min(e.clientX + 10, window.innerWidth - 290) + 'px'; popup.style.top = Math.min(e.clientY, window.innerHeight - 220) + 'px';
   };
 

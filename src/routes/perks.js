@@ -110,8 +110,9 @@ router.patch('/servers/:serverId/tag', async (req, res) => {
   const allocation = await pool.query(`SELECT id FROM server_boost_allocations WHERE server_id=$1 AND feature='tag'`, [serverId]);
   if (!allocation.rows.length) return res.status(403).json({ error: 'Spend two boosts on the server tag first' });
   const background = /^#[0-9a-f]{6}$/i.test(String(req.body.background || '')) ? req.body.background : '#5865f2';
-  await pool.query('UPDATE servers SET server_tag=$1, tag_background=$2 WHERE id=$3', [tag, background, serverId]);
-  res.json({ success: true, tag });
+  const tagPrivate = req.body.tagPrivate === true;
+  await pool.query('UPDATE servers SET server_tag=$1, tag_background=$2, tag_private=$3 WHERE id=$4', [tag, background, tagPrivate, serverId]);
+  res.json({ success: true, tag, tagPrivate });
 });
 
 router.post('/servers/:serverId/spend', async (req, res) => {

@@ -309,9 +309,11 @@ async function initDb() {
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
     price INTEGER NOT NULL CHECK (price > 0),
+    reward_role_id TEXT DEFAULT NULL REFERENCES server_roles(id) ON DELETE SET NULL,
     active BOOLEAN DEFAULT TRUE,
     created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
   )`, 'server_economy_items');
+  await runSql(`ALTER TABLE server_economy_items ADD COLUMN IF NOT EXISTS reward_role_id TEXT DEFAULT NULL REFERENCES server_roles(id) ON DELETE SET NULL`, 'alter_economy_reward_role');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_server_economy_items_server ON server_economy_items(server_id, active, created_at DESC)`, 'idx_server_economy_items_server');
   await runSql(`CREATE TABLE IF NOT EXISTS server_economy_purchases (
     id TEXT PRIMARY KEY,
@@ -322,7 +324,9 @@ async function initDb() {
     price INTEGER NOT NULL,
     created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
   )`, 'server_economy_purchases');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_economy_purchases_item ON server_economy_purchases(item_id)`, 'idx_server_economy_purchases_item');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS tag_background TEXT DEFAULT '#5865f2'`, 'alter_servers_tag_background');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS tag_private BOOLEAN DEFAULT FALSE`, 'alter_servers_tag_private');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_description TEXT DEFAULT NULL`, 'alter_servers_invite_description');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_tags TEXT DEFAULT ''`, 'alter_servers_invite_tags');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_banner_mode TEXT DEFAULT 'solid'`, 'alter_servers_invite_banner_mode');

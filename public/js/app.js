@@ -2511,6 +2511,17 @@
   });
 
   // ---- Server Settings ----
+  $('server-economy-btn').addEventListener('click', async () => {
+    if (!activeServerId) return;
+    $('member-server-economy-content').innerHTML = '<div class="loading">Loading server shop...</div>';
+    $('server-economy-modal').classList.add('active');
+    await loadServerEconomy('member-server-economy-content');
+  });
+  $('server-economy-close').addEventListener('click', () => $('server-economy-modal').classList.remove('active'));
+  $('server-economy-modal').addEventListener('click', e => {
+    if (e.target === $('server-economy-modal')) $('server-economy-modal').classList.remove('active');
+  });
+
   $('server-settings-btn').addEventListener('click', async () => {
     if (!activeServerData) return;
     const s = activeServerData.server;
@@ -2518,6 +2529,7 @@
     $('settings-invite-code').value = s.inviteCode;
     $('settings-boost-status').textContent = `${s.boostCount || 0} active boosts. Tags and gradients unlock at 2.`;
     $('settings-server-tag').value = s.tag || '';
+    $('settings-tag-private').checked = !!s.tagPrivate;
     $('settings-invite-description').value = s.inviteDescription || '';
     $('settings-invite-tags').value = s.inviteTags || '';
     $('settings-invite-banner-mode').value = s.inviteBannerMode || 'solid';
@@ -2550,28 +2562,34 @@
   }
 
   let serverEconomyData = null;
-  async function loadServerEconomy() {
-    const host = $('server-economy-content');
+  async function loadServerEconomy(targetId = 'server-economy-content') {
+    const host = $(targetId);
     if (!host || !activeServerId) return;
     const r = await api('GET', `/api/servers/${activeServerId}/economy`);
     if (r.error) { host.innerHTML = `<div class="form-error">${esc(r.error)}</div>`; return; }
     serverEconomyData = r;
-    renderServerEconomy(r);
+    renderServerEconomy(r, targetId);
   }
 
-  function renderServerEconomy(data) {
-    const host = $('server-economy-content');
+  function renderServerEconomy(data, targetId = 'server-economy-content') {
+    const host = $(targetId);
     const items = data.items || [];
+    const roles = data.roles || [];
+    const managementView = data.canManage && targetId === 'server-economy-content';
     host.innerHTML = `
       <div class="economy-header-card">
-        <div><div class="section-label">SERVER ECONOMY</div><p class="field-hint">Members buy server perks with Nexals. The server owner receives every purchase.</p></div>
+        <div><div class="section-label">SERVER SHOP</div><p class="field-hint">Buy server perks with Nexals. A role reward replaces your current non-admin role, and the server owner receives the payment.</p></div>
         <div class="nexal-balance"><span>✦</span>${(data.nexals || 0).toLocaleString()} Nexals</div>
       </div>
-      ${data.canManage ? `
+      ${managementView ? `
         <div class="economy-create">
           <input id="economy-name-input" maxlength="40" placeholder="Item name, e.g. VIP Shoutout" />
           <input id="economy-price-input" type="number" min="1" max="100000000" placeholder="Price" />
           <input id="economy-desc-input" maxlength="160" placeholder="Description" />
+          <select id="economy-role-input">
+            <option value="">No role reward</option>
+            ${roles.map(role => `<option value="${esc(role.id)}">${esc(role.name)}</option>`).join('')}
+          </select>
           <button class="btn-primary" onclick="createServerEconomyItem()">Create Item</button>
         </div>` : ''}
       <div class="economy-grid">
@@ -2580,11 +2598,12 @@
             <div>
               <h3>${esc(item.name)}</h3>
               <p>${esc(item.description || 'Server perk')}</p>
+              ${item.rewardRole ? `<span class="economy-role-reward" style="--reward-role:${esc(item.rewardRole.color)}">Includes role: ${esc(item.rewardRole.name)}</span>` : ''}
               <span>${item.sold.toLocaleString()} sold</span>
             </div>
             <strong>${item.price.toLocaleString()} Nexals</strong>
-            <button class="shop-card-btn buy" onclick="buyServerEconomyItem('${item.id}')" ${item.active ? '' : 'disabled'}>Buy</button>
-            ${data.canManage ? `<button class="shop-card-btn" onclick="toggleServerEconomyItem('${item.id}',${item.active ? 'false' : 'true'})">${item.active ? 'Disable' : 'Enable'}</button>` : ''}
+            <button class="shop-card-btn buy" onclick="buyServerEconomyItem('${item.id}')" ${item.active && !data.isOwner ? '' : 'disabled'}>${data.isOwner ? 'Owner storefront' : 'Buy'}</button>
+            ${managementView ? `<button class="shop-card-btn" onclick="toggleServerEconomyItem('${item.id}',${item.active ? 'false' : 'true'})">${item.active ? 'Disable' : 'Enable'}</button>` : ''}
           </div>`).join('') : '<div class="empty-state">No server economy items yet.</div>'}
       </div>`;
   }
@@ -2593,7 +2612,8 @@
     const payload = {
       name: $('economy-name-input').value,
       price: parseInt($('economy-price-input').value, 10),
-      description: $('economy-desc-input').value
+      description: $('economy-desc-input').value,
+      rewardRoleId: $('economy-role-input')?.value || null
     };
     const r = await api('POST', `/api/servers/${activeServerId}/economy/items`, payload);
     if (r.error) return toast(r.error, 'error');
@@ -2607,8 +2627,10 @@
     const r = await api('POST', `/api/servers/${activeServerId}/economy/items/${itemId}/buy`);
     if (r.error) return toast(r.error, 'error');
     updateNexalDisplay(r.nexals);
-    toast('Purchased. The server owner received the Nexals.', 'success');
-    await loadServerEconomy();
+    toast(r.roleGranted ? `Purchased and received the ${r.roleGranted.name} role` : 'Purchased. The server owner received the Nexals.', 'success');
+    if (r.roleGranted) await loadServerSidebar(activeServerId);
+    const targetId = $('server-economy-modal')?.classList.contains('active') ? 'member-server-economy-content' : 'server-economy-content';
+    await loadServerEconomy(targetId);
   };
 
   window.toggleServerEconomyItem = async function(itemId, active) {
@@ -2619,7 +2641,7 @@
 
   function identityTagHtml(user) {
     if (!user || !user.activeServerTag || !user.activeServerTagServerId) return '';
-    const payload = encodeURIComponent(JSON.stringify({ tag: user.activeServerTag, background: user.activeServerTagBackground, serverId: user.activeServerTagServerId, serverName: user.activeServerTagServerName, inviteCode: user.activeServerTagInviteCode })).replace(/'/g, '%27');
+    const payload = encodeURIComponent(JSON.stringify({ tag: user.activeServerTag, background: user.activeServerTagBackground, serverId: user.activeServerTagServerId, serverName: user.activeServerTagServerName, inviteCode: user.activeServerTagInviteCode, private: !!user.activeServerTagPrivate })).replace(/'/g, '%27');
     return ` <button class="identity-tag" style="--tag-bg:${esc(user.activeServerTagBackground || '#5865f2')}" onclick="event.stopPropagation();showIdentityTagInvite(event,decodeURIComponent('${payload}'))">[${esc(user.activeServerTag)}]</button>`;
   }
 
@@ -2657,7 +2679,10 @@
 
   $('save-server-tag-btn').addEventListener('click', async () => {
     if (!activeServerId) return;
-    const r = await api('PATCH', '/api/perks/servers/' + activeServerId + '/tag', { tag: $('settings-server-tag').value });
+    const r = await api('PATCH', '/api/perks/servers/' + activeServerId + '/tag', {
+      tag: $('settings-server-tag').value,
+      tagPrivate: $('settings-tag-private').checked
+    });
     if (r.error) return toast(r.error, 'error');
     toast('Server tag saved', 'success');
     await loadServerSidebar(activeServerId);
@@ -2677,7 +2702,8 @@
       bannerMode: $('settings-invite-banner-mode').value,
       bannerStart: $('settings-invite-banner-start').value,
       bannerEnd: $('settings-invite-banner-end').value,
-      bannerImage: $('settings-invite-banner-image').value
+      bannerImage: $('settings-invite-banner-image').value,
+      tagPrivate: $('settings-tag-private').checked
     });
     if (r.error) return toast(r.error, 'error');
     activeServerData.server = { ...activeServerData.server, ...r.server };
@@ -3404,7 +3430,7 @@
     const isMe = msg.fromId === currentUser.id;
     const currentRoleForMessage = isChannelMsg && activeServerData && activeServerData.roles && activeServerData.roles.find(r => { const me = activeServerData.members && activeServerData.members.find(m => m.id === currentUser.id); return me && r.id === me.roleId; });
     const author = isMe
-      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeDecoration: currentUser.activeDecoration || null, activeNameplate: currentUser.activeNameplate || null, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null), proActive: currentUser.proActive, proNameEffect: currentUser.proNameEffect, proGradientStart: currentUser.proGradientStart, proGradientEnd: currentUser.proGradientEnd, activeServerTag: currentUser.activeServerTag, activeServerTagBackground: currentUser.activeServerTagBackground, activeServerTagServerId: currentUser.activeServerTagServerId, activeServerTagServerName: currentUser.activeServerTagServerName, activeServerTagInviteCode: currentUser.activeServerTagInviteCode }
+      ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeDecoration: currentUser.activeDecoration || null, activeNameplate: currentUser.activeNameplate || null, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null), proActive: currentUser.proActive, proNameEffect: currentUser.proNameEffect, proGradientStart: currentUser.proGradientStart, proGradientEnd: currentUser.proGradientEnd, activeServerTag: currentUser.activeServerTag, activeServerTagBackground: currentUser.activeServerTagBackground, activeServerTagServerId: currentUser.activeServerTagServerId, activeServerTagServerName: currentUser.activeServerTagServerName, activeServerTagInviteCode: currentUser.activeServerTagInviteCode, activeServerTagPrivate: !!currentUser.activeServerTagPrivate }
       : msg.author;
 
     const roleColor = author.roleColor || null;
@@ -7288,7 +7314,13 @@
     popup.style.removeProperty('--profile-start');
     popup.style.removeProperty('--profile-end');
     const popupBanner = popup.querySelector('.profile-popup-banner');
-    if (popupBanner) popupBanner.style.backgroundImage = '';
+    if (popupBanner) {
+      popupBanner.style.display = 'block';
+      popupBanner.style.backgroundImage = '';
+    }
+    popup.querySelector('.profile-popup-avatar-wrap').style.display = 'inline-block';
+    popup.querySelector('.profile-popup-divider').style.display = 'block';
+    $('popup-discord-activity').style.display = 'none';
 
     // Render what we have immediately
     renderAvatar($('popup-avatar'), data);
@@ -7351,9 +7383,21 @@
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');
-        tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${r.serverTag.iconDataUrl}" alt="">` : ''}<span>${esc(r.serverTag.tag)} | ${esc(r.serverTag.name)}</span>`;
+        tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${r.serverTag.iconDataUrl}" alt="">` : ''}<span>${esc(r.serverTag.tag)}${r.serverTag.private ? '' : ` | ${esc(r.serverTag.name)}`}</span>`;
         const invite = $('popup-tag-invite');
-        tag.onclick = () => { invite.style.display = invite.style.display === 'none' ? 'block' : 'none'; invite.innerHTML = `<strong>${esc(r.serverTag.name)}</strong><span>Server invite from ${esc(data.displayName)}</span><button type="button">Join Server</button>`; invite.querySelector('button').onclick = async () => { const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); }; };
+        tag.onclick = () => {
+          invite.style.display = invite.style.display === 'none' ? 'block' : 'none';
+          if (r.serverTag.private) {
+            invite.innerHTML = '<strong>Private Server</strong><span>This server hides its identity and does not accept joins through its tag.</span>';
+            return;
+          }
+          invite.innerHTML = `<strong>${esc(r.serverTag.name)}</strong><span>Server invite from ${esc(data.displayName)}</span><button type="button">Join Server</button>`;
+          invite.querySelector('button').onclick = async () => {
+            const joined = await api('POST', '/api/servers/join/' + r.serverTag.inviteCode);
+            if (joined.error) return toast(joined.error, 'error');
+            toast('Joined server', 'success');
+          };
+        };
       } else { tag.style.display = 'none'; $('popup-tag-invite').style.display = 'none'; }
     } catch(err) {}
   };
@@ -7378,17 +7422,41 @@
 
   window.showIdentityTagInvite = function(e, tagData) {
     e.stopPropagation();
-    const tag = typeof tagData === 'string' ? JSON.parse(tagData) : tagData;
+    const rawTag = typeof tagData === 'string' ? JSON.parse(tagData) : tagData;
+    const tag = rawTag?.activeServerTag ? {
+      tag: rawTag.activeServerTag,
+      background: rawTag.activeServerTagBackground,
+      serverId: rawTag.activeServerTagServerId,
+      serverName: rawTag.activeServerTagServerName,
+      inviteCode: rawTag.activeServerTagInviteCode,
+      private: !!rawTag.activeServerTagPrivate
+    } : rawTag;
     if (!tag || !tag.serverId) return;
     const popup = $('profile-popup');
-    $('popup-name').textContent = tag.serverName || 'Server';
-    $('popup-username').textContent = 'Server invite';
+    popup.className = 'profile-popup server-tag-card';
+    popup.style.setProperty('--tag-card-color', tag.background || '#5865f2');
+    popup.querySelector('.profile-popup-banner').style.display = tag.private ? 'none' : 'block';
+    popup.querySelector('.profile-popup-avatar-wrap').style.display = 'none';
+    popup.querySelector('.profile-popup-divider').style.display = 'none';
+    $('popup-name').textContent = tag.private ? 'Private Server' : (tag.serverName || 'Server');
+    $('popup-username').textContent = tag.private ? `[${tag.tag}]` : 'Server invite';
     $('popup-role').style.display = 'none'; $('popup-bio-section').style.display = 'none';
+    $('popup-discord-activity').style.display = 'none';
     $('popup-server-tag').style.display = 'none';
     if ($('popup-report-user')) $('popup-report-user').style.display = 'none';
+    if ($('popup-gift-actions')) $('popup-gift-actions').style.display = 'none';
     $('popup-tag-invite').style.display = 'block';
-    $('popup-tag-invite').innerHTML = `<strong>${esc(tag.serverName || 'Server')}</strong><span>[${esc(tag.tag)}] Server invite</span><button type="button">Join Server</button>`;
-    $('popup-tag-invite').querySelector('button').onclick = async () => { if (!tag.inviteCode) return; const joined = await api('POST', '/api/servers/join/' + tag.inviteCode); if (joined.error) return toast(joined.error, 'error'); toast('Joined server', 'success'); };
+    if (tag.private) {
+      $('popup-tag-invite').innerHTML = '<strong>Private Server</strong><span>Its identity, artwork, and invite are hidden by the server administrators.</span>';
+    } else {
+      $('popup-tag-invite').innerHTML = `<strong>${esc(tag.serverName || 'Server')}</strong><span>[${esc(tag.tag)}] Server invite</span><button type="button">Join Server</button>`;
+      $('popup-tag-invite').querySelector('button').onclick = async () => {
+        if (!tag.inviteCode) return;
+        const joined = await api('POST', '/api/servers/join/' + tag.inviteCode);
+        if (joined.error) return toast(joined.error, 'error');
+        toast('Joined server', 'success');
+      };
+    }
     popup.style.display = 'block'; popup.style.left = Math.min(e.clientX + 10, window.innerWidth - 290) + 'px'; popup.style.top = Math.min(e.clientY, window.innerHeight - 220) + 'px';
   };
 

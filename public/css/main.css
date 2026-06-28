@@ -1991,6 +1991,9 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .profile-popup-tag { display:flex;align-items:center;gap:7px;border:0;border-radius:6px;padding:6px 8px;margin:4px 0 10px;color:#fff;background:var(--tag-background,#5865f2);cursor:pointer;font:inherit;font-size:11px;font-weight:800; }
 .profile-popup-tag img { width:18px;height:18px;border-radius:50%;object-fit:cover; }
 .profile-popup-tag-invite { margin:2px 0 10px;padding:10px;border:1px solid var(--border-bright);background:var(--bg-surface);font-size:12px;color:var(--text-secondary); }.profile-popup-tag-invite strong { display:block;color:var(--text-primary);margin-bottom:3px; }.profile-popup-tag-invite button { margin-top:8px;width:100%;padding:7px;border:0;background:var(--accent);color:#fff;font-weight:800;cursor:pointer; }
+.profile-popup.server-tag-card .profile-popup-banner { height:42px;background:var(--tag-card-color,#5865f2); }
+.profile-popup.server-tag-card .profile-popup-body { padding-top:14px; }
+.profile-popup.server-tag-card .profile-popup-tag-invite { margin-top:12px;border-left:3px solid var(--tag-card-color,#5865f2);border-radius:6px;line-height:1.45; }
 .profile-popup-discord-activity { margin:8px 0 2px; padding:7px 9px; border-left:3px solid #5865f2; background:rgba(88,101,242,.12); color:var(--text-secondary); font-size:12px; line-height:1.35; }
 #popup-gift-actions { display:flex; }
 .tutorial-modal { max-width:620px; }
@@ -6829,6 +6832,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .auction-sell-row select,
 .auction-sell-row input,
 .economy-create input,
+.economy-create select,
 .call-token-panel input,
 .blackjack-buyin-panel input {
   background: var(--bg-void);
@@ -6838,6 +6842,22 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   padding: 10px 12px;
   font: inherit;
 }
+.economy-create { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.economy-create .btn-primary { grid-column:1 / -1; }
+.economy-role-reward {
+  display:inline-flex!important;
+  width:max-content;
+  max-width:100%;
+  padding:3px 7px;
+  border:1px solid color-mix(in srgb,var(--reward-role) 58%,transparent);
+  border-radius:4px;
+  color:var(--reward-role)!important;
+  background:color-mix(in srgb,var(--reward-role) 12%,transparent);
+  font-size:10px!important;
+  font-weight:800;
+}
+.server-economy-modal { max-width:860px; }
+.server-economy-modal .modal-body { max-height:min(72vh,680px);overflow-y:auto; }
 .auction-grid,
 .economy-grid {
   display: grid;
@@ -6900,6 +6920,11 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 }
 .economy-card.disabled {
   opacity: 0.6;
+}
+@media(max-width:620px) {
+  .economy-create { grid-template-columns:1fr; }
+  .economy-create .btn-primary { grid-column:auto; }
+  .economy-header-card { align-items:flex-start;flex-direction:column; }
 }
 .call-token-panel {
   margin-bottom: 14px;

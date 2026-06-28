@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DynaPuff&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/main.css?v=20260628-profiles" />
+  <link rel="stylesheet" href="/css/main.css?v=20260628-economy-private-tags" />
 </head>
 <body>
   <div id="app">
@@ -164,6 +164,9 @@
           <div class="server-sidebar-header" id="server-sidebar-header">
             <span id="server-sidebar-name">Server</span>
             <div style="display:flex;gap:2px">
+              <button class="icon-btn" id="server-economy-btn" title="Server Shop">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M4 7h16l-1 14H5L4 7z"/><path d="M8 7a4 4 0 0 1 8 0"/><path d="M9 12h6"/></svg>
+              </button>
               <button class="icon-btn" id="server-boost-btn" title="Boost this server">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>
               </button>
@@ -493,7 +496,11 @@
           <div class="field-group"><label>Server Name</label><input type="text" id="settings-server-name" /></div>
           <div class="field-group"><label>Invite Code</label><div class="invite-code-row"><input type="text" id="settings-invite-code" readonly /><button class="btn-secondary" id="copy-invite-btn">Copy</button></div></div>
           <div class="field-group"><label>Boost Status</label><div id="settings-boost-status" style="color:var(--text-secondary);font-size:13px"></div></div>
-          <div class="field-group" id="settings-tag-group"><label>Server Tag (2 boosts required)</label><div class="invite-code-row"><input type="text" id="settings-server-tag" maxlength="4" style="text-transform:uppercase" /><button class="btn-secondary" id="save-server-tag-btn">Save Tag</button></div></div>
+          <div class="field-group" id="settings-tag-group">
+            <label>Server Tag (2 boosts required)</label>
+            <div class="invite-code-row"><input type="text" id="settings-server-tag" maxlength="4" style="text-transform:uppercase" /><button class="btn-secondary" id="save-server-tag-btn">Save Tag</button></div>
+            <label class="toggle-row" style="margin-top:9px"><input type="checkbox" id="settings-tag-private" /><span class="toggle-label"><span class="toggle-title">Private server tag</span><span class="toggle-hint">The tag remains visible, but its card hides the server identity and cannot be used to join.</span></span></label>
+          </div>
           <div class="invite-customization" id="settings-invite-customization">
             <div class="section-label">RICH INVITE CARD</div>
             <div class="field-group"><label>Description</label><input type="text" id="settings-invite-description" maxlength="180" placeholder="What should people know before joining?" /></div>
@@ -595,6 +602,14 @@
           <div id="bans-list"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Member-facing Server Economy -->
+  <div class="modal-overlay" id="server-economy-modal">
+    <div class="modal modal-wide server-economy-modal">
+      <div class="modal-header"><h2>Server Shop</h2><button class="modal-close" id="server-economy-close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div class="modal-body"><div id="member-server-economy-content"></div></div>
     </div>
   </div>
 
@@ -1064,6 +1079,6 @@
   </script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script src="/js/app.js?v=20260628-admin-grants"></script>
+  <script src="/js/app.js?v=20260628-economy-private-tags"></script>
 </body>
 </html>

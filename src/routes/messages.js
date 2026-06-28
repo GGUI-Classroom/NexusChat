@@ -41,7 +41,7 @@ router.get('/:userId', async (req, res) => {
   if (!isFriend.rows.length && !isNexusGuardThread) return res.status(403).json({ error: 'Not friends' });
 
   let query = `SELECT m.id, m.from_id, m.to_id, m.content, m.created_at,
-    u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
+    u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private
     FROM messages m JOIN users u ON u.id=m.from_id LEFT JOIN servers ats ON ats.id=u.active_server_tag_id
     WHERE ((m.from_id=$1 AND m.to_id=$2) OR (m.from_id=$2 AND m.to_id=$1))`;
   const params = [req.session.userId, userId];
@@ -65,7 +65,7 @@ router.get('/:userId', async (req, res) => {
         activeDecoration: m.active_decoration || null,
         activeNameplate: m.active_nameplate || null,
         activeColor: m.active_color || null,
-        activeFont: m.active_font || null, proActive: (m.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: m.profile_gradient_start, proGradientEnd: m.profile_gradient_end, proNameEffect: m.profile_name_effect, activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_server_name || null, activeServerTagInviteCode: m.tag_invite_code || null
+        activeFont: m.active_font || null, proActive: (m.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: m.profile_gradient_start, proGradientEnd: m.profile_gradient_end, proNameEffect: m.profile_name_effect, activeServerTag: m.server_tag || null, activeServerTagBackground: m.tag_background || '#5865f2', activeServerTagServerId: m.tag_server_id || null, activeServerTagServerName: m.tag_private ? null : (m.tag_server_name || null), activeServerTagInviteCode: m.tag_private ? null : (m.tag_invite_code || null), activeServerTagPrivate: !!m.tag_private
       };
     }
   });

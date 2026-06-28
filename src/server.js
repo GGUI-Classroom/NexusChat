@@ -187,7 +187,7 @@ app.post('/api/nexus-link/inbound-dm', async (req, res) => {
   const sender = await pool.query(
     `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font,
       u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect,
-      ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background
+      ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private
      FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
     [fromId]
   );
@@ -200,7 +200,7 @@ app.post('/api/nexus-link/inbound-dm', async (req, res) => {
       avatarDataUrl: avatarUrl(fromId, !!user.has_avatar),
       activeDecoration: user.active_decoration || null, activeNameplate: user.active_nameplate || null, activeColor: user.active_color || null, activeFont: user.active_font || null,
       proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: user.profile_gradient_start, proGradientEnd: user.profile_gradient_end, proNameEffect: user.profile_name_effect,
-      activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_server_name || null, activeServerTagInviteCode: user.tag_invite_code || null
+      activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_private ? null : (user.tag_server_name || null), activeServerTagInviteCode: user.tag_private ? null : (user.tag_invite_code || null), activeServerTagPrivate: !!user.tag_private
     }
   };
   await pool.query('INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)', [msg.id, fromId, toId, content, msg.createdAt]);
@@ -229,7 +229,7 @@ app.post('/api/nexus-link/outbound-dm', async (req, res) => {
   const senderResult = await pool.query(
     `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font,
       u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect,
-      ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
+      ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
       EXISTS(SELECT 1 FROM friendships f WHERE (f.user1_id=u.id AND f.user2_id=$2) OR (f.user1_id=$2 AND f.user2_id=u.id)) AS friends
      FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
     [fromId, recipient.id]
@@ -246,7 +246,7 @@ app.post('/api/nexus-link/outbound-dm', async (req, res) => {
       avatarDataUrl: sender.avatar_data ? `data:${sender.avatar_mime};base64,${sender.avatar_data}` : null,
       activeDecoration: sender.active_decoration || null, activeNameplate: sender.active_nameplate || null, activeColor: sender.active_color || null, activeFont: sender.active_font || null,
       proActive: (sender.pro_expires_at || 0) > now, proGradientStart: sender.profile_gradient_start, proGradientEnd: sender.profile_gradient_end, proNameEffect: sender.profile_name_effect,
-      activeServerTag: sender.server_tag || null, activeServerTagBackground: sender.tag_background || '#5865f2', activeServerTagServerId: sender.tag_server_id || null, activeServerTagServerName: sender.tag_server_name || null, activeServerTagInviteCode: sender.tag_invite_code || null
+      activeServerTag: sender.server_tag || null, activeServerTagBackground: sender.tag_background || '#5865f2', activeServerTagServerId: sender.tag_server_id || null, activeServerTagServerName: sender.tag_private ? null : (sender.tag_server_name || null), activeServerTagInviteCode: sender.tag_private ? null : (sender.tag_invite_code || null), activeServerTagPrivate: !!sender.tag_private
     }
   };
   await pool.query('INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)', [msg.id, fromId, recipient.id, content, now]);
@@ -1372,7 +1372,7 @@ io.on('connection', (socket) => {
     if (!trimmed) return;
     // Single query: check friendship AND get sender info at once
     const check = await pool.query(
-      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
+      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
         (SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1) as friend_id
        FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
       [userId, toId]
@@ -1393,7 +1393,7 @@ io.on('connection', (socket) => {
         activeNameplate: s.active_nameplate || null,
         activeColor: s.active_color || null,
         activeFont: s.active_font || null, proActive: (s.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: s.profile_gradient_start, proGradientEnd: s.profile_gradient_end, proNameEffect: s.profile_name_effect,
-        activeServerTag: s.server_tag || null, activeServerTagBackground: s.tag_background || '#5865f2', activeServerTagServerId: s.tag_server_id || null, activeServerTagServerName: s.tag_server_name || null, activeServerTagInviteCode: s.tag_invite_code || null
+        activeServerTag: s.server_tag || null, activeServerTagBackground: s.tag_background || '#5865f2', activeServerTagServerId: s.tag_server_id || null, activeServerTagServerName: s.tag_private ? null : (s.tag_server_name || null), activeServerTagInviteCode: s.tag_private ? null : (s.tag_invite_code || null), activeServerTagPrivate: !!s.tag_private
       }
     };
     // Emit to sender immediately (no await before this)
@@ -1475,7 +1475,7 @@ io.on('connection', (socket) => {
     const check = await pool.query(
       `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
         sr.is_admin, sr.can_delete_messages,
-        u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background,
+        u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
         ch.id as ch_id, ch.locked, ch.private as ch_private, ch.slowmode_seconds, ch.channel_type,
         (SELECT allow_send FROM channel_permissions cp
          WHERE cp.channel_id=$2 AND (cp.role_id=sm.role_id OR cp.role_id IS NULL)
@@ -1620,7 +1620,7 @@ io.on('connection', (socket) => {
         activeNameplate: row.active_nameplate || null,
         activeColor: row.active_color || null,
         activeFont: row.active_font || null, proActive: (row.pro_expires_at || 0) > Math.floor(Date.now() / 1000), proGradientStart: row.profile_gradient_start, proGradientEnd: row.profile_gradient_end, proNameEffect: row.profile_name_effect,
-        activeServerTag: row.server_tag || null, activeServerTagBackground: row.tag_background || '#5865f2', activeServerTagServerId: row.tag_server_id || null, activeServerTagServerName: row.tag_server_name || null, activeServerTagInviteCode: row.tag_invite_code || null
+        activeServerTag: row.server_tag || null, activeServerTagBackground: row.tag_background || '#5865f2', activeServerTagServerId: row.tag_server_id || null, activeServerTagServerName: row.tag_private ? null : (row.tag_server_name || null), activeServerTagInviteCode: row.tag_private ? null : (row.tag_invite_code || null), activeServerTagPrivate: !!row.tag_private
       }
     };
     // Resolve mentions for notification
