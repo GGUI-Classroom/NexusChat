@@ -1550,7 +1550,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .channel-item .ch-delete:hover { color: var(--red); }
 
 .server-member-list {
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: 4px;
   padding: 0 6px 12px;
   overflow-y: auto;
   flex: 1;
@@ -1558,9 +1558,20 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 
 .server-member-item {
   display: flex; align-items: center; gap: 8px;
-  padding: 5px 8px;
+  min-height: 52px;
+  padding: 7px 8px;
   border-radius: var(--radius-sm);
   transition: var(--transition);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  overflow: clip;
+}
+.server-member-item.nameplate-surface { min-height: 58px; }
+.server-member-item .avatar-wrap {
+  z-index: 3;
+  display: grid;
+  place-items: center;
 }
 .server-member-item:hover { background: var(--bg-hover); }
 .server-member-item .member-name { font-size: 13px; font-weight: 600; color: var(--text-secondary); flex: 1; min-width: 0; overflow: visible; text-overflow: clip; white-space: nowrap; }
