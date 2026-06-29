@@ -7117,11 +7117,21 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 }
 .connect4-stage { min-height:0; }
 .connect4-board-wrap {
-  width:min(560px,calc((100dvh - 330px) * 1.1667),100%);
-  min-width:280px;
-  padding-bottom:14px;
+  width:min(460px,calc((100dvh - 430px) * 1.1667),100%);
+  min-width:260px;
+  padding-bottom:26px;
 }
 .connect4-board { gap:clamp(4px,1vh,8px); padding:clamp(8px,1.7vh,15px); }
+.connect4-stage {
+  padding-bottom:42px;
+  overflow:visible;
+}
+.connect4-game { overflow:visible; }
+@media(max-height:760px) {
+  .connect4-board-wrap { width:min(390px,calc((100dvh - 360px) * 1.1667),100%); }
+  .connect4-stage { padding-top:12px; }
+  .connect4-players { margin-bottom:10px; }
+}
 .call-join-panel {
   display:grid;
   grid-template-columns:minmax(180px,1fr) 150px 150px auto;
