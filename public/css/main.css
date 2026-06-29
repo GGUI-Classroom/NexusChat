@@ -7180,6 +7180,18 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   border-radius:10px;
 }
 .profile-avatar-clip .avatar-preview { width:72px; height:72px; flex:none; }
+.paid-game-lobby { overflow:hidden; border:1px solid var(--border-bright); border-radius:7px; background:var(--bg-surface); }
+.paid-game-lobby-head { display:flex; align-items:center; gap:14px; padding:22px; border-bottom:1px solid var(--border); background:linear-gradient(100deg,#152c44,#1b2546); }
+.paid-game-lobby-head .blackjack-table-mark { width:42px; height:42px; }
+.paid-game-lobby-head small { color:#93aac0; font-size:9px; font-weight:800; }
+.paid-game-lobby-head h2 { margin:3px 0; font-size:20px; }
+.paid-game-lobby-head p { margin:0; color:#aebbd0; font-size:11px; }
+.paid-game-player-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:18px; }
+.paid-game-player-list>div { display:flex; justify-content:space-between; gap:12px; padding:12px; border:1px solid var(--border); border-radius:5px; background:var(--bg-elevated); }
+.paid-game-player-list b { color:var(--yellow); font-size:10px; text-align:right; }
+.paid-game-lobby-actions { padding:0 18px 18px; }
+.paid-game-lobby-actions>.call-join-panel { margin-top:12px; }
+@media(max-width:620px) { .paid-game-player-list { grid-template-columns:1fr; } }
 @media(max-width:520px) {
   .profile-avatar-upload { align-items:flex-start; }
   .profile-avatar-clip { width:104px; height:104px; flex-basis:104px; }

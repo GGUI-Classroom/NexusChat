@@ -499,9 +499,10 @@ function gameStateFor(game, viewerId) {
       message: game.message || ''
     };
   }
+  const blackjackStarted = game.type === 'blackjack' && game.phase !== 'lobby';
   const revealDealer = game.type !== 'blackjack' || game.phase === 'round_complete' || game.phase === 'complete';
   return { type: game.type, phase: game.phase, hostId: game.hostId, roundsTotal: game.roundsTotal || 1, roundNumber: game.roundNumber || 0, turnId: game.turnId || null, community: game.community || [], pot: game.pot || 0,
-    dealer: game.type === 'blackjack' ? { hand: revealDealer ? game.dealer.hand : [game.dealer.hand[0], { hidden: true }], score: revealDealer ? blackjackScore(game.dealer.hand) : null } : null,
+    dealer: game.type === 'blackjack' ? { hand: !blackjackStarted ? [] : (revealDealer ? game.dealer.hand : [game.dealer.hand[0], { hidden: true }]), score: revealDealer ? blackjackScore(game.dealer.hand) : null } : null,
     players: game.players.map(p => ({ id: p.id, displayName: p.displayName, chips: p.chips, buyIn: p.buyIn || 0, bet: p.bet || 0, folded: !!p.folded, standing: !!p.standing, hand: p.id === viewerId || game.phase === 'complete' ? p.hand : p.hand.map(() => ({ hidden: true })), score: game.type === 'blackjack' ? blackjackScore(p.hand) : null })), winnerId: game.winnerId || null, message: game.message || '' };
 }
 function beginCallGameRound(game) {

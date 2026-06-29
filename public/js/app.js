@@ -3549,7 +3549,10 @@
   }
   function nexalsToTableTokens(nexals) { return Math.floor(((parseInt(nexals, 10) || 0) * 1000) / 900); }
   function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
-  function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
+  function gameCard(card) {
+    if (!card) return '';
+    return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`;
+  }
   function activityName(type) { return type === 'poker' ? "Texas Hold'em" : type === 'uno' ? 'UNO' : type === 'connect4' ? 'Connect Four' : 'Blackjack'; }
   function unoSymbol(value) { return ({ skip: '⊘', reverse: '↻', draw2: '+2', wild: 'W', wild4: '+4' })[value] || value; }
   function unoCardHtml(card, options = {}) {
@@ -3634,6 +3637,10 @@
       content.innerHTML = `<div class="connect4-lobby"><div class="connect4-lobby-banner"><div class="connect4-mini-board">${Array.from({ length: 20 }, () => '<i></i>').join('')}</div><div><small>OPEN TABLE</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s Connect Four table</h2><p>${game.players.length} / 2 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST · RED</b>' : '<b>READY · YELLOW</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for an opponent...' : 'Both players are ready.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinConnectFourRoom()">Join Table</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start Game</button>` : ''}${leave}${end}</div></div>`;
       return;
     }
+    if (['blackjack', 'poker'].includes(game.type) && game.phase === 'lobby') {
+      content.innerHTML = `<div class="paid-game-lobby"><div class="paid-game-lobby-head"><span class="blackjack-table-mark">${game.type === 'blackjack' ? '21' : 'S'}</span><div><small>CALL ACTIVITY</small><h2>${activityName(game.type)}</h2><p>${game.players.length} / 6 players at the table</p></div></div><div class="paid-game-player-list">${game.players.map(player => `<div><span>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''}</span><b>${(player.chips || 0).toLocaleString()} tokens · Bet ${(player.bet || 0).toLocaleString()}</b></div>`).join('')}</div><div class="paid-game-lobby-actions">${lobby}${leave}${end}</div></div>`;
+      return;
+    }
     if (game.type === 'blackjack' && game.phase !== 'lobby') {
       const actionButtons = game.phase === 'playing'
         ? '<button class="btn-secondary" onclick="callGameAction(\'hit\')">Hit</button><button class="btn-primary" onclick="callGameAction(\'stand\')">Stand</button>'
@@ -3699,7 +3706,20 @@
       joinButton.disabled = true;
       joinButton.textContent = 'Joining...';
     }
+    let completed = false;
+    const joinTimeout = setTimeout(() => {
+      if (completed) return;
+      completed = true;
+      if (joinButton) {
+        joinButton.disabled = false;
+        joinButton.textContent = 'Join Activity';
+      }
+      toast('The activity did not respond. Close Activities and try again.', 'error');
+    }, 8000);
     socket.emit('call_game_join', { roomId, buyIn, bet }, result => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(joinTimeout);
       if (joinButton) {
         joinButton.disabled = false;
         joinButton.textContent = 'Join Activity';
