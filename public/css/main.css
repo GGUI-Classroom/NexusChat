@@ -7146,3 +7146,41 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   .call-join-panel { grid-template-columns:1fr 1fr; }
   .call-join-panel>div,.call-join-panel>button { grid-column:1/-1; }
 }
+
+.activity-session-controls {
+  position:sticky;
+  top:0;
+  z-index:30;
+  min-height:58px;
+  margin:-20px -20px 14px;
+  padding:9px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  border-bottom:1px solid var(--border-bright);
+  background:rgba(14,19,29,.96);
+  backdrop-filter:blur(10px);
+}
+.activity-session-controls>div:last-child { display:flex; gap:8px; }
+.activity-session-controls strong,.activity-session-controls span { display:block; }
+.activity-session-controls span { margin-top:2px; color:var(--text-muted); font-size:10px; }
+.game-choice.open { position:relative; }
+.game-choice.open>b { position:absolute; left:18px; bottom:16px; color:var(--accent); font-size:11px; }
+
+.profile-avatar-upload { min-height:122px; }
+.profile-avatar-clip {
+  position:relative;
+  width:116px;
+  height:116px;
+  flex:0 0 116px;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  border-radius:10px;
+}
+.profile-avatar-clip .avatar-preview { width:72px; height:72px; flex:none; }
+@media(max-width:520px) {
+  .profile-avatar-upload { align-items:flex-start; }
+  .profile-avatar-clip { width:104px; height:104px; flex-basis:104px; }
+}

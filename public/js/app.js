@@ -3602,7 +3602,7 @@
     activeCallGame = game;
     const content = $('call-games-content');
     if (!game) {
-      const openRoom = availableCallGame ? `<button class="game-choice open" onclick="joinAvailableCallGame()"><strong>${activityName(availableCallGame.type)} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span></button>` : '';
+      const openRoom = availableCallGame ? `<button class="game-choice open" data-join-available="true"><strong>${activityName(availableCallGame.type)} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span><b>Join Activity</b></button>` : '';
       content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">Table-token settings apply to Blackjack and Poker only.</span></div><div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button><button class="game-choice uno-choice" onclick="openUnoBrowser()"><strong>UNO</strong><span>Free to play. Open UNO rooms or create a new one.</span><b>Play</b></button><button class="game-choice connect4-choice" onclick="openConnectFourBrowser()"><strong>Connect Four</strong><span>Free two-player drop-disc strategy.</span><b>Play</b></button></div>`;
       const buyInput = $('call-buyin-input');
       if (buyInput) buyInput.addEventListener('input', () => { const tokens = nexalsToTableTokens(buyInput.value); $('call-token-preview').textContent = `${(parseInt(buyInput.value, 10) || 0).toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens`; });
@@ -3616,6 +3616,16 @@
     const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for another call participant to join.' : `${game.players.length} players joined. Start when ready.`}</p>${paidJoin}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,10,15].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${activityName(game.type)}</button>` : ''}`;
     const end = game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : '';
     const leave = joined ? '<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>' : '';
+    const sessionControls = game.phase !== 'lobby'
+      ? `<div class="activity-session-controls"><div><strong>${activityName(game.type)}</strong><span>${game.phase === 'complete' ? 'Activity complete' : 'Activity in progress'}</span></div><div>${leave}${end}</div></div>`
+      : '';
+    if (sessionControls) {
+      queueMicrotask(() => {
+        if (content.isConnected && !content.querySelector('.activity-session-controls')) {
+          content.insertAdjacentHTML('afterbegin', sessionControls);
+        }
+      });
+    }
     if (game.type === 'uno' && game.phase === 'lobby') {
       content.innerHTML = `<div class="uno-lobby"><div class="uno-lobby-banner"><span class="uno-browser-logo">UNO</span><div><small>OPEN ROOM</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s UNO room</h2><p>${game.players.length} / 6 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST</b>' : '<b>READY</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for another caller to join...' : 'Players ready. The host can start the game.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinUnoRoom()">Join Room</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start UNO</button>` : ''}${leave}${end}</div></div>`;
       return;
@@ -3699,7 +3709,10 @@
       $('call-games-modal').classList.add('active');
     });
   };
-  window.joinAvailableCallGame = function() { window.joinCallGame(); };
+  window.joinAvailableCallGame = function() {
+    toast(`Joining ${activityName(availableCallGame?.type || 'blackjack')}...`, 'info', 1800);
+    window.joinCallGame();
+  };
   window.startCallGame = function() { const roomId = activeGameRoomId(); const rounds = parseInt($('call-round-count')?.value, 10) || 3; if (roomId && socket) socket.emit('call_game_start', { roomId, rounds }); };
   window.nextCallGameRound = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_next_round', { roomId }); };
   window.callGameAction = function(action) { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
@@ -3727,7 +3740,12 @@
   $('call-games-btn').addEventListener('click', () => { if (!activeGameRoomId()) return toast('Join a call first', 'error'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); });
   $('call-games-close').addEventListener('click', () => $('call-games-modal').classList.remove('active'));
   $('call-games-modal').addEventListener('click', e => { if (e.target === $('call-games-modal')) $('call-games-modal').classList.remove('active'); });
-  $('call-games-content').addEventListener('click', e => { const choice = e.target.closest('[data-game-type]'); if (choice) window.openCallGame(choice.dataset.gameType); });
+  $('call-games-content').addEventListener('click', e => {
+    const available = e.target.closest('[data-join-available]');
+    if (available) return window.joinAvailableCallGame();
+    const choice = e.target.closest('[data-game-type]');
+    if (choice) window.openCallGame(choice.dataset.gameType);
+  });
   $('activity-invite-join').addEventListener('click', () => {
     if (!pendingActivityInvite || !socket) return;
     const invite = pendingActivityInvite;
