@@ -3537,6 +3537,16 @@
   let availableCallGame = null;
   let pendingActivityInvite = null;
   let pendingUnoCardId = null;
+  function clearCallActivityState() {
+    activeCallGame = null;
+    availableCallGame = null;
+    pendingActivityInvite = null;
+    pendingUnoCardId = null;
+    $('activity-invite-modal')?.classList.remove('active');
+    $('call-games-modal')?.classList.remove('active');
+    const content = $('call-games-content');
+    if (content) content.innerHTML = '';
+  }
   function nexalsToTableTokens(nexals) { return Math.floor(((parseInt(nexals, 10) || 0) * 1000) / 900); }
   function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
   function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
@@ -3600,7 +3610,10 @@
     }
     const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
     const joined = game.players.some(player => player.id === currentUser.id);
-    const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for another call participant to join.' : `${game.players.length} players joined. Start when ready.`}</p>${!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : ''}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,10,15].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${activityName(game.type)}</button>` : ''}`;
+    const paidJoin = !joined && ['blackjack', 'poker'].includes(game.type)
+      ? `<div class="call-join-panel"><div><strong>Join ${activityName(game.type)}</strong><span>Choose your own table balance and opening bet.</span></div><label>Nexal buy-in<input id="call-join-buyin" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet<input id="call-join-bet" type="number" min="1" step="50" value="100"></label><button class="btn-primary" onclick="joinCallGame()">Join Table</button></div>`
+      : (!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : '');
+    const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for another call participant to join.' : `${game.players.length} players joined. Start when ready.`}</p>${paidJoin}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,10,15].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${activityName(game.type)}</button>` : ''}`;
     const end = game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : '';
     const leave = joined ? '<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>' : '';
     if (game.type === 'uno' && game.phase === 'lobby') {
@@ -3665,7 +3678,27 @@
     renderCallGame({ type, phase: 'lobby', hostId: currentUser.id, players: [{ id: currentUser.id, displayName: currentUser.displayName, chips: nexalsToTableTokens(buyIn), buyIn, bet, hand: [] }], dealer: type === 'blackjack' ? { hand: [], score: null } : null, community: [], pot: 0, message: 'Opening table...' });
     socket.emit('call_game_open', { roomId, type, buyIn, bet }, result => { if (result && result.error) { activeCallGame = null; renderCallGame(null); toast(result.error, 'error'); } });
   };
-  window.joinCallGame = function() { const roomId = activeGameRoomId(); const buyIn = parseInt($('call-buyin-input')?.value, 10) || 0; const bet = parseInt($('call-bet-input')?.value, 10) || 0; if (roomId && socket) socket.emit('call_game_join', { roomId, buyIn, bet }); };
+  window.joinCallGame = function(options = {}) {
+    const roomId = options.roomId || activeGameRoomId();
+    const paidGame = ['blackjack', 'poker'].includes(activeCallGame?.type || pendingActivityInvite?.type || availableCallGame?.type);
+    const buyIn = parseInt($('call-join-buyin')?.value || $('call-buyin-input')?.value, 10) || (paidGame ? 900 : 0);
+    const bet = parseInt($('call-join-bet')?.value || $('call-bet-input')?.value, 10) || (paidGame ? 100 : 0);
+    if (!roomId || !socket) return toast('Join the call before joining an activity.', 'error');
+    const joinButton = $('activity-invite-join');
+    if (joinButton) {
+      joinButton.disabled = true;
+      joinButton.textContent = 'Joining...';
+    }
+    socket.emit('call_game_join', { roomId, buyIn, bet }, result => {
+      if (joinButton) {
+        joinButton.disabled = false;
+        joinButton.textContent = 'Join Activity';
+      }
+      if (result?.error) return toast(result.error, 'error');
+      pendingActivityInvite = null;
+      $('call-games-modal').classList.add('active');
+    });
+  };
   window.joinAvailableCallGame = function() { window.joinCallGame(); };
   window.startCallGame = function() { const roomId = activeGameRoomId(); const rounds = parseInt($('call-round-count')?.value, 10) || 3; if (roomId && socket) socket.emit('call_game_start', { roomId, rounds }); };
   window.nextCallGameRound = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_next_round', { roomId }); };
@@ -3697,10 +3730,11 @@
   $('call-games-content').addEventListener('click', e => { const choice = e.target.closest('[data-game-type]'); if (choice) window.openCallGame(choice.dataset.gameType); });
   $('activity-invite-join').addEventListener('click', () => {
     if (!pendingActivityInvite || !socket) return;
-    socket.emit('call_game_join', { roomId: pendingActivityInvite.roomId, buyIn: 900, bet: 100 });
+    const invite = pendingActivityInvite;
     $('activity-invite-modal').classList.remove('active');
     $('call-games-modal').classList.add('active');
-    pendingActivityInvite = null;
+    renderCallGame(activeCallGame);
+    window.joinCallGame({ roomId: invite.roomId });
   });
   $('activity-invite-ignore').addEventListener('click', () => { pendingActivityInvite = null; $('activity-invite-modal').classList.remove('active'); });
 
@@ -3949,7 +3983,10 @@
     });
 
     socket.on('call_ended', ({ roomId }) => {
-      if (callState && callState.roomId === roomId) endCallLocal();
+      if (!callState || callState.roomId === roomId) {
+        clearCallActivityState();
+        endCallLocal();
+      }
     });
 
     socket.on('new_channel_message', msg => {
@@ -4581,6 +4618,7 @@
     $('video-toggle-btn').classList.remove('video-off');
     $('view-screen-btn').style.display = 'none';
     $('view-screen-btn').classList.remove('viewing');
+    clearCallActivityState();
   }
 
   async function ensureGroupPeerConnection(peerId, initiateOffer) {
@@ -6433,6 +6471,8 @@
   window.cashoutBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/cashout'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); renderStatsBlackjack(r.table); toast(`Cashed out ${r.earned} Nexals`, 'success'); };
   window.closeStatsBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/close'); if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals); lastStatsBlackjackTable = null; $('games-blackjack-table').innerHTML = ''; if (r.earned) toast(`Table closed. Cashed out ${r.earned.toLocaleString()} Nexals.`, 'success'); };
   window.addEventListener('pagehide', () => {
+    const roomId = activeGameRoomId();
+    if (roomId && socket?.connected) socket.emit('call_end', { roomId });
     if (currentUser && navigator.sendBeacon) navigator.sendBeacon('/api/games/blackjack/close', new Blob(['{}'], { type: 'application/json' }));
   });
 

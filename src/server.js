@@ -579,6 +579,24 @@ async function settleCallGame(roomId, reason = 'Activity ended') {
   game.message = `${reason}. Table tokens settled: ${summary || 'no payouts'}.`;
   return payouts;
 }
+async function closeDirectCallRoom(roomId, reason = 'Call ended') {
+  if (!roomId) return;
+  if (callGames.has(roomId)) {
+    await settleCallGame(roomId, reason);
+    callGames.delete(roomId);
+    io.to(`call:${roomId}`).emit('call_game_closed', { roomId, reason });
+    io.to(`groupcall:${roomId}`).emit('call_game_closed', { roomId, reason });
+  }
+  const room = await getRoomParticipants(roomId);
+  if (room && room.size) {
+    for (const uid of room) {
+      await clearUserCallRoom(uid);
+      io.to(`user:${uid}`).emit('call_ended', { roomId });
+    }
+  }
+  await clearRoomParticipants(roomId);
+  callTypes.delete(roomId);
+}
 async function isInGameRoom(userId, roomId) {
   if (userGroupCallRoom.get(userId) === roomId || groupCallRooms.get(roomId)?.has(userId)) return true;
   return (await getUserCallRoom(userId)) === roomId;
@@ -1831,6 +1849,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('join_call', ({ roomId }) => {
+    socket.data.callRoomId = roomId;
     socket.join(`call:${roomId}`);
     socket.to(`call:${roomId}`).emit('peer_joined', { userId });
   });
@@ -1846,19 +1865,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('call_end', async ({ roomId }) => {
-    if (callGames.delete(roomId)) {
-      io.to(`call:${roomId}`).emit('call_game_closed', { roomId });
-      io.to(`groupcall:${roomId}`).emit('call_game_closed', { roomId });
-    }
-    const room = await getRoomParticipants(roomId);
-    if (room && room.size) {
-      for (const uid of room) {
-        await clearUserCallRoom(uid);
-        io.to(`user:${uid}`).emit('call_ended', { roomId });
-      }
-      await clearRoomParticipants(roomId);
-      callTypes.delete(roomId);
-    }
+    await closeDirectCallRoom(roomId);
+    socket.data.callRoomId = null;
     socket.leave(`call:${roomId}`);
   });
 
@@ -2020,20 +2028,34 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('call_game_join', async ({ roomId, buyIn, bet }) => {
+  socket.on('call_game_join', async ({ roomId, buyIn, bet }, ack = () => {}) => {
     const game = callGames.get(roomId);
     const maxPlayers = game?.type === 'connect4' ? 2 : 6;
-    if (!game || game.phase !== 'lobby' || !await isInGameRoom(userId, roomId) || game.players.some(p => p.id === userId) || game.players.length >= maxPlayers) return;
+    if (!game) return ack({ error: 'That activity is no longer open.' });
+    if (game.phase !== 'lobby') return ack({ error: 'That match has already started.' });
+    if (!await isInGameRoom(userId, roomId)) return ack({ error: 'Join the call before joining the activity.' });
+    if (game.players.some(p => p.id === userId)) {
+      socket.emit('call_game_state', { roomId, game: gameStateFor(game, userId) });
+      return ack({ success: true, alreadyJoined: true });
+    }
+    if (game.players.length >= maxPlayers) return ack({ error: 'That activity is full.' });
     const me = await pool.query('SELECT display_name FROM users WHERE id=$1', [userId]);
     let purchase = { buyIn: 0, tokens: 0, nexals: null };
     if (!['uno', 'connect4'].includes(game.type)) {
       try { purchase = await buyCallTableTokens(userId, buyIn); }
-      catch (error) { socket.emit('call_game_error', { message: error.message }); return; }
+      catch (error) { socket.emit('call_game_error', { message: error.message }); return ack({ error: error.message }); }
     }
     const openingBet = Math.min(1000000, Math.max(0, parseInt(bet, 10) || 0));
+    if (!['uno', 'connect4'].includes(game.type) && (!openingBet || openingBet > purchase.tokens)) {
+      if (purchase.buyIn) {
+        await pool.query('UPDATE users SET nexals=nexals+$1 WHERE id=$2', [purchase.buyIn, userId]);
+      }
+      return ack({ error: 'Choose a token bet that fits within your table balance.' });
+    }
     game.players.push({ id: userId, displayName: me.rows[0]?.display_name || 'Player', chips: purchase.tokens, buyIn: purchase.buyIn, bet: openingBet, score: 0, hand: [] });
     if (purchase.nexals !== null) socket.emit('nexals_updated', { nexals: purchase.nexals });
     emitGame(roomId);
+    ack({ success: true });
   });
 
   socket.on('call_game_start', async ({ roomId, rounds }) => {
@@ -2249,6 +2271,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', async () => {
+    const disconnectedCallRoom = socket.data.callRoomId;
+    if (disconnectedCallRoom) {
+      await closeDirectCallRoom(disconnectedCallRoom, 'A participant left the call');
+      socket.data.callRoomId = null;
+    }
     const sockets = userSockets.get(userId);
     if (sockets) {
       sockets.delete(socket.id);
@@ -2264,18 +2291,7 @@ io.on('connection', (socket) => {
         }
         const roomId = await getUserCallRoom(userId);
         if (roomId) {
-          const room = await getRoomParticipants(roomId);
-          if (room && room.size) {
-            for (const uid of room) {
-              if (uid !== userId) {
-                await clearUserCallRoom(uid);
-                io.to(`user:${uid}`).emit('call_ended', { roomId });
-              }
-            }
-            await clearRoomParticipants(roomId);
-            callTypes.delete(roomId);
-          }
-          await clearUserCallRoom(userId);
+          await closeDirectCallRoom(roomId, 'A participant disconnected');
         }
 
         const gRoomId = userGroupCallRoom.get(userId);
