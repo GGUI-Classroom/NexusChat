@@ -507,6 +507,30 @@ async function initDb() {
   )`, 'user_reports');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_user_reports_status_created ON user_reports(status, created_at DESC)`, 'idx_user_reports_status_created');
 
+  await runSql(`CREATE TABLE IF NOT EXISTS global_safety_terms (
+    id TEXT PRIMARY KEY,
+    term TEXT NOT NULL,
+    normalized_term TEXT NOT NULL UNIQUE,
+    created_by TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'global_safety_terms');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_global_safety_terms_normalized ON global_safety_terms(normalized_term)`, 'idx_global_safety_terms_normalized');
+  await runSql(`
+    INSERT INTO global_safety_terms (id, term, normalized_term)
+    SELECT seed.id, seed.term, seed.normalized_term
+    FROM (VALUES
+      ('safety-default-1', 'nigger', 'nigger'),
+      ('safety-default-2', 'nigga', 'nigga'),
+      ('safety-default-3', 'faggot', 'faggot'),
+      ('safety-default-4', 'kike', 'kike'),
+      ('safety-default-5', 'chink', 'chink'),
+      ('safety-default-6', 'spic', 'spic'),
+      ('safety-default-7', 'wetback', 'wetback')
+    ) AS seed(id, term, normalized_term)
+    WHERE NOT EXISTS (SELECT 1 FROM global_safety_terms)
+    ON CONFLICT (normalized_term) DO NOTHING
+  `, 'seed_global_safety_terms');
+
   await runSql(`CREATE TABLE IF NOT EXISTS server_mutes (
     id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,

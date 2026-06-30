@@ -13,6 +13,7 @@ const { envFlag } = require('./config/env');
 const { pool, initDb } = require('./models/db');
 const { avatarUrl } = require('./utils/avatar');
 const { requestIp, requestDeviceId, socketDeviceId } = require('./utils/ip');
+const { enforceGlobalSafety, findConfiguredViolation } = require('./utils/globalSafety');
 
 const app = express();
 const server = http.createServer(app);
@@ -1389,6 +1390,15 @@ io.on('connection', (socket) => {
     if (!toId || !content || typeof content !== 'string') return;
     const trimmed = content.trim().slice(0, 4000);
     if (!trimmed) return;
+    const safetyViolation = await enforceGlobalSafety({
+      userId,
+      content: trimmed,
+      messageType: 'dm'
+    });
+    if (safetyViolation) {
+      socket.emit('message_error', { error: 'Message blocked by NexusGuard global safety policy. The attempt was automatically reported.' });
+      return;
+    }
     // Single query: check friendship AND get sender info at once
     const check = await pool.query(
       `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
@@ -1475,6 +1485,21 @@ io.on('connection', (socket) => {
     const normalizedReplyId = typeof replyToMessageId === 'string' && replyToMessageId.trim() ? replyToMessageId.trim() : null;
     if (!trimmed) return;
 
+    const safetyViolation = await enforceGlobalSafety({
+      userId,
+      content: trimmed,
+      messageType: 'channel',
+      serverId,
+      channelId
+    });
+    if (safetyViolation) {
+      socket.emit('channel_error', {
+        channelId,
+        error: 'Message blocked by NexusGuard global safety policy. The attempt was automatically reported.'
+      });
+      return;
+    }
+
     const botConfig = await getServerBotConfig(serverId);
 
     if (trimmed.startsWith(botConfig.botPrefix || '/')) {
@@ -1555,13 +1580,12 @@ io.on('connection', (socket) => {
     }
 
     if (botConfig.botEnabled && botConfig.botAutoMod) {
-      const lower = trimmed.toLowerCase();
-      const blockedWord = (botConfig.blockedWords || []).find(w => lower.includes(w));
+      const blockedWord = findConfiguredViolation(trimmed, botConfig.blockedWords || []);
       if (blockedWord) {
-        socket.emit('channel_error', { channelId, error: `Message blocked: contains blocked word "${blockedWord}".` });
+        socket.emit('channel_error', { channelId, error: `Message blocked: contains blocked word "${blockedWord.term}".` });
         await sendBotDirectMessage({
           toUserId: userId,
-          content: `[${NEXUS_BOT_NAME}] Your message in server ${serverId} was blocked for using a filtered word: ${blockedWord}`
+          content: `[${NEXUS_BOT_NAME}] Your message in server ${serverId} was blocked for using a filtered word: ${blockedWord.term}`
         });
         return;
       }

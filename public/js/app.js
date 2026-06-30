@@ -4216,6 +4216,9 @@
     socket.on('channel_error', ({ channelId, error }) => {
       if (channelId === activeChannelId) toast(error, 'error');
     });
+    socket.on('message_error', ({ error }) => {
+      toast(error || 'Message could not be sent', 'error');
+    });
 
     socket.on('screenshare_started', ({ fromId }) => {
       expectingRemoteScreenTrack = true;
@@ -5628,6 +5631,7 @@
     const list = $('admin-userreports-list');
     if (!list) return;
     const status = $('admin-userreports-status')?.value || 'open';
+    if (isCoreAdmin) adminLoadGlobalSafetyTerms();
     list.innerHTML = '<div style="padding:14px;color:var(--text-muted)">Loading reports...</div>';
     const r = await api('GET', '/api/admin/user-reports?status=' + encodeURIComponent(status));
     if (r.error) {
@@ -5662,6 +5666,30 @@
         </div>
       </div>`;
     }).join('');
+  }
+
+  async function adminLoadGlobalSafetyTerms() {
+    const editor = $('admin-global-safety-editor');
+    if (!editor) return;
+    editor.style.display = isCoreAdmin ? 'block' : 'none';
+    if (!isCoreAdmin) return;
+    const result = await api('GET', '/api/admin/safety-terms');
+    if (result.error) return showError('admin-global-safety-error', result.error);
+    const terms = result.terms || [];
+    $('admin-global-safety-terms').value = terms.join('\n');
+    $('admin-global-safety-count').textContent = `${terms.length} global terms`;
+  }
+
+  if ($('admin-global-safety-save')) {
+    $('admin-global-safety-save').addEventListener('click', async () => {
+      showError('admin-global-safety-error', '');
+      const terms = $('admin-global-safety-terms').value.split(/\r?\n/).map(term => term.trim()).filter(Boolean);
+      const result = await api('PUT', '/api/admin/safety-terms', { terms });
+      if (result.error) return showError('admin-global-safety-error', result.error);
+      $('admin-global-safety-terms').value = result.terms.join('\n');
+      $('admin-global-safety-count').textContent = `${result.terms.length} global terms`;
+      toast('Global NexusGuard filter updated', 'success');
+    });
   }
 
   window.adminFillSuspend = function(username) {

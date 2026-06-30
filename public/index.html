@@ -922,6 +922,16 @@
           </div>
         </div>
         <div class="admin-pane" id="admin-pane-userreports">
+          <div id="admin-global-safety-editor" style="display:none;margin:16px 16px 8px;padding:16px;border:1px solid var(--border-bright);border-radius:8px;background:var(--bg-surface)">
+            <div class="section-label">GLOBAL DISCRIMINATORY-LANGUAGE FILTER</div>
+            <p style="margin:7px 0 12px;color:var(--text-secondary);font-size:12px;line-height:1.5">Core-admin policy applied to every DM and server. Enter only severe discriminatory terms, one per line. Punctuation, spacing, asterisks, and common character substitutions are detected automatically.</p>
+            <textarea id="admin-global-safety-terms" rows="7" maxlength="12000" placeholder="One severe discriminatory term per line" style="width:100%;resize:vertical"></textarea>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+              <button class="btn-primary" id="admin-global-safety-save">Save Global Filter</button>
+              <span id="admin-global-safety-count" style="color:var(--text-muted);font-size:11px"></span>
+            </div>
+            <div class="form-error" id="admin-global-safety-error"></div>
+          </div>
           <div style="padding:16px 20px 8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <select id="admin-userreports-status" style="padding:9px 10px;background:var(--bg-void);border:1px solid var(--border-bright);border-radius:6px;color:var(--text-primary);font-family:Syne,sans-serif;font-size:13px">
               <option value="open">Open reports</option>

@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 const { requireAuth } = require('../middleware/auth');
 const { buildReportPayload, clearReportCache, getActiveReport } = require('../utils/systemReport');
+const { clearSafetyTermCache, normalizeTerm } = require('../utils/globalSafety');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -343,6 +344,44 @@ router.get('/user-reports', async (req, res) => {
     reporter: { username: row.reporter_username, displayName: row.reporter_display_name },
     target: { username: row.target_username, displayName: row.target_display_name }
   }))});
+});
+
+router.get('/safety-terms', requireCoreAdmin, async (req, res) => {
+  const result = await pool.query('SELECT term FROM global_safety_terms ORDER BY term ASC');
+  res.json({ terms: result.rows.map(row => row.term) });
+});
+
+router.put('/safety-terms', requireCoreAdmin, async (req, res) => {
+  const submitted = Array.isArray(req.body.terms) ? req.body.terms : [];
+  const unique = new Map();
+  for (const rawTerm of submitted.slice(0, 200)) {
+    const term = String(rawTerm || '').trim().slice(0, 80);
+    const normalized = normalizeTerm(term);
+    if (normalized.length < 3) continue;
+    if (!unique.has(normalized)) unique.set(normalized, term);
+  }
+  if (!unique.size) return res.status(400).json({ error: 'Keep at least one discriminatory term in the global filter.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM global_safety_terms');
+    for (const [normalized, term] of unique) {
+      await client.query(
+        `INSERT INTO global_safety_terms (id, term, normalized_term, created_by)
+         VALUES ($1,$2,$3,$4)`,
+        [uuidv4(), term, normalized, req.session.userId]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  clearSafetyTermCache();
+  res.json({ success: true, terms: [...unique.values()].sort((a, b) => a.localeCompare(b)) });
 });
 
 router.post('/user-reports/:reportId/resolve', async (req, res) => {
