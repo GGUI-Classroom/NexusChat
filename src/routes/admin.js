@@ -4,6 +4,7 @@ const { pool } = require('../models/db');
 const { requireAuth } = require('../middleware/auth');
 const { buildReportPayload, clearReportCache, getActiveReport } = require('../utils/systemReport');
 const { clearSafetyTermCache, normalizeTerm } = require('../utils/globalSafety');
+const { getCurrentTos, setCachedTos } = require('../utils/tosPolicy');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -93,6 +94,36 @@ router.get('/check', (req, res) => {
 
 router.get('/system-report', requireCoreAdmin, async (req, res) => {
   res.json({ report: await getActiveReport(pool) });
+});
+
+router.get('/tos', requireCoreAdmin, async (req, res) => {
+  res.json({ tos: await getCurrentTos(true) });
+});
+
+router.put('/tos', requireCoreAdmin, async (req, res) => {
+  const title = String(req.body.title || '').trim().slice(0, 120);
+  const content = String(req.body.content || '').trim().slice(0, 30000);
+  if (title.length < 3) return res.status(400).json({ error: 'Enter a TOS title.' });
+  if (content.length < 100) return res.status(400).json({ error: 'Terms of Service must contain at least 100 characters.' });
+  const updated = await pool.query(
+    `UPDATE terms_of_service
+     SET version=version+1, title=$1, content=$2, updated_by=$3,
+         updated_at=EXTRACT(EPOCH FROM NOW())::BIGINT
+     WHERE id='current'
+     RETURNING version, title, content, updated_at`,
+    [title, content, req.session.userId]
+  );
+  const row = updated.rows[0];
+  const tos = {
+    version: parseInt(row.version, 10),
+    title: row.title,
+    content: row.content,
+    updatedAt: parseInt(row.updated_at, 10)
+  };
+  setCachedTos(tos);
+  const io = req.app.get('io');
+  if (io) io.emit('tos_required', { tos });
+  res.json({ success: true, tos });
 });
 
 router.post('/system-report', requireCoreAdmin, async (req, res) => {

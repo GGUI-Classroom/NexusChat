@@ -14,6 +14,7 @@ const { pool, initDb } = require('./models/db');
 const { avatarUrl } = require('./utils/avatar');
 const { requestIp, requestDeviceId, socketDeviceId } = require('./utils/ip');
 const { enforceGlobalSafety, findConfiguredViolation } = require('./utils/globalSafety');
+const { getCurrentTos, getUserTosState, requireCurrentTos } = require('./utils/tosPolicy');
 
 const app = express();
 const server = http.createServer(app);
@@ -152,6 +153,7 @@ app.use(async (req, res, next) => {
 app.set('io', io);
 
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api', requireCurrentTos);
 app.use('/api/friends', require('./routes/friends'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/users', require('./routes/users'));
@@ -778,6 +780,8 @@ io.use(async (socket, next) => {
       if (banned.rows.length) return next(new Error('This device is banned from Nexus'));
     }
     await pool.query('UPDATE users SET last_ip=$1, last_device_id=$2 WHERE id=$3', [ip || null, deviceId || null, sess.userId]);
+    const tosState = await getUserTosState(sess.userId);
+    socket.data.tosAcceptedVersion = tosState.acceptedVersion;
   } catch (error) {
     console.error('Socket device ban check failed:', error.message);
   }
@@ -1378,6 +1382,25 @@ async function runChannelCommand({ socket, serverId, channelId, actorUserId, act
 
 io.on('connection', (socket) => {
   const userId = socket.userId;
+  socket.use(async ([event], next) => {
+    if (event === 'tos_accepted') return next();
+    try {
+      const policy = await getCurrentTos();
+      if ((parseInt(socket.data.tosAcceptedVersion, 10) || 0) < policy.version) {
+        return next(new Error('TOS_REQUIRED'));
+      }
+      next();
+    } catch (error) {
+      next(new Error('TOS_UNAVAILABLE'));
+    }
+  });
+  socket.on('tos_accepted', async ({ version } = {}) => {
+    const state = await getUserTosState(userId);
+    if (!state.required && parseInt(version, 10) === state.policy.version) {
+      socket.data.tosAcceptedVersion = state.acceptedVersion;
+      socket.emit('tos_acceptance_confirmed', { version: state.acceptedVersion });
+    }
+  });
   if (!userSockets.has(userId)) userSockets.set(userId, new Set());
   userSockets.get(userId).add(socket.id);
 

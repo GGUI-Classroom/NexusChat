@@ -806,6 +806,7 @@
         <button class="admin-tab" data-tab="control">🎛 Control</button>
         <button class="admin-tab" data-tab="reports">Reports</button>
         <button class="admin-tab" data-tab="userreports">User Reports</button>
+        <button class="admin-tab" data-tab="tos">Terms of Service</button>
         <button class="admin-tab" data-tab="admins">🛡 Admins</button>
         <button class="admin-tab" data-tab="history">📋 Log</button>
       </div>
@@ -946,6 +947,22 @@
           </div>
           <div id="admin-userreports-list" style="padding:0 16px 16px"></div>
         </div>
+        <div class="admin-pane" id="admin-pane-tos">
+          <div class="admin-tos-editor">
+            <div>
+              <div class="section-label">TERMS OF SERVICE</div>
+              <h3>Publish a new agreement</h3>
+              <p>Saving creates a new version and immediately requires every account to review and accept it again.</p>
+            </div>
+            <div class="field-group"><label>Document Title</label><input id="admin-tos-title" type="text" maxlength="120" /></div>
+            <div class="field-group"><label>Terms</label><textarea id="admin-tos-content" rows="18" maxlength="30000"></textarea></div>
+            <div class="admin-tos-publish-row">
+              <span id="admin-tos-version">Current version: -</span>
+              <button class="btn-danger" id="admin-tos-publish">Publish New Version</button>
+            </div>
+            <div class="form-error" id="admin-tos-error"></div>
+          </div>
+        </div>
         <div class="admin-pane" id="admin-pane-admins">
           <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
             <div class="field-group" style="margin:0"><label>Username To Promote</label><input type="text" id="admin-add-username" placeholder="Username" autocomplete="off" /></div>
@@ -1063,6 +1080,24 @@
   </div>
 
   <div id="pending-gifts-stack" class="pending-gifts-stack"></div>
+
+  <div class="tos-overlay" id="tos-overlay" aria-modal="true" role="dialog" style="display:none">
+    <div class="tos-dialog">
+      <div class="tos-brand">NEXUS</div>
+      <div class="tos-heading">
+        <div><span>REQUIRED AGREEMENT</span><h2 id="tos-title">Nexus Terms of Service</h2></div>
+        <small id="tos-version">Version 1</small>
+      </div>
+      <div class="tos-document" id="tos-content"></div>
+      <label class="tos-consent">
+        <input type="checkbox" id="tos-checkbox" />
+        <span>I have read and agree to the current Nexus Terms of Service.</span>
+      </label>
+      <div class="form-error" id="tos-error"></div>
+      <button class="btn-primary" id="tos-accept-btn" disabled>Agree and Continue</button>
+      <button class="tos-signout" id="tos-signout-btn">Sign out instead</button>
+    </div>
+  </div>
 
   <div class="modal-overlay" id="tutorial-overlay" style="z-index:1200">
     <div class="modal tutorial-modal">

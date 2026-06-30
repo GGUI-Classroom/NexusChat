@@ -50,6 +50,51 @@ async function initDb() {
     status TEXT DEFAULT 'offline',
     created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
   )`, 'users');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS accepted_tos_version INTEGER NOT NULL DEFAULT 0`, 'alter_users_accepted_tos_version');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS accepted_tos_at BIGINT DEFAULT NULL`, 'alter_users_accepted_tos_at');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS terms_of_service (
+    id TEXT PRIMARY KEY,
+    version INTEGER NOT NULL DEFAULT 1,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    updated_by TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+    updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'terms_of_service');
+  await runSql(`
+    INSERT INTO terms_of_service (id, version, title, content)
+    VALUES (
+      'current',
+      1,
+      'Nexus Terms of Service',
+      'By using Nexus, you agree to use the service lawfully and respectfully.
+
+1. Accounts: Keep your account secure and provide accurate registration information. You are responsible for activity performed through your account.
+
+2. Safety: Discriminatory harassment, threats, sexual exploitation, child sexual abuse material, grooming, and attempts to evade safety systems are prohibited.
+
+3. Content: You are responsible for content you send or upload. Nexus may block, remove, preserve, or review content when necessary for safety, moderation, legal compliance, or operation of the service.
+
+4. Communities: Server owners and moderators may establish additional rules, but those rules cannot override Nexus-wide safety requirements.
+
+5. Virtual Items: Nexals, decorations, boosts, and other virtual items have no cash value unless Nexus explicitly states otherwise. Features and balances may be adjusted to protect the service.
+
+6. Enforcement: Nexus may warn, restrict, suspend, or terminate accounts that violate these terms or create risk for users or the service.
+
+7. Availability: Nexus may change, interrupt, or discontinue features. The service is provided as available without a guarantee of uninterrupted operation.
+
+8. Updates: These terms may be updated. When a new version is published, you must review and accept it before continuing to use Nexus.'
+    )
+    ON CONFLICT (id) DO NOTHING
+  `, 'seed_terms_of_service');
+  await runSql(`CREATE TABLE IF NOT EXISTS tos_acceptances (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    accepted_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(user_id, version)
+  )`, 'tos_acceptances');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_tos_acceptances_user ON tos_acceptances(user_id, version DESC)`, 'idx_tos_acceptances_user');
 
   await runSql(`CREATE TABLE IF NOT EXISTS friend_requests (
     id TEXT PRIMARY KEY,

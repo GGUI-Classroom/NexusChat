@@ -11,6 +11,8 @@
   let friends = [];
   const authorCache = {};
   let pendingSystemReport = null;
+  let pendingTos = null;
+  let appInitialized = false;
   let isCoreAdmin = false;
   let reportAlarmCtx = null;
   let reportAlarmTimer = null;
@@ -1427,7 +1429,12 @@
       const res = await fetch(path, opts);
       const text = await res.text();
       try {
-        return JSON.parse(text);
+        const parsed = JSON.parse(text);
+        if (parsed.tosRequired && parsed.tos) {
+          pendingTos = parsed.tos;
+          if (currentUser) showTosAgreement(parsed.tos);
+        }
+        return parsed;
       } catch (e) {
         console.error('Non-JSON response:', text);
         return { error: 'Server returned invalid response: ' + text.slice(0, 100) };
@@ -1451,6 +1458,7 @@
     if (auth && auth.user) {
       currentUser = auth.user;
       pendingSystemReport = auth.systemReport || null;
+      pendingTos = auth.tosRequired ? auth.tos : null;
       enterApp();
     } else {
       showScreen('auth-screen');
@@ -1508,6 +1516,7 @@
     if (!r.user) return showError('login-error', 'Unexpected response — check browser console');
     currentUser = r.user;
     pendingSystemReport = r.systemReport || null;
+    pendingTos = r.tosRequired ? r.tos : null;
     enterApp();
   });
 
@@ -1526,6 +1535,7 @@
     if (!r.user) return showError('register-error', 'Unexpected response — check browser console');
     currentUser = r.user;
     pendingSystemReport = r.systemReport || null;
+    pendingTos = r.tosRequired ? r.tos : null;
     enterApp();
   });
 
@@ -1536,6 +1546,13 @@
       updateSelfCard();
       syncSecretAmbient();
       showScreen('main-screen');
+      if (pendingTos) {
+        showTosAgreement(pendingTos);
+        return;
+      }
+      $('tos-overlay').style.display = 'none';
+      if (appInitialized) return;
+      appInitialized = true;
       loadPersistedClientState();
       connectSocket();
       loadFriends();
@@ -1559,6 +1576,56 @@
       alert('Login succeeded but app failed to load: ' + e.message);
     }
   }
+
+  function showTosAgreement(tos) {
+    if (!tos) return;
+    pendingTos = tos;
+    $('tos-title').textContent = tos.title || 'Nexus Terms of Service';
+    $('tos-version').textContent = `Version ${tos.version}`;
+    $('tos-content').textContent = tos.content || '';
+    $('tos-checkbox').checked = false;
+    $('tos-accept-btn').disabled = true;
+    showError('tos-error', '');
+    $('tos-overlay').style.display = 'grid';
+  }
+
+  $('tos-checkbox').addEventListener('change', event => {
+    $('tos-accept-btn').disabled = !event.target.checked;
+  });
+
+  $('tos-accept-btn').addEventListener('click', async () => {
+    if (!pendingTos || !$('tos-checkbox').checked) return;
+    const button = $('tos-accept-btn');
+    button.disabled = true;
+    button.textContent = 'Saving Agreement...';
+    const result = await api('POST', '/api/auth/tos/accept', {
+      version: pendingTos.version,
+      accepted: true
+    });
+    button.textContent = 'Agree and Continue';
+    if (result.error) {
+      button.disabled = !$('tos-checkbox').checked;
+      if (result.tos) showTosAgreement(result.tos);
+      return showError('tos-error', result.error);
+    }
+    const acceptedVersion = result.acceptedVersion;
+    pendingTos = null;
+    if (currentUser) currentUser.acceptedTosVersion = acceptedVersion;
+    $('tos-overlay').style.display = 'none';
+    if (socket) socket.emit('tos_accepted', { version: acceptedVersion });
+    enterApp();
+  });
+
+  $('tos-signout-btn').addEventListener('click', async () => {
+    await api('POST', '/api/auth/logout');
+    pendingTos = null;
+    appInitialized = false;
+    if (socket) socket.disconnect();
+    socket = null;
+    currentUser = null;
+    $('tos-overlay').style.display = 'none';
+    showScreen('auth-screen');
+  });
 
   if ($('nexus-report-ack-btn')) {
     $('nexus-report-ack-btn').addEventListener('click', async () => {
@@ -3902,6 +3969,23 @@
 
     socket = io({ transports: ['websocket', 'polling'], auth: { deviceId: getDeviceId() } });
 
+    socket.on('tos_required', ({ tos }) => {
+      if (!tos || !currentUser) return;
+      if (callState) {
+        socket.emit('call_end', { roomId: callState.roomId });
+        endCallLocal();
+      }
+      if (groupCallState) leaveGroupCall(true);
+      showTosAgreement(tos);
+    });
+    socket.on('error', error => {
+      if (error?.message === 'TOS_REQUIRED' && currentUser) {
+        api('GET', '/api/auth/tos').then(result => {
+          if (result.tos) showTosAgreement(result.tos);
+        });
+      }
+    });
+
     socket.on('call_game_state', ({ roomId, game }) => {
       if (roomId !== activeGameRoomId()) return;
       pendingUnoCardId = null;
@@ -5055,6 +5139,8 @@
     leaveGroupCall(false);
     if (socket) socket.disconnect();
     currentUser = null; socket = null; friends = [];
+    appInitialized = false;
+    pendingTos = null;
     activeDmUserId = null; activeDmUser = null;
     endCallLocal();
     showScreen('auth-screen');
@@ -5085,6 +5171,8 @@
     btn.style.display = isAppAdmin ? 'flex' : 'none';
     const reportsTab = document.querySelector('.admin-tab[data-tab="reports"]');
     if (reportsTab) reportsTab.style.display = isCoreAdmin ? '' : 'none';
+    const tosTab = document.querySelector('.admin-tab[data-tab="tos"]');
+    if (tosTab) tosTab.style.display = isCoreAdmin ? '' : 'none';
   }
 
   window.openAdminPanel = function() {
@@ -5109,6 +5197,7 @@
     if (tab === 'admins') adminLoadAdmins();
     if (tab === 'reports') adminLoadSystemReport();
     if (tab === 'userreports') adminLoadUserReports();
+    if (tab === 'tos') adminLoadTos();
     if (tab === 'suspend') adminLoadIpBans();
     if (tab === 'userinfo') { $('admin-userinfo-result').innerHTML = ''; }
   }
@@ -5666,6 +5755,35 @@
         </div>
       </div>`;
     }).join('');
+  }
+
+  async function adminLoadTos() {
+    if (!isCoreAdmin) return;
+    showError('admin-tos-error', '');
+    const result = await api('GET', '/api/admin/tos');
+    if (result.error) return showError('admin-tos-error', result.error);
+    $('admin-tos-title').value = result.tos.title || '';
+    $('admin-tos-content').value = result.tos.content || '';
+    $('admin-tos-version').textContent = `Current version: ${result.tos.version}`;
+  }
+
+  if ($('admin-tos-publish')) {
+    $('admin-tos-publish').addEventListener('click', async () => {
+      if (!confirm('Publish a new Terms of Service version? Every user, including you, must agree again immediately.')) return;
+      showError('admin-tos-error', '');
+      const button = $('admin-tos-publish');
+      button.disabled = true;
+      button.textContent = 'Publishing...';
+      const result = await api('PUT', '/api/admin/tos', {
+        title: $('admin-tos-title').value.trim(),
+        content: $('admin-tos-content').value.trim()
+      });
+      button.disabled = false;
+      button.textContent = 'Publish New Version';
+      if (result.error) return showError('admin-tos-error', result.error);
+      $('admin-tos-version').textContent = `Current version: ${result.tos.version}`;
+      toast('New Terms of Service published', 'success');
+    });
   }
 
   async function adminLoadGlobalSafetyTerms() {

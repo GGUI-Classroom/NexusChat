@@ -5,6 +5,7 @@ const { pool } = require('../models/db');
 const { avatarUrl } = require('../utils/avatar');
 const { getActiveReportForUser } = require('../utils/systemReport');
 const { requestIp, requestDeviceId } = require('../utils/ip');
+const { getCurrentTos, getUserTosState } = require('../utils/tosPolicy');
 
 const router = express.Router();
 const DEFAULT_SERVER_INVITE_CODE = 'GPFA9B32';
@@ -44,8 +45,10 @@ router.post('/register', async (req, res) => {
       );
     }
     req.session.userId = id;
+    req.session.tosAcceptedVersion = 0;
     const systemReport = await getActiveReportForUser(pool, id);
-    return res.json({ success: true, systemReport, user: { id, username: username.toLowerCase(), displayName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null, tutorialCompleted: false } });
+    const tos = await getCurrentTos();
+    return res.json({ success: true, systemReport, tosRequired: true, tos, user: { id, username: username.toLowerCase(), displayName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null, tutorialCompleted: false } });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'Server error' });
@@ -66,7 +69,7 @@ router.post('/login', async (req, res) => {
       `SELECT id, username, display_name, password_hash, bio, (avatar_data IS NOT NULL) AS has_avatar,
         active_decoration, active_nameplate, active_color, active_font, active_ringtone, pro_expires_at,
         profile_card_style, profile_gradient_start, profile_gradient_end, profile_name_effect, profile_effect,
-        (profile_banner_data IS NOT NULL) AS has_profile_banner, tutorial_completed
+        (profile_banner_data IS NOT NULL) AS has_profile_banner, tutorial_completed, accepted_tos_version
        FROM users WHERE LOWER(username)=LOWER($1)`,
       [username]
     );
@@ -90,9 +93,11 @@ router.post('/login', async (req, res) => {
     }
 
     req.session.userId = user.id;
+    req.session.tosAcceptedVersion = parseInt(user.accepted_tos_version, 10) || 0;
     await pool.query('UPDATE users SET last_ip=$1, last_device_id=$2 WHERE id=$3', [ip || null, deviceId || null, user.id]);
     const systemReport = await getActiveReportForUser(pool, user.id);
-    return res.json({ success: true, systemReport, user: {
+    const tosState = await getUserTosState(user.id);
+    return res.json({ success: true, systemReport, tosRequired: tosState.required, tos: tosState.required ? tosState.policy : null, user: {
       id: user.id, username: user.username, displayName: user.display_name,
       avatarDataUrl: avatarUrl(user.id, !!user.has_avatar),
       bio: user.bio || null,
@@ -101,7 +106,7 @@ router.post('/login', async (req, res) => {
       activeColor: user.active_color || null,
         activeFont: user.active_font || null,
       activeRingtone: user.active_ringtone || null,
-      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileCardStyle: user.profile_card_style || 'soft', proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', profileEffect: user.profile_effect || 'none', profileBannerUrl: user.has_profile_banner ? `/api/users/banner/${user.id}` : null, tutorialCompleted: user.tutorial_completed !== false
+      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileCardStyle: user.profile_card_style || 'soft', proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', profileEffect: user.profile_effect || 'none', profileBannerUrl: user.has_profile_banner ? `/api/users/banner/${user.id}` : null, tutorialCompleted: user.tutorial_completed !== false, acceptedTosVersion: tosState.acceptedVersion
     }});
   } catch (e) {
     console.error(e);
@@ -132,13 +137,15 @@ router.get('/me', async (req, res) => {
     }
 
     const r = await pool.query(
-      'SELECT u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.bio, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.active_ringtone, u.pro_expires_at, u.profile_card_style, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, u.profile_effect, (u.profile_banner_data IS NOT NULL) AS has_profile_banner, u.tutorial_completed, s.id AS tag_server_id, s.name AS tag_server_name, s.invite_code AS tag_invite_code, s.server_tag, s.tag_background, s.tag_private FROM users u LEFT JOIN servers s ON s.id=u.active_server_tag_id WHERE u.id=$1',
+      'SELECT u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.bio, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.active_ringtone, u.pro_expires_at, u.profile_card_style, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, u.profile_effect, (u.profile_banner_data IS NOT NULL) AS has_profile_banner, u.tutorial_completed, u.accepted_tos_version, s.id AS tag_server_id, s.name AS tag_server_name, s.invite_code AS tag_invite_code, s.server_tag, s.tag_background, s.tag_private FROM users u LEFT JOIN servers s ON s.id=u.active_server_tag_id WHERE u.id=$1',
       [req.session.userId]
     );
     const user = r.rows[0];
     if (!user) return res.json({ user: null });
+    req.session.tosAcceptedVersion = parseInt(user.accepted_tos_version, 10) || 0;
     const systemReport = await getActiveReportForUser(pool, user.id);
-    return res.json({ systemReport, user: {
+    const tosState = await getUserTosState(user.id);
+    return res.json({ systemReport, tosRequired: tosState.required, tos: tosState.required ? tosState.policy : null, user: {
       id: user.id, username: user.username, displayName: user.display_name,
       avatarDataUrl: avatarUrl(user.id, !!user.has_avatar),
       bio: user.bio || null,
@@ -148,11 +155,54 @@ router.get('/me', async (req, res) => {
       activeColor: user.active_color || null,
         activeFont: user.active_font || null,
       activeRingtone: user.active_ringtone || null,
-      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileCardStyle: user.profile_card_style || 'soft', proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', profileEffect: user.profile_effect || 'none', profileBannerUrl: user.has_profile_banner ? `/api/users/banner/${user.id}` : null, activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_private ? null : (user.tag_server_name || null), activeServerTagInviteCode: user.tag_private ? null : (user.tag_invite_code || null), activeServerTagPrivate: !!user.tag_private, tutorialCompleted: user.tutorial_completed !== false
+      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileCardStyle: user.profile_card_style || 'soft', proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', profileEffect: user.profile_effect || 'none', profileBannerUrl: user.has_profile_banner ? `/api/users/banner/${user.id}` : null, activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_private ? null : (user.tag_server_name || null), activeServerTagInviteCode: user.tag_private ? null : (user.tag_invite_code || null), activeServerTagPrivate: !!user.tag_private, tutorialCompleted: user.tutorial_completed !== false, acceptedTosVersion: tosState.acceptedVersion
     }});
   } catch (e) {
     return res.status(500).json({ error: 'Server error' });
   }
+});
+
+router.get('/tos', async (req, res) => {
+  try {
+    const policy = await getCurrentTos();
+    if (!req.session.userId) return res.json({ required: true, tos: policy });
+    const state = await getUserTosState(req.session.userId);
+    res.json({ required: state.required, acceptedVersion: state.acceptedVersion, tos: policy });
+  } catch (error) {
+    res.status(503).json({ error: 'Terms of Service are temporarily unavailable' });
+  }
+});
+
+router.post('/tos/accept', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: 'Unauthorized' });
+  const policy = await getCurrentTos();
+  const version = parseInt(req.body.version, 10);
+  if (req.body.accepted !== true || version !== policy.version) {
+    return res.status(409).json({ error: 'The Terms of Service changed. Review the latest version.', tosRequired: true, tos: policy });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE users
+       SET accepted_tos_version=$1, accepted_tos_at=EXTRACT(EPOCH FROM NOW())::BIGINT
+       WHERE id=$2`,
+      [policy.version, req.session.userId]
+    );
+    await client.query(
+      `INSERT INTO tos_acceptances (id, user_id, version)
+       VALUES ($1,$2,$3) ON CONFLICT (user_id, version) DO NOTHING`,
+      [uuidv4(), req.session.userId, policy.version]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  req.session.tosAcceptedVersion = policy.version;
+  res.json({ success: true, acceptedVersion: policy.version });
 });
 
 module.exports = router;
