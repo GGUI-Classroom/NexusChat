@@ -6,7 +6,35 @@ const CACHE_TTL_MS = 60 * 1000;
 const LEET_MAP = {
   '0': 'o', '1': 'i', '2': 'z', '3': 'e', '4': 'a',
   '5': 's', '6': 'g', '7': 't', '8': 'b', '9': 'g',
-  '@': 'a', '$': 's'
+  '@': 'a', '$': 's', '!': 'i', '|': 'i', '+': 't',
+  '€': 'e', '£': 'l'
+};
+const CONFUSABLE_MAP = {
+  'а': 'a', 'ɑ': 'a', 'α': 'a',
+  'Ь': 'b', 'в': 'b', 'β': 'b',
+  'с': 'c', 'ϲ': 'c',
+  'ԁ': 'd',
+  'е': 'e', 'ε': 'e',
+  'ɡ': 'g',
+  'һ': 'h',
+  'і': 'i', 'ї': 'i', 'ι': 'i',
+  'ј': 'j',
+  'κ': 'k',
+  'ӏ': 'l',
+  'м': 'm', 'μ': 'm',
+  'ո': 'n',
+  'о': 'o', 'ο': 'o',
+  'р': 'p', 'ρ': 'p',
+  'ԛ': 'q',
+  'г': 'r',
+  'ѕ': 's',
+  'т': 't', 'τ': 't',
+  'υ': 'u',
+  'ν': 'v',
+  'ԝ': 'w', 'ω': 'w',
+  'х': 'x', 'χ': 'x',
+  'у': 'y',
+  'ᴢ': 'z'
 };
 
 let cachedTerms = null;
@@ -17,7 +45,8 @@ function normalizeCharacters(value) {
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
     .toLowerCase()
-    .replace(/[0-9@$]/g, character => LEET_MAP[character] || character)
+    .replace(/[0-9@$!|+€£]/g, character => LEET_MAP[character] || character)
+    .replace(/[^\u0000-\u007f]/g, character => CONFUSABLE_MAP[character] || character)
     .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
 }
 
@@ -28,11 +57,28 @@ function normalizeTerm(value) {
 function compileTerm(term) {
   const normalized = normalizeTerm(term);
   if (normalized.length < 3) return null;
-  const separated = normalized.split('').map(character => character.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^a-z0-9]{0,12}');
+  const characters = normalized.split('');
+  const buildPattern = omittedIndex => {
+    const kept = characters
+      .map((character, index) => ({ character, index }))
+      .filter(entry => entry.index !== omittedIndex);
+    return kept.map((entry, position) => {
+      const token = `${entry.character.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}{1,6}`;
+      if (position === kept.length - 1) return token;
+      const skippedConfiguredCharacter = kept[position + 1].index - entry.index > 1;
+      return token + (skippedConfiguredCharacter ? '[^a-z0-9]{1,12}' : '[^a-z0-9]{0,12}');
+    }).join('');
+  };
+  const variants = [buildPattern(-1)];
+  if (characters.length >= 5) {
+    for (let index = 1; index < characters.length - 1; index++) {
+      variants.push(buildPattern(index));
+    }
+  }
   return {
     term: String(term).trim(),
     normalized,
-    pattern: new RegExp(`(^|[^a-z0-9])${separated}(?:s)?(?=$|[^a-z0-9])`, 'i')
+    pattern: new RegExp(`(^|[^a-z0-9])(?:${variants.join('|')})(?:s)?(?=$|[^a-z0-9])`, 'i')
   };
 }
 
