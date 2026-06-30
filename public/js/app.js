@@ -5675,19 +5675,30 @@
     if (!isCoreAdmin) return;
     const result = await api('GET', '/api/admin/safety-terms');
     if (result.error) return showError('admin-global-safety-error', result.error);
-    const terms = result.terms || [];
-    $('admin-global-safety-terms').value = terms.join('\n');
-    $('admin-global-safety-count').textContent = `${terms.length} global terms`;
+    const categories = result.categories || { discriminatory: result.terms || [], nsfw: [], child_safety: [] };
+    $('admin-global-safety-terms').value = (categories.discriminatory || []).join('\n');
+    $('admin-global-nsfw-terms').value = (categories.nsfw || []).join('\n');
+    $('admin-global-child-terms').value = (categories.child_safety || []).join('\n');
+    const count = Object.values(categories).reduce((total, terms) => total + terms.length, 0);
+    $('admin-global-safety-count').textContent = `${count} global terms`;
   }
 
   if ($('admin-global-safety-save')) {
     $('admin-global-safety-save').addEventListener('click', async () => {
       showError('admin-global-safety-error', '');
-      const terms = $('admin-global-safety-terms').value.split(/\r?\n/).map(term => term.trim()).filter(Boolean);
-      const result = await api('PUT', '/api/admin/safety-terms', { terms });
+      const lines = id => $(id).value.split(/\r?\n/).map(term => term.trim()).filter(Boolean);
+      const categories = {
+        discriminatory: lines('admin-global-safety-terms'),
+        nsfw: lines('admin-global-nsfw-terms'),
+        child_safety: lines('admin-global-child-terms')
+      };
+      const result = await api('PUT', '/api/admin/safety-terms', { categories });
       if (result.error) return showError('admin-global-safety-error', result.error);
-      $('admin-global-safety-terms').value = result.terms.join('\n');
-      $('admin-global-safety-count').textContent = `${result.terms.length} global terms`;
+      $('admin-global-safety-terms').value = result.categories.discriminatory.join('\n');
+      $('admin-global-nsfw-terms').value = result.categories.nsfw.join('\n');
+      $('admin-global-child-terms').value = result.categories.child_safety.join('\n');
+      const count = Object.values(result.categories).reduce((total, terms) => total + terms.length, 0);
+      $('admin-global-safety-count').textContent = `${count} global terms`;
       toast('Global NexusGuard filter updated', 'success');
     });
   }

@@ -511,9 +511,11 @@ async function initDb() {
     id TEXT PRIMARY KEY,
     term TEXT NOT NULL,
     normalized_term TEXT NOT NULL UNIQUE,
+    category TEXT NOT NULL DEFAULT 'discriminatory',
     created_by TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
     created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
   )`, 'global_safety_terms');
+  await runSql(`ALTER TABLE global_safety_terms ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'discriminatory'`, 'alter_global_safety_terms_category');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_global_safety_terms_normalized ON global_safety_terms(normalized_term)`, 'idx_global_safety_terms_normalized');
   await runSql(`
     INSERT INTO global_safety_terms (id, term, normalized_term)
@@ -530,6 +532,32 @@ async function initDb() {
     WHERE NOT EXISTS (SELECT 1 FROM global_safety_terms)
     ON CONFLICT (normalized_term) DO NOTHING
   `, 'seed_global_safety_terms');
+  await runSql(`
+    INSERT INTO global_safety_terms (id, term, normalized_term, category)
+    SELECT seed.id, seed.term, seed.normalized_term, 'nsfw'
+    FROM (VALUES
+      ('safety-nsfw-1', 'send nudes', 'sendnudes'),
+      ('safety-nsfw-2', 'nude pics', 'nudepics'),
+      ('safety-nsfw-3', 'explicit photos', 'explicitphotos'),
+      ('safety-nsfw-4', 'porn link', 'pornlink'),
+      ('safety-nsfw-5', 'sexual content', 'sexualcontent')
+    ) AS seed(id, term, normalized_term)
+    WHERE NOT EXISTS (SELECT 1 FROM global_safety_terms WHERE category='nsfw')
+    ON CONFLICT (normalized_term) DO NOTHING
+  `, 'seed_global_safety_terms_nsfw');
+  await runSql(`
+    INSERT INTO global_safety_terms (id, term, normalized_term, category)
+    SELECT seed.id, seed.term, seed.normalized_term, 'child_safety'
+    FROM (VALUES
+      ('safety-child-1', 'child porn', 'childporn'),
+      ('safety-child-2', 'underage nudes', 'underagenudes'),
+      ('safety-child-3', 'minor nudes', 'minornudes'),
+      ('safety-child-4', 'sexualize minors', 'sexualizeminors'),
+      ('safety-child-5', 'explicit minor', 'explicitminor')
+    ) AS seed(id, term, normalized_term)
+    WHERE NOT EXISTS (SELECT 1 FROM global_safety_terms WHERE category='child_safety')
+    ON CONFLICT (normalized_term) DO NOTHING
+  `, 'seed_global_safety_terms_child_safety');
 
   await runSql(`CREATE TABLE IF NOT EXISTS server_mutes (
     id TEXT PRIMARY KEY,

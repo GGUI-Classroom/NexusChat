@@ -54,7 +54,7 @@ function normalizeTerm(value) {
   return normalizeCharacters(value).replace(/[^a-z]/g, '');
 }
 
-function compileTerm(term) {
+function compileTerm(term, category = 'server') {
   const normalized = normalizeTerm(term);
   if (normalized.length < 3) return null;
   const characters = normalized.split('');
@@ -78,14 +78,15 @@ function compileTerm(term) {
   return {
     term: String(term).trim(),
     normalized,
+    category,
     pattern: new RegExp(`(^|[^a-z0-9])(?:${variants.join('|')})(?:s)?(?=$|[^a-z0-9])`, 'i')
   };
 }
 
 async function getSafetyTerms() {
   if (cachedTerms && Date.now() < cacheExpiresAt) return cachedTerms;
-  const result = await pool.query('SELECT term FROM global_safety_terms ORDER BY term ASC');
-  cachedTerms = result.rows.map(row => compileTerm(row.term)).filter(Boolean);
+  const result = await pool.query('SELECT term, category FROM global_safety_terms ORDER BY category, term ASC');
+  cachedTerms = result.rows.map(row => compileTerm(row.term, row.category)).filter(Boolean);
   cacheExpiresAt = Date.now() + CACHE_TTL_MS;
   return cachedTerms;
 }
@@ -109,7 +110,7 @@ function findConfiguredViolation(content, terms) {
     .find(entry => entry.pattern.test(normalizedContent)) || null;
 }
 
-async function createAutomaticSafetyReport({ userId, content, messageType, serverId = null, channelId = null, matchedTerm }) {
+async function createAutomaticSafetyReport({ userId, content, messageType, serverId = null, channelId = null, matchedTerm, category }) {
   await pool.query(
     `INSERT INTO user_reports
       (id, reporter_id, target_user_id, report_type, reason, message_type, message_id, message_content, server_id, channel_id)
@@ -118,7 +119,7 @@ async function createAutomaticSafetyReport({ userId, content, messageType, serve
       uuidv4(),
       NEXUS_GUARD_ID,
       userId,
-      `NexusGuard global safety filter matched configured term: ${matchedTerm}`,
+      `NexusGuard ${contextCategoryLabel(category)} filter matched configured term: ${matchedTerm}`,
       messageType,
       String(content || '').slice(0, 4000),
       serverId,
@@ -127,10 +128,16 @@ async function createAutomaticSafetyReport({ userId, content, messageType, serve
   );
 }
 
+function contextCategoryLabel(category) {
+  if (category === 'child_safety') return 'Child Safety';
+  if (category === 'nsfw') return 'NSFW';
+  return 'Discriminatory Language';
+}
+
 async function enforceGlobalSafety(context) {
   const violation = await findSafetyViolation(context.content);
   if (!violation) return null;
-  await createAutomaticSafetyReport({ ...context, matchedTerm: violation.term });
+  await createAutomaticSafetyReport({ ...context, matchedTerm: violation.term, category: violation.category });
   return violation;
 }
 

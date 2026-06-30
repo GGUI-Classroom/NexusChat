@@ -925,7 +925,11 @@
           <div id="admin-global-safety-editor" style="display:none;margin:16px 16px 8px;padding:16px;border:1px solid var(--border-bright);border-radius:8px;background:var(--bg-surface)">
             <div class="section-label">GLOBAL DISCRIMINATORY-LANGUAGE FILTER</div>
             <p style="margin:7px 0 12px;color:var(--text-secondary);font-size:12px;line-height:1.5">Core-admin policy applied to every DM and server. Enter only severe discriminatory terms, one per line. Punctuation, spacing, asterisks, and common character substitutions are detected automatically.</p>
-            <textarea id="admin-global-safety-terms" rows="7" maxlength="12000" placeholder="One severe discriminatory term per line" style="width:100%;resize:vertical"></textarea>
+            <div class="admin-safety-category-grid">
+              <label><span>Discriminatory language</span><textarea id="admin-global-safety-terms" rows="7" maxlength="12000" placeholder="One severe discriminatory term per line"></textarea></label>
+              <label><span>NSFW phrases</span><textarea id="admin-global-nsfw-terms" rows="7" maxlength="12000" placeholder="One explicit phrase per line"></textarea></label>
+              <label><span>Child Safety phrases</span><textarea id="admin-global-child-terms" rows="7" maxlength="12000" placeholder="One child-safety phrase per line"></textarea></label>
+            </div>
             <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
               <button class="btn-primary" id="admin-global-safety-save">Save Global Filter</button>
               <span id="admin-global-safety-count" style="color:var(--text-muted);font-size:11px"></span>

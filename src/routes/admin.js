@@ -347,30 +347,41 @@ router.get('/user-reports', async (req, res) => {
 });
 
 router.get('/safety-terms', requireCoreAdmin, async (req, res) => {
-  const result = await pool.query('SELECT term FROM global_safety_terms ORDER BY term ASC');
-  res.json({ terms: result.rows.map(row => row.term) });
+  const result = await pool.query('SELECT term, category FROM global_safety_terms ORDER BY category, term ASC');
+  const categories = { discriminatory: [], nsfw: [], child_safety: [] };
+  result.rows.forEach(row => {
+    const category = Object.prototype.hasOwnProperty.call(categories, row.category) ? row.category : 'discriminatory';
+    categories[category].push(row.term);
+  });
+  res.json({ terms: categories.discriminatory, categories });
 });
 
 router.put('/safety-terms', requireCoreAdmin, async (req, res) => {
-  const submitted = Array.isArray(req.body.terms) ? req.body.terms : [];
+  const submittedCategories = req.body.categories && typeof req.body.categories === 'object'
+    ? req.body.categories
+    : { discriminatory: req.body.terms };
+  const allowedCategories = ['discriminatory', 'nsfw', 'child_safety'];
   const unique = new Map();
-  for (const rawTerm of submitted.slice(0, 200)) {
-    const term = String(rawTerm || '').trim().slice(0, 80);
-    const normalized = normalizeTerm(term);
-    if (normalized.length < 3) continue;
-    if (!unique.has(normalized)) unique.set(normalized, term);
+  for (const category of allowedCategories) {
+    const submitted = Array.isArray(submittedCategories[category]) ? submittedCategories[category] : [];
+    for (const rawTerm of submitted.slice(0, 200)) {
+      const term = String(rawTerm || '').trim().slice(0, 80);
+      const normalized = normalizeTerm(term);
+      if (normalized.length < 3) continue;
+      if (!unique.has(normalized)) unique.set(normalized, { term, category });
+    }
   }
-  if (!unique.size) return res.status(400).json({ error: 'Keep at least one discriminatory term in the global filter.' });
+  if (!unique.size) return res.status(400).json({ error: 'Keep at least one term in the global safety filter.' });
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query('DELETE FROM global_safety_terms');
-    for (const [normalized, term] of unique) {
+    for (const [normalized, entry] of unique) {
       await client.query(
-        `INSERT INTO global_safety_terms (id, term, normalized_term, created_by)
-         VALUES ($1,$2,$3,$4)`,
-        [uuidv4(), term, normalized, req.session.userId]
+        `INSERT INTO global_safety_terms (id, term, normalized_term, category, created_by)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [uuidv4(), entry.term, normalized, entry.category, req.session.userId]
       );
     }
     await client.query('COMMIT');
@@ -381,7 +392,10 @@ router.put('/safety-terms', requireCoreAdmin, async (req, res) => {
     client.release();
   }
   clearSafetyTermCache();
-  res.json({ success: true, terms: [...unique.values()].sort((a, b) => a.localeCompare(b)) });
+  const categories = { discriminatory: [], nsfw: [], child_safety: [] };
+  unique.forEach(entry => categories[entry.category].push(entry.term));
+  Object.values(categories).forEach(terms => terms.sort((a, b) => a.localeCompare(b)));
+  res.json({ success: true, terms: categories.discriminatory, categories });
 });
 
 router.post('/user-reports/:reportId/resolve', async (req, res) => {
