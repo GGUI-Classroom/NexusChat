@@ -7206,3 +7206,74 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   .profile-avatar-upload { align-items:flex-start; }
   .profile-avatar-clip { width:104px; height:104px; flex-basis:104px; }
 }
+
+/* Discord-style server members rail and server icon menu */
+#server-sidebar-name {
+  font-size:12px;
+  line-height:1.25;
+  font-weight:700;
+}
+.server-members-panel {
+  display:none;
+  width:238px;
+  min-width:238px;
+  height:100dvh;
+  border-left:1px solid var(--border);
+  background:var(--bg-surface);
+  overflow:hidden;
+  flex-direction:column;
+}
+.server-members-panel.active { display:flex; }
+.server-members-panel-header {
+  min-height:52px;
+  padding:0 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom:1px solid var(--border);
+  color:var(--text-secondary);
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+}
+.server-members-panel-header small {
+  color:var(--text-muted);
+  font:700 10px 'JetBrains Mono',monospace;
+}
+.server-members-panel .server-member-list { padding:8px 6px 18px; }
+.server-members-panel .server-member-item { min-height:48px; }
+
+.server-context-menu {
+  position:fixed;
+  z-index:2200;
+  display:none;
+  width:210px;
+  padding:6px;
+  border:1px solid var(--border-bright);
+  border-radius:6px;
+  background:var(--bg-elevated);
+  box-shadow:0 16px 40px rgba(0,0,0,.5);
+}
+.server-context-menu.active { display:block; }
+.server-context-menu button {
+  width:100%;
+  min-height:34px;
+  padding:8px 10px;
+  border:0;
+  border-radius:4px;
+  background:transparent;
+  color:var(--text-secondary);
+  text-align:left;
+  font:600 12px 'Syne',sans-serif;
+  cursor:pointer;
+}
+.server-context-menu button:hover { background:var(--accent); color:#fff; }
+.server-context-menu button.danger { color:var(--red); }
+.server-context-menu button.danger:hover { background:var(--red); color:#fff; }
+.server-context-menu>div { height:1px; margin:5px 3px; background:var(--border); }
+@media(max-width:1100px) {
+  .server-members-panel { width:205px; min-width:205px; }
+}
+@media(max-width:900px) {
+  .server-members-panel { display:none!important; }
+}

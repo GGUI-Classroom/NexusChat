@@ -1750,6 +1750,13 @@
           : `<span class="rail-initial">${abbr}</span>`}
       </button>`;
     }).join('');
+    container.querySelectorAll('.rail-btn[data-server-id]').forEach(button => {
+      button.addEventListener('contextmenu', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openServerContextMenu(event, button.dataset.serverId);
+      });
+    });
   }
 
   async function loadServerSidebar(serverId) {
@@ -1849,6 +1856,7 @@
   }
 
   function renderMemberList(members) {
+    $('server-member-count').textContent = members.length.toLocaleString();
     const me = members.find(m => m.id === currentUser.id);
     const iAmAdmin = me && (me.role === 'admin' || me.isAdmin);
     const server = activeServerData && activeServerData.server;
@@ -1879,6 +1887,64 @@
     }).join('');
     members.forEach(m => { const el = $(`smav-${m.id}`); if (el) renderAvatar(el, m); });
   }
+
+  let contextServerId = null;
+
+  function closeServerContextMenu() {
+    const menu = $('server-context-menu');
+    menu.classList.remove('active');
+    menu.setAttribute('aria-hidden', 'true');
+    contextServerId = null;
+  }
+
+  function openServerContextMenu(event, serverId) {
+    const menu = $('server-context-menu');
+    contextServerId = serverId;
+    menu.classList.add('active');
+    menu.setAttribute('aria-hidden', 'false');
+    const bounds = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - bounds.width - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - bounds.height - 8))}px`;
+  }
+
+  async function prepareContextServer() {
+    const serverId = contextServerId;
+    if (!serverId) return false;
+    if (activeServerId !== serverId || !activeServerData) {
+      await loadServerSidebar(serverId);
+      switchView('channel');
+      document.querySelectorAll('.rail-btn').forEach(button => button.classList.toggle('active', button.dataset.serverId === serverId));
+      $('sidebar-dms').style.display = 'none';
+      $('sidebar-server').style.display = 'flex';
+      $('server-members-panel').classList.add('active');
+    }
+    return true;
+  }
+
+  $('server-context-menu').addEventListener('click', async event => {
+    const actionButton = event.target.closest('[data-server-action]');
+    if (!actionButton) return;
+    const action = actionButton.dataset.serverAction;
+    const ready = await prepareContextServer();
+    closeServerContextMenu();
+    if (!ready) return;
+    if (action === 'invite') $('invite-btn').click();
+    if (action === 'boost') $('server-boost-btn').click();
+    if (action === 'settings') {
+      if (!isCurrentServerAdmin) return toast('Only server owners and admins can open Server Settings.', 'error');
+      $('server-settings-btn').click();
+    }
+    if (action === 'leave') $('leave-server-btn').click();
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('#server-context-menu')) closeServerContextMenu();
+  });
+  document.addEventListener('contextmenu', event => {
+    if (!event.target.closest('.rail-btn[data-server-id]')) closeServerContextMenu();
+  });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeServerContextMenu(); });
+  window.addEventListener('blur', closeServerContextMenu);
+  window.addEventListener('resize', closeServerContextMenu);
 
   // ---- Kick / Ban ----
   window.kickMember = async function(userId, name) {
@@ -2968,6 +3034,7 @@
       $('rail-dms') && $('rail-dms').classList.add('active');
       $('sidebar-dms').style.display = 'flex';
       $('sidebar-server').style.display = 'none';
+      $('server-members-panel').classList.remove('active');
       activeServerId = null;
       activeChannelId = null;
       switchView('friends');
@@ -2977,6 +3044,7 @@
       if (btn) btn.classList.add('active');
       $('sidebar-dms').style.display = 'none';
       $('sidebar-server').style.display = 'flex';
+      $('server-members-panel').classList.add('active');
       loadServerSidebar(id);
       switchView('channel');
     }

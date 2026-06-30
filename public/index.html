@@ -185,8 +185,6 @@
             </button>
           </div>
           <div id="channel-list" class="channel-list"></div>
-          <div class="server-members-label">MEMBERS</div>
-          <div id="server-member-list" class="server-member-list"></div>
         </div>
 
         <div class="sidebar-footer">
@@ -400,7 +398,20 @@
         </div>
 
       </main>
+
+      <aside class="server-members-panel" id="server-members-panel" aria-label="Server members">
+        <div class="server-members-panel-header"><span>Members</span><small id="server-member-count">0</small></div>
+        <div id="server-member-list" class="server-member-list"></div>
+      </aside>
     </div>
+  </div>
+
+  <div class="server-context-menu" id="server-context-menu" role="menu" aria-hidden="true">
+    <button type="button" data-server-action="invite">Invite Friends</button>
+    <button type="button" data-server-action="boost">Boost Server</button>
+    <button type="button" data-server-action="settings">Server Settings</button>
+    <div></div>
+    <button type="button" class="danger" data-server-action="leave">Leave Server</button>
   </div>
 
   <!-- Profile Modal -->
