@@ -1816,7 +1816,7 @@
         const locked = el.dataset.channelLocked === '1';
         const topic = el.dataset.channelTopic || null;
         const slowmodeSeconds = parseInt(el.dataset.channelSlowmode || '0', 10) || 0;
-        openChannel({ id: chId, name: chName, type, locked, topic, slowmodeSeconds }, { autoJoinVoice: true });
+        openChannel({ id: chId, name: chName, type, locked, topic, slowmodeSeconds });
       });
     });
     $('channel-list').querySelectorAll('.ch-perms').forEach(btn => {
@@ -1986,7 +1986,7 @@
     renderMemberList(s.members);
   };
 
-  window.openChannel = function(channel, options = {}) {
+  window.openChannel = function(channel) {
     if (groupCallState && groupCallState.roomId) {
       const switchingAway = groupCallState.channelId !== channel.id || (channel.type || 'text') !== 'voice';
       if (switchingAway) leaveGroupCall(true);
@@ -2038,7 +2038,6 @@
     $('channel-container').style.display = 'flex';
     loadChannelMessages(channel.id);
     $('channel-message-input').focus();
-    if (activeChannelType === 'voice' && options.autoJoinVoice) joinActiveVoiceChannel(false);
   };
 
   window.deleteChannel = async function(e, channelId) {
@@ -2124,13 +2123,13 @@
   $('channel-send-btn').addEventListener('click', sendChannelMessage);
   if ($('channel-edit-btn')) $('channel-edit-btn').addEventListener('click', () => window.openChannelSettingsQuick());
   if ($('channel-pins-btn')) $('channel-pins-btn').addEventListener('click', () => window.openChannelPins());
-  async function joinActiveVoiceChannel(toggleIfConnected = false) {
+  if ($('group-call-btn')) $('group-call-btn').addEventListener('click', async () => {
     if (!socket || !activeServerId || !activeChannelId) return;
     if (activeChannelType !== 'voice') return toast('Join a voice channel to start voice chat', 'error');
     if (callState || outgoingCallTo) return toast('Finish your direct call first', 'error');
 
-    if (groupCallState) {
-      if (toggleIfConnected && groupCallState.roomId) leaveGroupCall(true);
+    if (groupCallState && groupCallState.roomId) {
+      leaveGroupCall(true);
       return;
     }
 
@@ -2155,10 +2154,6 @@
       groupCallState = null;
       toast('Microphone access is required for group voice', 'error');
     }
-  }
-
-  if ($('group-call-btn')) $('group-call-btn').addEventListener('click', async () => {
-    await joinActiveVoiceChannel(true);
   });
 
   if ($('group-camera-btn')) $('group-camera-btn').addEventListener('click', async () => {
