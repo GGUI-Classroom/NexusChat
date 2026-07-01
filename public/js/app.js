@@ -1725,6 +1725,13 @@
     if (backdrop) backdrop.classList.remove('active');
   }
 
+  function closeMobileMembers() {
+    const panel = $('server-members-panel');
+    if (panel) panel.classList.remove('mobile-open');
+    const backdrop = $('sidebar-backdrop');
+    if (backdrop) backdrop.classList.remove('active');
+  }
+
   $('mobile-menu-btn').addEventListener('click', () => {
     const sidebar = document.querySelector('.sidebar');
     if (sidebar && sidebar.classList.contains('open')) {
@@ -1734,7 +1741,18 @@
     }
   });
 
-  $('sidebar-backdrop').addEventListener('click', closeMobileSidebar);
+  $('sidebar-backdrop').addEventListener('click', () => {
+    closeMobileSidebar();
+    closeMobileMembers();
+  });
+
+  $('mobile-members-btn').addEventListener('click', () => {
+    const panel = $('server-members-panel');
+    if (!panel) return;
+    closeMobileSidebar();
+    panel.classList.toggle('mobile-open');
+    $('sidebar-backdrop').classList.toggle('active', panel.classList.contains('mobile-open'));
+  });
 
   function setMobileTitle(title) {
     const el = $('mobile-topbar-title');
@@ -3115,12 +3133,15 @@
 
   // Rail selection: 'dms' or a server id
   window.railSelect = function(id) {
+    if (isMobile()) closeMobileMembers();
     document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
     if (id === 'dms') {
       $('rail-dms') && $('rail-dms').classList.add('active');
       $('sidebar-dms').style.display = 'flex';
       $('sidebar-server').style.display = 'none';
       $('server-members-panel').classList.remove('active');
+      $('server-members-panel').classList.remove('mobile-open');
+      if ($('mobile-members-btn')) $('mobile-members-btn').style.display = 'none';
       activeServerId = null;
       activeChannelId = null;
       switchView('friends');
@@ -3131,6 +3152,7 @@
       $('sidebar-dms').style.display = 'none';
       $('sidebar-server').style.display = 'flex';
       $('server-members-panel').classList.add('active');
+      if ($('mobile-members-btn')) $('mobile-members-btn').style.display = isMobile() ? 'flex' : 'none';
       loadServerSidebar(id);
       switchView('channel');
     }

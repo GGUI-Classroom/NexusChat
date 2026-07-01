@@ -7341,3 +7341,152 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   .tos-document { flex:1 }
   .admin-tos-publish-row { align-items:stretch;flex-direction:column }
 }
+
+/* Mobile usability pass */
+.mobile-topbar-btn {
+  width:38px;
+  height:38px;
+  padding:0;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:var(--text-secondary);
+  align-items:center;
+  justify-content:center;
+}
+.mobile-topbar-btn:active { background:var(--bg-hover);color:var(--text-primary) }
+
+@media(max-width:680px) {
+  :root { --mobile-dock-h:64px }
+
+  .server-rail {
+    display:flex;
+    position:fixed;
+    z-index:590;
+    inset:auto 0 0;
+    width:100vw;
+    min-width:0;
+    height:var(--mobile-dock-h);
+    padding:7px max(8px,env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
+    border:0;
+    border-top:1px solid var(--border);
+    overflow-x:auto;
+    overflow-y:hidden;
+    flex-direction:row;
+    align-items:center;
+    background:color-mix(in srgb,var(--bg-void) 94%,transparent);
+    backdrop-filter:blur(14px);
+  }
+  .server-rail .rail-section {
+    width:max-content;
+    min-width:100%;
+    padding:0;
+    flex-direction:row;
+    justify-content:flex-start;
+    gap:8px;
+  }
+  .server-rail #server-icons { display:flex;flex-direction:row;gap:8px }
+  .server-rail .rail-divider { width:1px;min-width:1px;height:30px;margin:0 2px }
+  .server-rail .rail-btn { width:44px;height:44px }
+  .server-rail .rail-btn.active::before {
+    left:50%;
+    top:auto;
+    bottom:-7px;
+    width:22px;
+    height:3px;
+    transform:translateX(-50%);
+    border-radius:3px 3px 0 0;
+  }
+
+  .sidebar { height:calc(100dvh - var(--mobile-dock-h)) }
+  .main-content { padding-bottom:var(--mobile-dock-h) }
+  .view { top:48px!important;bottom:var(--mobile-dock-h)!important;height:auto!important }
+
+  .modal-overlay { align-items:flex-end }
+  .modal:not(.settings-modal):not(.server-settings-full) {
+    width:100%!important;
+    max-width:100%!important;
+    max-height:calc(100dvh - 18px)!important;
+    border-radius:10px 10px 0 0!important;
+  }
+  .modal-wide { max-width:100%!important }
+  .modal-header { min-height:54px;padding:12px 16px }
+  .modal-body { padding:16px;overflow-y:auto }
+  .modal-close,.icon-btn,.mobile-topbar-btn { min-width:42px;min-height:42px }
+
+  .chat-header { min-height:56px;padding:8px 10px }
+  .chat-peer-info,.chat-peer-info>div:last-child { min-width:0 }
+  .chat-peer-info .display-name,.chat-peer-info .username {
+    max-width:44vw;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .chat-actions { flex-shrink:0 }
+  .chat-actions .icon-btn { width:42px;height:42px }
+  .messages-wrap { padding:10px 6px 12px }
+  .message { padding:5px 4px;gap:8px }
+  .message-input-wrap {
+    padding:8px max(8px,env(safe-area-inset-right)) 8px max(8px,env(safe-area-inset-left));
+    gap:6px;
+  }
+  .message-input-wrap textarea {
+    min-width:0;
+    min-height:42px;
+    padding:10px 12px;
+    font-size:16px;
+  }
+  .send-btn { width:44px;height:44px }
+  .mention-autocomplete { left:8px!important;right:8px!important;width:auto!important;max-height:42vh }
+
+  .server-members-panel.active {
+    display:flex!important;
+    position:fixed;
+    z-index:610;
+    top:48px;
+    right:-86vw;
+    bottom:var(--mobile-dock-h);
+    width:min(84vw,330px)!important;
+    min-width:0!important;
+    height:auto;
+    transition:right .22s ease;
+    box-shadow:-18px 0 40px rgba(0,0,0,.38);
+  }
+  .server-members-panel.active.mobile-open { right:0 }
+  .server-members-panel-header { min-height:52px }
+
+  .settings-modal .profile-settings-tabs {
+    overflow-x:auto;
+    overscroll-behavior-x:contain;
+    scrollbar-width:none;
+  }
+  .settings-modal .profile-settings-tab { min-height:42px }
+  .server-settings-full {
+    display:flex;
+    flex-direction:column;
+    height:100dvh;
+  }
+  .server-settings-full>.modal-header { flex:0 0 58px;min-height:58px;padding:0 14px }
+  .server-settings-full>.settings-tabs {
+    flex:0 0 auto;
+    width:100%;
+    padding:8px;
+    border:0;
+    border-bottom:1px solid var(--border);
+    flex-direction:row;
+    overflow-x:auto;
+    overflow-y:hidden;
+  }
+  .server-settings-full .settings-tab { width:auto;min-width:max-content;min-height:42px;padding:10px 13px }
+  .server-settings-full>.modal-body {
+    flex:1 1 auto;
+    width:100%;
+    min-height:0;
+    padding:18px 14px 80px;
+  }
+
+  .shop-grid,.friends-grid,.games-grid,.auction-grid { grid-template-columns:1fr!important }
+  .view-header { padding:14px 12px 0!important }
+  .view-header h1 { font-size:21px }
+  #stats-content,#pro-content,.quests-content,.games-content,.auction-content { padding:12px!important }
+}
