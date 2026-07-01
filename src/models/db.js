@@ -213,7 +213,7 @@ async function initDb() {
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS locked BOOLEAN DEFAULT FALSE`, 'alter_channels_locked');
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS private BOOLEAN DEFAULT FALSE`, 'alter_channels_private');
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS channel_type TEXT DEFAULT 'text'`, 'alter_channels_channel_type');
-  await runSql(`UPDATE channels SET channel_type='text' WHERE channel_type IS NULL OR channel_type NOT IN ('text','voice')`, 'normalize_channels_channel_type');
+  await runSql(`UPDATE channels SET channel_type='text' WHERE channel_type IS NULL OR channel_type NOT IN ('text','voice','forum')`, 'normalize_channels_channel_type');
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS topic TEXT DEFAULT NULL`, 'alter_channels_topic');
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS slowmode_seconds INTEGER DEFAULT 0`, 'alter_channels_slowmode');
   await runSql(`ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT DEFAULT NULL`, 'alter_channel_messages_reply_to');
@@ -354,6 +354,19 @@ async function initDb() {
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS gradient_end TEXT DEFAULT NULL`, 'alter_roles_gradient_end');
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS gradient_animated BOOLEAN DEFAULT FALSE`, 'alter_roles_gradient_animated');
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS display_separately BOOLEAN DEFAULT FALSE`, 'alter_roles_display_separately');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_manage_channels BOOLEAN DEFAULT FALSE`, 'alter_roles_manage_channels');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_manage_roles BOOLEAN DEFAULT FALSE`, 'alter_roles_manage_roles');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_kick_members BOOLEAN DEFAULT FALSE`, 'alter_roles_kick_members');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_ban_members BOOLEAN DEFAULT FALSE`, 'alter_roles_ban_members');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_manage_messages BOOLEAN DEFAULT FALSE`, 'alter_roles_manage_messages');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_mention_everyone BOOLEAN DEFAULT FALSE`, 'alter_roles_mention_everyone');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_create_invites BOOLEAN DEFAULT FALSE`, 'alter_roles_create_invites');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_connect_voice BOOLEAN DEFAULT TRUE`, 'alter_roles_connect_voice');
+  await runOnceMigration(
+    'default_member_invites_v1',
+    `UPDATE server_roles SET can_create_invites=TRUE WHERE is_admin=FALSE`,
+    'default_member_invites'
+  );
   await runOnceMigration(
     'group_existing_admin_roles_v1',
     `UPDATE server_roles SET display_separately=TRUE WHERE is_admin=TRUE`,

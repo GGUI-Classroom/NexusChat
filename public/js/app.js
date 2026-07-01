@@ -1856,12 +1856,16 @@
     // Show settings + add-channel only for admin/owner
     const me = r.members.find(m => m.id === currentUser.id);
     const isAdmin = me && (me.role === 'admin' || me.isAdmin);
-    isCurrentServerAdmin = !!isAdmin;
-    $('server-settings-btn').style.display = isAdmin ? 'flex' : 'none';
-    $('add-channel-btn').style.display = isAdmin ? 'flex' : 'none';
-    if ($('channel-edit-btn')) $('channel-edit-btn').style.display = isAdmin ? 'flex' : 'none';
+    const memberRoleIds = new Set((me && me.roleIds) || []);
+    const hasRolePermission = permission => (r.roles || []).some(role => memberRoleIds.has(role.id) && role.permissions && role.permissions[permission]);
+    const canManageChannels = !!isAdmin || hasRolePermission('manageChannels');
+    const canManageServer = !!isAdmin || canManageChannels || hasRolePermission('manageRoles') || hasRolePermission('manageMessages') || hasRolePermission('kickMembers') || hasRolePermission('banMembers');
+    isCurrentServerAdmin = canManageServer;
+    $('server-settings-btn').style.display = canManageServer ? 'flex' : 'none';
+    $('add-channel-btn').style.display = canManageChannels ? 'flex' : 'none';
+    if ($('channel-edit-btn')) $('channel-edit-btn').style.display = canManageChannels ? 'flex' : 'none';
 
-    renderChannelList(r.channels, isAdmin);
+    renderChannelList(r.channels, canManageChannels);
     renderMemberList(r.members);
 
     // Join socket room
@@ -1880,7 +1884,7 @@
          data-channel-locked="${c.locked ? '1' : '0'}"
          data-channel-topic="${esc(c.topic || '')}"
          data-channel-slowmode="${parseInt(c.slowmodeSeconds || 0, 10)}">
-        <span class="ch-hash">${(c.type === 'voice') ? '🔊' : (c.locked ? '🔒' : c.private ? '👁' : '#')}</span>
+        <span class="ch-hash">${(c.type === 'voice') ? '🔊' : (c.type === 'forum') ? '▤' : (c.locked ? '🔒' : c.private ? '👁' : '#')}</span>
         <span class="ch-name">${esc(c.name)}</span>
         ${isAdmin ? `
           <button class="ch-perms" data-ch-id="${c.id}" data-ch-name="${esc(c.name)}" title="Permissions">
@@ -2120,6 +2124,7 @@
     activeChannelTopic = channel.topic || null;
     activeChannelSlowmode = Math.max(0, parseInt(channel.slowmodeSeconds, 10) || 0);
     setChannelReply(null);
+    $('channel-container').classList.toggle('forum-channel-mode', activeChannelType === 'forum');
 
     document.querySelectorAll('.channel-item').forEach(el => {
       el.classList.toggle('active', el.dataset.channelId === channel.id);
@@ -2143,7 +2148,7 @@
       if ($('group-camera-btn')) $('group-camera-btn').style.display = 'inline-flex';
       if ($('group-screen-btn')) $('group-screen-btn').style.display = 'inline-flex';
     } else {
-      $('channel-message-input').placeholder = 'Message #' + channel.name + slowmodeHint + '…';
+      $('channel-message-input').placeholder = activeChannelType === 'forum' ? 'Post title on the first line, details below...' : 'Message #' + channel.name + slowmodeHint + '…';
       $('channel-message-input').disabled = false;
       $('channel-send-btn').style.display = 'inline-flex';
       if ($('group-call-btn')) $('group-call-btn').style.display = 'none';
@@ -2155,6 +2160,11 @@
     $('channel-placeholder').style.display = 'none';
     $('channel-container').style.display = 'flex';
     loadChannelMessages(channel.id);
+    if (activeChannelType === 'voice') {
+      setTimeout(() => {
+        if (!groupCallState || groupCallState.channelId !== channel.id) $('group-call-btn').click();
+      }, 0);
+    }
     $('channel-message-input').focus();
   };
 
@@ -2613,7 +2623,8 @@
     e.preventDefault();
     if (!activeServerId) return;
     const name = $('channel-create-name').value.trim();
-    const type = $('channel-create-type').value === 'voice' ? 'voice' : 'text';
+    const requestedType = $('channel-create-type').value;
+    const type = ['voice', 'forum'].includes(requestedType) ? requestedType : 'text';
     if (!name) {
       showError('channel-create-error', 'Channel name is required');
       return;
@@ -2851,7 +2862,15 @@
   function nameplatePreviewHtml(nameplate, label = 'Nexus User') {
     return `<div class="nameplate-preview nameplate-${esc(nameplate.id)}"><b class="nameplate-preview-avatar">N</b><span>${esc(label)}</span><i></i></div>`;
   }
-  window.spendBoosts = async function(feature) { const r = await api('POST', '/api/perks/servers/' + activeServerId + '/spend', { feature }); if (r.error) return toast(r.error, 'error'); toast('Boosts allocated', 'success'); await loadServerSidebar(activeServerId); $('server-settings-btn').click(); };
+  window.spendBoosts = async function(feature) {
+    const r = await api('POST', '/api/perks/servers/' + activeServerId + '/spend', { feature });
+    if (r.error) return toast(r.error, 'error');
+    const features = new Set(activeServerData.server.boostFeatures || []);
+    features.add(feature);
+    activeServerData.server.boostFeatures = [...features];
+    renderBoostSettings(activeServerData.server);
+    toast('Boosts allocated', 'success');
+  };
 
   $('server-boost-btn').addEventListener('click', async () => {
     if (!activeServerId || !activeServerData) return;
@@ -2902,7 +2921,7 @@
   window.switchSettingsTab = function(tab) {
     document.querySelectorAll('.settings-tab').forEach(b => b.classList.toggle('active', b.dataset.stab === tab));
     document.querySelectorAll('.settings-tab-panel').forEach(p => {
-      p.style.display = p.id === 'settings-tab-' + tab ? 'block' : 'none';
+      p.style.display = p.id === 'settings-tab-' + tab ? (tab === 'roles' ? 'grid' : 'block') : 'none';
       p.classList.toggle('active', p.id === 'settings-tab-' + tab);
     });
     if (tab === 'economy') loadServerEconomy();
@@ -2962,25 +2981,71 @@
 
   function renderRolesList(roles) {
     $('roles-list').innerHTML = roles.length
-      ? roles.map(r => `
+      ? roles.map(r => {
+          const memberCount = ((activeServerData && activeServerData.members) || []).filter(member => (member.roleIds || [member.roleId]).includes(r.id)).length;
+          return `
           <div class="role-row" id="role-row-${r.id}">
             <div class="role-dot" style="background:${r.color}"></div>
             <span class="role-name${r.gradientStart ? ' role-gradient-text' : ''}" style="${r.gradientStart ? `--role-gradient-start:${r.gradientStart};--role-gradient-end:${r.gradientEnd}` : `color:${r.color}`}">${esc(r.name)}</span>
             <span class="role-badge">${r.isAdmin ? 'Admin' : 'Member'}</span>
+            <span class="role-badge">${memberCount} member${memberCount === 1 ? '' : 's'}</span>
             ${r.canDeleteMessages ? '<span class="role-badge" style="background:rgba(240,84,84,0.15);color:var(--red)">Can Delete</span>' : ''}
             <div class="role-actions">
               <button class="role-edit-btn" onclick="editRole('${r.id}')">Edit</button>
               <button class="role-del-btn" onclick="deleteRole('${r.id}','${esc(r.name)}')">Delete</button>
             </div>
             <label class="toggle-row" style="grid-column:1/-1;margin:4px 0 0"><input type="checkbox" ${r.gradientStart ? 'checked' : ''} onchange="toggleRoleGradient('${r.id}',this.checked)"><span class="toggle-label"><span class="toggle-title">Animated gradient</span></span></label>
-          </div>`).join('')
+          </div>`;
+        }).join('')
       : '<p style="font-size:13px;color:var(--text-muted);padding:8px 0">No custom roles yet. Create one below.</p>';
   }
 
-  window.editRole = function(roleId) { const role = activeServerData.roles.find(r => r.id === roleId); if (!role) return; $('role-editor').style.display='block'; $('edit-role-id').value=role.id; $('edit-role-name').value=role.name; $('edit-role-color').value=role.color; $('edit-role-admin').value=String(!!role.isAdmin); $('edit-role-gradient').checked=!!role.gradientStart; $('edit-role-display-separately').checked=!!role.displaySeparately; $('edit-role-gradient-colors').style.display=role.gradientStart?'flex':'none'; $('edit-role-gradient-start').value=role.gradientStart||'#62e6ff'; $('edit-role-gradient-end').value=role.gradientEnd||'#b06cff'; };
+  window.editRole = function(roleId) {
+    const role = activeServerData.roles.find(r => r.id === roleId);
+    if (!role) return;
+    $('role-editor').style.display = 'block';
+    $('edit-role-id').value = role.id;
+    $('edit-role-name').value = role.name;
+    $('edit-role-color').value = role.color;
+    $('edit-role-admin').value = String(!!role.isAdmin);
+    $('edit-role-gradient').checked = !!role.gradientStart;
+    $('edit-role-display-separately').checked = !!role.displaySeparately;
+    $('edit-role-gradient-colors').style.display = role.gradientStart ? 'flex' : 'none';
+    $('edit-role-gradient-start').value = role.gradientStart || '#62e6ff';
+    $('edit-role-gradient-end').value = role.gradientEnd || '#b06cff';
+    document.querySelectorAll('[data-role-permission]').forEach(input => {
+      input.checked = !!(role.permissions || {})[input.dataset.rolePermission];
+    });
+    $('role-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   $('edit-role-gradient').addEventListener('change', function(){ $('edit-role-gradient-colors').style.display=this.checked?'flex':'none'; });
   $('cancel-role-editor-btn').addEventListener('click', ()=> $('role-editor').style.display='none');
-  $('save-role-editor-btn').addEventListener('click', async ()=> { const payload={name:$('edit-role-name').value.trim(),color:$('edit-role-color').value,isAdmin:$('edit-role-admin').value==='true',gradientAnimated:$('edit-role-gradient').checked,displaySeparately:$('edit-role-display-separately').checked}; if(payload.gradientAnimated){payload.gradientStart=$('edit-role-gradient-start').value;payload.gradientEnd=$('edit-role-gradient-end').value;} const r=await api('PATCH',`/api/servers/${activeServerId}/roles/${$('edit-role-id').value}`,payload); if(r.error)return toast(r.error,'error'); const s=await api('GET',`/api/servers/${activeServerId}`); activeServerData=s; renderRolesList(s.roles||[]); renderMemberList(s.members); $('role-editor').style.display='none'; toast('Role updated','success'); });
+  $('save-role-editor-btn').addEventListener('click', async () => {
+    const permissions = {};
+    document.querySelectorAll('[data-role-permission]').forEach(input => {
+      permissions[input.dataset.rolePermission] = input.checked;
+    });
+    const payload = {
+      name: $('edit-role-name').value.trim(),
+      color: $('edit-role-color').value,
+      isAdmin: $('edit-role-admin').value === 'true',
+      gradientAnimated: $('edit-role-gradient').checked,
+      displaySeparately: $('edit-role-display-separately').checked,
+      permissions
+    };
+    if (payload.gradientAnimated) {
+      payload.gradientStart = $('edit-role-gradient-start').value;
+      payload.gradientEnd = $('edit-role-gradient-end').value;
+    }
+    const r = await api('PATCH', `/api/servers/${activeServerId}/roles/${$('edit-role-id').value}`, payload);
+    if (r.error) return toast(r.error, 'error');
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    renderRolesList(s.roles || []);
+    renderMemberList(s.members);
+    $('role-editor').style.display = 'none';
+    toast('Role updated', 'success');
+  });
   window.toggleRoleGradient = function(roleId, enabled) { editRole(roleId); $('edit-role-gradient').checked=enabled; $('edit-role-gradient-colors').style.display=enabled?'flex':'none'; };
 
   window.deleteRole = async function(roleId, name) {
@@ -3642,7 +3707,7 @@
     const el = document.createElement('div');
     const prevTs = prevEl ? parseInt(prevEl.dataset.ts) : 0;
     const prevFrom = prevEl ? prevEl.dataset.from : '';
-    const grouped = prevFrom === msg.fromId &&
+    const grouped = activeChannelType !== 'forum' && prevFrom === msg.fromId &&
       messageDateKey(prevTs) === messageDateKey(msg.createdAt) &&
       (msg.createdAt - prevTs) < 300;
     const isMentioned = msg.content && currentUser && (
@@ -3687,8 +3752,12 @@
     const isOwnMsg = msg.fromId === currentUser.id;
     const meInServer = activeServerData && activeServerData.members && activeServerData.members.find(m => m.id === currentUser.id);
     const myRole = meInServer && activeServerData.roles && activeServerData.roles.find(r => r.id === meInServer.roleId);
-    const canDeleteThisMsg = isOwnMsg || (meInServer && (meInServer.role === 'admin' || meInServer.isAdmin)) || (myRole && myRole.canDeleteMessages);
-    const canManagePins = isChannelMsg && meInServer && (meInServer.role === 'admin' || meInServer.isAdmin);
+    const myRoleIds = new Set((meInServer && meInServer.roleIds) || []);
+    const canManageMessages = activeServerData && activeServerData.roles && activeServerData.roles.some(role =>
+      myRoleIds.has(role.id) && (role.canDeleteMessages || (role.permissions && role.permissions.manageMessages))
+    );
+    const canDeleteThisMsg = isOwnMsg || (meInServer && (meInServer.role === 'admin' || meInServer.isAdmin)) || canManageMessages || (myRole && myRole.canDeleteMessages);
+    const canManagePins = isChannelMsg && meInServer && ((meInServer.role === 'admin' || meInServer.isAdmin) || canManageMessages);
 
     const replyPreviewHtml = msg.replyTo
       ? `<div class="msg-reply-preview"><strong>${esc(msg.replyTo.displayName || 'User')}</strong>: ${esc(String(msg.replyTo.content || '').slice(0, 120))}</div>`
@@ -3712,6 +3781,11 @@
     const reactionBar = isChannelMsg
       ? `<div class="msg-reactions" id="reactions-${msg.id}">${renderReactionChips(msg.id, msg.channelId, msg.reactions || [])}</div>`
       : '';
+    const forumParts = activeChannelType === 'forum' ? String(msg.content || '').split('\n') : null;
+    const messageContentHtml = forumParts
+      ? `<div class="forum-post-title">${renderContent(forumParts.shift() || 'Untitled post', msg.mentions, author.activeColor || null)}</div>
+         ${forumParts.length ? `<div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(forumParts.join('\n'), msg.mentions, author.activeColor || null)}</div>` : ''}`
+      : `<div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(msg.content, msg.mentions, author.activeColor || null)}</div>`;
 
     el.innerHTML = `
       <div class="avatar-wrap profile-hover-target" data-profile="${profilePayload}" style="flex-shrink:0;align-self:flex-start;margin-top:2px"><div class="avatar" id="mav-${msg.id}"></div></div>
@@ -3722,7 +3796,7 @@
           ${pinBadge}
         </div>
         ${replyPreviewHtml}
-        <div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(msg.content, msg.mentions, author.activeColor || null)}</div>
+        ${messageContentHtml}
         ${reactionBar}
         ${replyAction}
         ${pinAction}
@@ -4313,6 +4387,11 @@
       const el = $(`reactions-${messageId}`);
       if (!el) return;
       el.innerHTML = renderReactionChips(messageId, channelId, reactions || []);
+    });
+
+    socket.on('group_call_error', ({ error }) => {
+      if (groupCallState && !groupCallState.roomId) leaveGroupCall(false);
+      toast(error || 'Could not join voice channel', 'error');
     });
 
     socket.on('group_call_joined', async ({ roomId, serverId, channelId, participants }) => {

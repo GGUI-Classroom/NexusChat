@@ -585,6 +585,18 @@
             <div style="display:flex;gap:10px"><div class="field-group" style="flex:1"><label>Color</label><input type="color" id="edit-role-color" /></div><div class="field-group" style="flex:1"><label>Permissions</label><select id="edit-role-admin"><option value="false">Member</option><option value="true">Admin</option></select></div></div>
             <label class="toggle-row"><input type="checkbox" id="edit-role-gradient" /><span class="toggle-label"><span class="toggle-title">Animated gradient</span><span class="toggle-hint">Requires the Gradient boost allocation</span></span></label>
             <label class="toggle-row"><input type="checkbox" id="edit-role-display-separately" /><span class="toggle-label"><span class="toggle-title">Display members separately</span><span class="toggle-hint">Give this role its own section in the member list</span></span></label>
+            <div class="role-permissions-editor">
+              <div class="section-label">PERMISSIONS</div>
+              <p class="field-hint">Choose exactly what members with this role can do.</p>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="manageChannels"><span class="toggle-label"><span class="toggle-title">Manage Channels</span><span class="toggle-hint">Create, edit, reorder, and delete channels.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="manageRoles"><span class="toggle-label"><span class="toggle-title">Manage Roles</span><span class="toggle-hint">Create roles and assign roles to members.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="kickMembers"><span class="toggle-label"><span class="toggle-title">Kick Members</span><span class="toggle-hint">Remove members from the server.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="banMembers"><span class="toggle-label"><span class="toggle-title">Ban Members</span><span class="toggle-hint">Ban members from returning.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="manageMessages"><span class="toggle-label"><span class="toggle-title">Manage Messages</span><span class="toggle-hint">Delete and pin other members' messages.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="mentionEveryone"><span class="toggle-label"><span class="toggle-title">Mention Everyone</span><span class="toggle-hint">Use @everyone and @here.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="createInvites"><span class="toggle-label"><span class="toggle-title">Create Invites</span><span class="toggle-hint">Invite people to this server.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="connectVoice" checked><span class="toggle-label"><span class="toggle-title">Connect to Voice</span><span class="toggle-hint">Join server voice channels.</span></span></label>
+            </div>
             <div id="edit-role-gradient-colors" style="display:none;gap:10px;margin-top:10px"><input type="color" id="edit-role-gradient-start" value="#62e6ff" /><input type="color" id="edit-role-gradient-end" value="#b06cff" /></div>
             <div style="display:flex;gap:8px;margin-top:12px"><button class="btn-primary" id="save-role-editor-btn">Save Role</button><button class="btn-secondary" id="cancel-role-editor-btn">Cancel</button></div>
           </div>
@@ -660,6 +672,7 @@
           <select id="channel-create-type">
             <option value="text">Text Channel</option>
             <option value="voice">Voice Channel</option>
+            <option value="forum">Forum Channel</option>
           </select>
         </div>
         <div class="form-error" id="channel-create-error"></div>

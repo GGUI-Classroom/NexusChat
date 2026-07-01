@@ -75,6 +75,16 @@ function roleForClient(role, gradientsEnabled) {
     position: role.position,
     displaySeparately: !!role.display_separately,
     canDeleteMessages: !!role.can_delete_messages,
+    permissions: {
+      manageChannels: !!role.can_manage_channels,
+      manageRoles: !!role.can_manage_roles,
+      kickMembers: !!role.can_kick_members,
+      banMembers: !!role.can_ban_members,
+      manageMessages: !!role.can_manage_messages,
+      mentionEveryone: !!role.can_mention_everyone,
+      createInvites: !!role.can_create_invites,
+      connectVoice: role.can_connect_voice !== false
+    },
     gradientStart: gradientsEnabled ? role.gradient_start : null,
     gradientEnd: gradientsEnabled ? role.gradient_end : null,
     gradientAnimated: gradientsEnabled && !!role.gradient_animated
@@ -98,6 +108,30 @@ async function isAdmin(serverId, userId) {
   if (server.rows[0].owner_id === userId) return true;
   const m = await getMemberRole(serverId, userId);
   return m && (m.role === 'admin' || m.is_admin);
+}
+
+async function hasPermission(serverId, userId, permission) {
+  if (await isAdmin(serverId, userId)) return true;
+  const allowed = new Set([
+    'can_manage_channels', 'can_manage_roles', 'can_kick_members', 'can_ban_members',
+    'can_manage_messages', 'can_mention_everyone', 'can_create_invites', 'can_connect_voice'
+  ]);
+  if (!allowed.has(permission)) return false;
+  const result = await pool.query(
+    `SELECT 1 FROM server_member_roles smr
+     JOIN server_roles sr ON sr.id=smr.role_id
+     WHERE smr.server_id=$1 AND smr.user_id=$2 AND sr.${permission}=TRUE LIMIT 1`,
+    [serverId, userId]
+  );
+  if (result.rows.length) return true;
+  if (permission === 'can_create_invites' || permission === 'can_connect_voice') {
+    const assigned = await pool.query(
+      'SELECT 1 FROM server_member_roles WHERE server_id=$1 AND user_id=$2 LIMIT 1',
+      [serverId, userId]
+    );
+    return !assigned.rows.length;
+  }
+  return false;
 }
 
 // List my servers
@@ -187,7 +221,8 @@ router.post('/', upload.single('icon'), async (req, res) => {
       const adminRoleId = uuidv4();
       const memberRoleId = uuidv4();
       await pool.query(
-        `INSERT INTO server_roles (id, server_id, name, color, is_admin, position, display_separately) VALUES ($1,$2,'Admin','#f05454',true,0,true),($3,$2,'Member','#8892a4',false,1,false)`,
+        `INSERT INTO server_roles (id, server_id, name, color, is_admin, position, display_separately, can_create_invites)
+         VALUES ($1,$2,'Admin','#f05454',true,0,true,true),($3,$2,'Member','#8892a4',false,1,false,true)`,
         [adminRoleId, id, memberRoleId]
       );
       await pool.query(`UPDATE server_members SET role_id=$1 WHERE server_id=$2 AND user_id=$3`, [adminRoleId, id, req.session.userId]);
@@ -386,9 +421,9 @@ router.post('/:id/channels', async (req, res) => {
   const { id } = req.params;
   const { name } = req.body;
   const rawType = String(req.body.type || 'text').toLowerCase();
-  const channelType = rawType === 'voice' ? 'voice' : 'text';
+  const channelType = ['voice', 'forum'].includes(rawType) ? rawType : 'text';
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
   const pos = await pool.query('SELECT COUNT(*) FROM channels WHERE server_id=$1', [id]);
   const chId = uuidv4();
   const chName = name.trim().toLowerCase().replace(/\s+/g,'-');
@@ -426,7 +461,7 @@ router.patch('/:id/invite-style', async (req, res) => {
 router.put('/:id/channels/order', async (req, res) => {
   const { id } = req.params;
   const channelIds = Array.isArray(req.body.channelIds) ? req.body.channelIds : [];
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
   const existing = await pool.query('SELECT id FROM channels WHERE server_id=$1 ORDER BY position ASC', [id]);
   const existingIds = existing.rows.map(row => row.id);
   if (channelIds.length !== existingIds.length || channelIds.some(chId => !existingIds.includes(chId))) {
@@ -449,7 +484,7 @@ router.put('/:id/channels/order', async (req, res) => {
 // Delete channel
 router.delete('/:id/channels/:chId', async (req, res) => {
   const { id, chId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
   const count = await pool.query('SELECT COUNT(*) FROM channels WHERE server_id=$1', [id]);
   if (parseInt(count.rows[0].count) <= 1) return res.status(400).json({ error: 'Cannot delete the last channel' });
   await pool.query('DELETE FROM channels WHERE id=$1 AND server_id=$2', [chId, id]);
@@ -472,9 +507,10 @@ router.get('/:id/roles', async (req, res) => {
 // Create role
 router.post('/:id/roles', async (req, res) => {
   const { id } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_roles')) return res.status(403).json({ error: 'You need Manage Roles permission' });
   const { name, color, isAdmin: roleIsAdmin } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (roleIsAdmin && !await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Only administrators can create administrator roles' });
   const pos = await pool.query('SELECT COUNT(*) FROM server_roles WHERE server_id=$1', [id]);
   const roleId = uuidv4();
   const canDelete = req.body.canDeleteMessages || false;
@@ -488,8 +524,13 @@ router.post('/:id/roles', async (req, res) => {
 // Update role
 router.patch('/:id/roles/:roleId', async (req, res) => {
   const { id, roleId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_roles')) return res.status(403).json({ error: 'You need Manage Roles permission' });
   const { name, color, isAdmin: roleIsAdmin, gradientStart, gradientEnd, gradientAnimated, displaySeparately } = req.body;
+  const existingRole = await pool.query('SELECT is_admin FROM server_roles WHERE id=$1 AND server_id=$2', [roleId, id]);
+  if (!existingRole.rows.length) return res.status(404).json({ error: 'Role not found' });
+  if ((existingRole.rows[0].is_admin || roleIsAdmin === true) && !await isAdmin(id, req.session.userId)) {
+    return res.status(403).json({ error: 'Only administrators can edit administrator roles' });
+  }
   const { canDeleteMessages } = req.body;
   const clearingGradient = gradientAnimated === false;
   const wantsGradient = !clearingGradient && (gradientStart || gradientEnd || gradientAnimated === true);
@@ -510,13 +551,26 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
     await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages), display_separately=COALESCE($5,display_separately) WHERE id=$6 AND server_id=$7`, base);
   }
   const r = await pool.query('SELECT * FROM server_roles WHERE id=$1', [roleId]);
-  res.json({ role: roleForClient(r.rows[0], (await activeBoostFeatures(id)).has('gradients')) });
+  if (req.body.permissions && typeof req.body.permissions === 'object') {
+    const p = req.body.permissions;
+    await pool.query(
+      `UPDATE server_roles SET can_manage_channels=$1, can_manage_roles=$2, can_kick_members=$3,
+       can_ban_members=$4, can_manage_messages=$5, can_mention_everyone=$6,
+       can_create_invites=$7, can_connect_voice=$8 WHERE id=$9 AND server_id=$10`,
+      [!!p.manageChannels, !!p.manageRoles, !!p.kickMembers, !!p.banMembers,
+       !!p.manageMessages, !!p.mentionEveryone, !!p.createInvites, p.connectVoice !== false, roleId, id]
+    );
+  }
+  const updatedRole = await pool.query('SELECT * FROM server_roles WHERE id=$1', [roleId]);
+  res.json({ role: roleForClient(updatedRole.rows[0], (await activeBoostFeatures(id)).has('gradients')) });
 });
 
 // Delete role
 router.delete('/:id/roles/:roleId', async (req, res) => {
   const { id, roleId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_roles')) return res.status(403).json({ error: 'You need Manage Roles permission' });
+  const deletingRole = await pool.query('SELECT is_admin FROM server_roles WHERE id=$1 AND server_id=$2', [roleId, id]);
+  if (deletingRole.rows[0]?.is_admin && !await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Only administrators can delete administrator roles' });
   // Unassign from members first
   await pool.query('UPDATE server_members SET role_id=NULL WHERE server_id=$1 AND role_id=$2', [id, roleId]);
   await pool.query('DELETE FROM server_roles WHERE id=$1 AND server_id=$2', [roleId, id]);
@@ -526,12 +580,13 @@ router.delete('/:id/roles/:roleId', async (req, res) => {
 // Assign role to member
 router.patch('/:id/members/:userId/role', async (req, res) => {
   const { id, userId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_roles')) return res.status(403).json({ error: 'You need Manage Roles permission' });
   const { roleId } = req.body;
   // Validate role belongs to server
   if (roleId) {
     const role = await pool.query('SELECT id, is_admin FROM server_roles WHERE id=$1 AND server_id=$2', [roleId, id]);
     if (!role.rows.length) return res.status(400).json({ error: 'Role not found' });
+    if (role.rows[0].is_admin && !await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Only administrators can assign administrator roles' });
     const newRole = role.rows[0].is_admin ? 'admin' : 'member';
     await pool.query('UPDATE server_members SET role_id=$1, role=$2 WHERE server_id=$3 AND user_id=$4', [roleId, newRole, id, userId]);
     await pool.query('INSERT INTO server_member_roles (server_id,user_id,role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, userId, roleId]);
@@ -544,7 +599,7 @@ router.patch('/:id/members/:userId/role', async (req, res) => {
 
 router.post('/:id/members/:userId/roles/:roleId', async (req, res) => {
   const { id, userId, roleId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_roles')) return res.status(403).json({ error: 'You need Manage Roles permission' });
   const serverOwner = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [id]);
   if (serverOwner.rows[0]?.owner_id === userId && userId !== req.session.userId) return res.status(403).json({ error: 'The server owner manages their own roles' });
   const [member, role] = await Promise.all([
@@ -552,6 +607,7 @@ router.post('/:id/members/:userId/roles/:roleId', async (req, res) => {
     pool.query('SELECT id, is_admin FROM server_roles WHERE server_id=$1 AND id=$2', [id, roleId])
   ]);
   if (!member.rows.length || !role.rows.length) return res.status(404).json({ error: 'Member or role not found' });
+  if (role.rows[0].is_admin && !await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Only administrators can assign administrator roles' });
   await pool.query('INSERT INTO server_member_roles (server_id,user_id,role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, userId, roleId]);
   if (!member.rows[0].role_id) {
     await pool.query('UPDATE server_members SET role_id=$1, role=$2 WHERE server_id=$3 AND user_id=$4', [roleId, role.rows[0].is_admin ? 'admin' : 'member', id, userId]);
@@ -563,7 +619,7 @@ router.post('/:id/members/:userId/roles/:roleId', async (req, res) => {
 
 router.delete('/:id/members/:userId/roles/:roleId', async (req, res) => {
   const { id, userId, roleId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_roles')) return res.status(403).json({ error: 'You need Manage Roles permission' });
   const serverOwner = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [id]);
   if (serverOwner.rows[0]?.owner_id === userId && userId !== req.session.userId) return res.status(403).json({ error: 'The server owner manages their own roles' });
   await pool.query('DELETE FROM server_member_roles WHERE server_id=$1 AND user_id=$2 AND role_id=$3', [id, userId, roleId]);
@@ -606,8 +662,7 @@ router.post('/join/:code', async (req, res) => {
 router.post('/:id/invite', async (req, res) => {
   const { id } = req.params;
   const { userId } = req.body;
-  const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
-  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  if (!await hasPermission(id, req.session.userId, 'can_create_invites')) return res.status(403).json({ error: 'You need Create Invites permission' });
   const already = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, userId]);
   if (already.rows.length) return res.status(409).json({ error: 'Already a member' });
   const banned = await pool.query('SELECT id FROM server_bans WHERE server_id=$1 AND user_id=$2', [id, userId]);
@@ -663,7 +718,7 @@ router.delete('/:id', async (req, res) => {
 // ---- KICK / BAN ----
 router.post('/:id/kick/:userId', async (req, res) => {
   const { id, userId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_kick_members')) return res.status(403).json({ error: 'You need Kick Members permission' });
   const server = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [id]);
   if (server.rows[0]?.owner_id === userId) return res.status(400).json({ error: 'Cannot kick the owner' });
   await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [id, userId]);
@@ -675,7 +730,7 @@ router.post('/:id/kick/:userId', async (req, res) => {
 
 router.post('/:id/ban/:userId', async (req, res) => {
   const { id, userId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_ban_members')) return res.status(403).json({ error: 'You need Ban Members permission' });
   const server = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [id]);
   if (server.rows[0]?.owner_id === userId) return res.status(400).json({ error: 'Cannot ban the owner' });
   const { reason } = req.body;
@@ -712,7 +767,7 @@ router.get('/:id/bans', async (req, res) => {
 // Get permissions for a channel
 router.get('/:id/channels/:chId/permissions', async (req, res) => {
   const { id, chId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
   const ch = await pool.query('SELECT locked FROM channels WHERE id=$1 AND server_id=$2', [chId, id]);
   if (!ch.rows.length) return res.status(404).json({ error: 'Channel not found' });
   const perms = await pool.query(
@@ -731,7 +786,7 @@ router.get('/:id/channels/:chId/permissions', async (req, res) => {
 // Set channel locked state
 router.patch('/:id/channels/:chId/lock', async (req, res) => {
   const { id, chId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
   const { locked } = req.body;
   await pool.query('UPDATE channels SET locked=$1 WHERE id=$2 AND server_id=$3', [!!locked, chId, id]);
   res.json({ success: true, locked: !!locked });
@@ -740,7 +795,7 @@ router.patch('/:id/channels/:chId/lock', async (req, res) => {
 // Set channel private state
 router.patch('/:id/channels/:chId/private', async (req, res) => {
   const { id, chId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
   const { private: isPrivate } = req.body;
   await pool.query('UPDATE channels SET private=$1 WHERE id=$2 AND server_id=$3', [!!isPrivate, chId, id]);
   res.json({ success: true, private: !!isPrivate });
@@ -749,7 +804,7 @@ router.patch('/:id/channels/:chId/private', async (req, res) => {
 // Update channel settings (topic + slowmode)
 router.patch('/:id/channels/:chId/settings', async (req, res) => {
   const { id, chId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
 
   const topicRaw = typeof req.body.topic === 'string' ? req.body.topic.trim() : '';
   const topic = topicRaw.length ? topicRaw.slice(0, 200) : null;
@@ -783,7 +838,7 @@ router.patch('/:id/channels/:chId/settings', async (req, res) => {
 // Set role permission for a channel
 router.put('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
   const { id, chId, roleId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
   const { allowSend } = req.body;
   const role = await pool.query('SELECT id FROM server_roles WHERE id=$1 AND server_id=$2', [roleId, id]);
   if (!role.rows.length) return res.status(404).json({ error: 'Role not found' });
@@ -800,7 +855,7 @@ router.put('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
 // Remove role permission override for a channel
 router.delete('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
   const { id, chId, roleId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
   await pool.query('DELETE FROM channel_permissions WHERE channel_id=$1 AND role_id=$2', [chId, roleId]);
   res.json({ success: true });
 });
@@ -954,7 +1009,7 @@ router.get('/:id/channels/:chId/pins', async (req, res) => {
 // Pin a message (admins only)
 router.post('/:id/channels/:chId/messages/:msgId/pin', async (req, res) => {
   const { id, chId, msgId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_messages')) return res.status(403).json({ error: 'You need Manage Messages permission' });
 
   const msg = await pool.query(
     `SELECT cm.id
@@ -979,7 +1034,7 @@ router.post('/:id/channels/:chId/messages/:msgId/pin', async (req, res) => {
 // Unpin a message (admins only)
 router.delete('/:id/channels/:chId/messages/:msgId/pin', async (req, res) => {
   const { id, chId, msgId } = req.params;
-  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  if (!await hasPermission(id, req.session.userId, 'can_manage_messages')) return res.status(403).json({ error: 'You need Manage Messages permission' });
   await pool.query(
     `DELETE FROM channel_pins cp
      USING channels ch
@@ -998,7 +1053,12 @@ router.delete('/:id/channels/:chId/messages/:msgId', async (req, res) => {
 
   // Check membership
   const member = await pool.query(
-    `SELECT sm.role, sm.role_id, sr.is_admin, sr.can_delete_messages
+    `SELECT sm.role, sm.role_id, sr.is_admin, sr.can_delete_messages,
+      EXISTS(
+        SELECT 1 FROM server_member_roles smr2 JOIN server_roles sr2 ON sr2.id=smr2.role_id
+        WHERE smr2.server_id=sm.server_id AND smr2.user_id=sm.user_id
+          AND (sr2.can_manage_messages=TRUE OR sr2.can_delete_messages=TRUE)
+      ) AS can_manage_messages
      FROM server_members sm
      LEFT JOIN server_roles sr ON sr.id = sm.role_id
      WHERE sm.server_id=$1 AND sm.user_id=$2`,
@@ -1016,7 +1076,7 @@ router.delete('/:id/channels/:chId/messages/:msgId', async (req, res) => {
 
   const isOwn = msg.rows[0].from_id === req.session.userId;
   const isAdmin = m.role === 'admin' || m.is_admin;
-  const canDelete = m.can_delete_messages;
+  const canDelete = m.can_delete_messages || m.can_manage_messages;
 
   if (!isOwn && !isAdmin && !canDelete) {
     return res.status(403).json({ error: 'No permission to delete this message' });

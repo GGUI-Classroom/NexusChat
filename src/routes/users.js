@@ -101,8 +101,14 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
       [serverId, req.session.userId]
     );
     const server = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [serverId]);
+    const rolePermission = await pool.query(
+      `SELECT 1 FROM server_member_roles smr JOIN server_roles sr ON sr.id=smr.role_id
+       WHERE smr.server_id=$1 AND smr.user_id=$2 AND sr.can_manage_roles=TRUE LIMIT 1`,
+      [serverId, req.session.userId]
+    );
     canManageRoles = server.rows[0]?.owner_id === req.session.userId ||
-      membership.rows.some(row => row.role === 'admin' || row.is_admin);
+      membership.rows.some(row => row.role === 'admin' || row.is_admin) ||
+      !!rolePermission.rows.length;
     const assigned = await pool.query(
       `SELECT sr.id, sr.name, sr.color, sr.position
        FROM server_member_roles smr

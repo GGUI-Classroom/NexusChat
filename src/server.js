@@ -277,7 +277,7 @@ app.post('/api/nexus-link/inbound-channel', async (req, res) => {
       ch.id AS valid_channel
      FROM server_members sm
      JOIN users u ON u.id=sm.user_id
-     JOIN channels ch ON ch.id=$3 AND ch.server_id=$2 AND COALESCE(ch.channel_type, 'text')='text'
+     JOIN channels ch ON ch.id=$3 AND ch.server_id=$2 AND COALESCE(ch.channel_type, 'text') IN ('text','forum')
      LEFT JOIN server_roles sr ON sr.id=sm.role_id
      WHERE sm.server_id=$2 AND sm.user_id=$1`,
     [userId, serverId, channelId]
@@ -1542,6 +1542,10 @@ io.on('connection', (socket) => {
     const check = await pool.query(
       `SELECT sm.role_id, sm.role AS member_role, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
         sr.is_admin, sr.can_delete_messages,
+        EXISTS(
+          SELECT 1 FROM server_member_roles smr2 JOIN server_roles sr2 ON sr2.id=smr2.role_id
+          WHERE smr2.server_id=sm.server_id AND smr2.user_id=sm.user_id AND sr2.can_mention_everyone=TRUE
+        ) AS can_mention_everyone,
         u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
         ch.id as ch_id, ch.locked, ch.private as ch_private, ch.slowmode_seconds, ch.channel_type,
         (SELECT allow_send FROM channel_permissions cp
@@ -1557,6 +1561,12 @@ io.on('connection', (socket) => {
     );
     if (!check.rows.length) return; // not a member or channel doesn't belong to server
     const row = check.rows[0];
+
+    if ((trimmed.includes('<@everyone>') || trimmed.includes('<@here>')) &&
+        row.member_role !== 'admin' && !row.is_admin && !row.can_mention_everyone) {
+      socket.emit('channel_error', { channelId, error: 'You do not have permission to mention everyone' });
+      return;
+    }
 
     if ((row.channel_type || 'text') === 'voice') {
       socket.emit('channel_error', { channelId, error: 'This is a voice channel. Join voice to communicate here.' });
@@ -1777,10 +1787,23 @@ io.on('connection', (socket) => {
     if (!normalizedEmoji) return;
 
     const member = await pool.query(
-      'SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2',
+      `SELECT sm.id, sm.role, s.owner_id,
+       (NOT EXISTS(
+         SELECT 1 FROM server_member_roles smr0
+         WHERE smr0.server_id=sm.server_id AND smr0.user_id=sm.user_id
+       ) OR EXISTS(
+         SELECT 1 FROM server_member_roles smr JOIN server_roles sr ON sr.id=smr.role_id
+         WHERE smr.server_id=sm.server_id AND smr.user_id=sm.user_id AND sr.can_connect_voice=TRUE
+       )) AS can_connect_voice
+       FROM server_members sm JOIN servers s ON s.id=sm.server_id
+       WHERE sm.server_id=$1 AND sm.user_id=$2`,
       [serverId, userId]
     );
     if (!member.rows.length) return;
+    if (member.rows[0].owner_id !== userId && member.rows[0].role !== 'admin' && !member.rows[0].can_connect_voice) {
+      socket.emit('group_call_error', { error: 'You do not have permission to connect to this voice channel' });
+      return;
+    }
 
     const msg = await pool.query(
       `SELECT cm.id

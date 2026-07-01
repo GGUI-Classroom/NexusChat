@@ -1057,7 +1057,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 
 /* ===== TOASTS ===== */
 .toast-container {
-  position: fixed; top: 20px; right: 20px;
+  position: fixed; bottom: 20px; right: 20px;
   z-index: 2000;
   display: flex; flex-direction: column; gap: 8px;
 }
@@ -1356,6 +1356,85 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .msg-reaction-chip:hover {
   color: var(--text-primary);
   border-color: var(--accent);
+}
+
+.forum-channel-mode .messages-wrap { background:var(--bg-void);padding:18px }
+.forum-channel-mode .messages-list {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  align-content:start;
+  gap:12px;
+}
+.forum-channel-mode .message {
+  min-height:150px;
+  margin:0!important;
+  padding:16px;
+  border:1px solid var(--border);
+  border-radius:7px;
+  background:var(--bg-surface);
+}
+.forum-channel-mode .message.grouped .avatar { visibility:visible }
+.forum-channel-mode .message-date-separator { grid-column:1/-1 }
+.forum-channel-mode .message-input-wrap textarea { min-height:52px }
+.forum-post-title {
+  margin:5px 0 9px;
+  color:var(--text-primary);
+  font-size:15px;
+  font-weight:800;
+  line-height:1.3;
+}
+
+.role-permissions-editor {
+  margin-top:18px;
+  padding-top:18px;
+  border-top:1px solid var(--border);
+}
+.role-permissions-editor .toggle-row {
+  min-height:58px;
+  margin:0;
+  padding:10px 4px;
+  border-bottom:1px solid var(--border);
+}
+
+#settings-tab-roles.active {
+  grid-template-columns:minmax(230px,300px) minmax(0,1fr);
+  gap:18px;
+  align-items:start;
+}
+#settings-tab-roles #roles-list {
+  grid-column:1;
+  grid-row:1 / span 2;
+  position:sticky;
+  top:0;
+  max-height:calc(100dvh - 150px);
+  overflow-y:auto;
+  padding-right:8px;
+}
+#settings-tab-roles #role-editor {
+  grid-column:2;
+  margin:0!important;
+  padding:22px!important;
+  border-radius:7px;
+}
+#settings-tab-roles>div:last-child { grid-column:2 }
+
+@media(max-width:800px) {
+  #settings-tab-roles.active { grid-template-columns:1fr }
+  #settings-tab-roles #roles-list {
+    grid-column:1;
+    grid-row:auto;
+    position:static;
+    max-height:260px;
+  }
+  #settings-tab-roles #role-editor,
+  #settings-tab-roles>div:last-child { grid-column:1 }
+}
+
+@media(max-width:680px) {
+  .toast-container { right:10px;bottom:calc(var(--mobile-dock-h,64px) + 10px);left:10px }
+  .toast { max-width:none }
+  .forum-channel-mode .messages-wrap { padding:10px }
+  .forum-channel-mode .messages-list { grid-template-columns:1fr }
 }
 
 .channel-emoji-picker {
