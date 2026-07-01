@@ -2215,8 +2215,9 @@
 
   function appendChannelMessage(msg, scroll=true) {
     const list = $('channel-messages-list');
-    const el = buildMessageEl(msg, list.lastElementChild);
+    const el = buildMessageEl(msg, lastRenderedMessage(list));
     list.appendChild(el);
+    refreshDateSeparators(list);
     if (scroll) {
       const wrap = $('channel-messages-wrap');
       requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
@@ -2227,6 +2228,7 @@
     const list = $('channel-messages-list');
     const el = buildMessageEl(msg, null);
     list.prepend(el);
+    refreshDateSeparators(list);
   }
 
   // Channel message input
@@ -3497,8 +3499,9 @@
 
   function appendMessage(msg, scroll = true) {
     const list = $('messages-list');
-    const el = buildMessageEl(msg, list.lastElementChild);
+    const el = buildMessageEl(msg, lastRenderedMessage(list));
     list.appendChild(el);
+    refreshDateSeparators(list);
     if (scroll) {
       const wrap = $('messages-wrap');
       requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
@@ -3510,6 +3513,45 @@
     // Build without grouping context (prepended messages are old, grouping is cosmetic)
     const el = buildMessageEl(msg, null);
     list.prepend(el);
+    refreshDateSeparators(list);
+  }
+
+  function lastRenderedMessage(list) {
+    const messages = list.querySelectorAll('.message');
+    return messages.length ? messages[messages.length - 1] : null;
+  }
+
+  function messageDateKey(timestamp) {
+    const date = new Date((parseInt(timestamp, 10) || 0) * 1000);
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  }
+
+  function messageDateLabel(timestamp) {
+    const date = new Date((parseInt(timestamp, 10) || 0) * 1000);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const key = messageDateKey(timestamp);
+    const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+    const yesterdayKey = `${yesterday.getFullYear()}-${yesterday.getMonth()}-${yesterday.getDate()}`;
+    if (key === todayKey) return 'Today';
+    if (key === yesterdayKey) return 'Yesterday';
+    return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  function refreshDateSeparators(list) {
+    list.querySelectorAll('.message-date-separator').forEach(separator => separator.remove());
+    let previousDate = '';
+    [...list.querySelectorAll('.message')].forEach(message => {
+      const dateKey = messageDateKey(message.dataset.ts);
+      if (dateKey === previousDate) return;
+      const separator = document.createElement('div');
+      separator.className = 'message-date-separator';
+      separator.setAttribute('role', 'separator');
+      separator.innerHTML = `<span>${esc(messageDateLabel(message.dataset.ts))}</span>`;
+      message.before(separator);
+      previousDate = dateKey;
+    });
   }
 
   function renderReactionChips(msgId, channelId, reactions) {
@@ -3600,7 +3642,9 @@
     const el = document.createElement('div');
     const prevTs = prevEl ? parseInt(prevEl.dataset.ts) : 0;
     const prevFrom = prevEl ? prevEl.dataset.from : '';
-    const grouped = prevFrom === msg.fromId && (msg.createdAt - prevTs) < 300;
+    const grouped = prevFrom === msg.fromId &&
+      messageDateKey(prevTs) === messageDateKey(msg.createdAt) &&
+      (msg.createdAt - prevTs) < 300;
     const isMentioned = msg.content && currentUser && (
       msg.content.includes('<@user:' + currentUser.id + '>') ||
       msg.content.includes('<@everyone>') ||

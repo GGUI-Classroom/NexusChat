@@ -660,6 +660,26 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 
 .messages-list { display: flex; flex-direction: column; gap: 2px; }
 
+.message-date-separator {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  margin:18px 0 8px;
+  color:var(--text-muted);
+  font-size:10px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.message-date-separator::before,
+.message-date-separator::after {
+  content:'';
+  height:1px;
+  flex:1;
+  background:var(--border);
+}
+.message-date-separator span { flex:0 0 auto }
+
 .message {
   display: flex; gap: 10px;
   padding: 4px 8px;
