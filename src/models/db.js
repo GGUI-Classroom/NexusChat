@@ -332,6 +332,7 @@ async function initDb() {
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS gradient_start TEXT DEFAULT NULL`, 'alter_roles_gradient_start');
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS gradient_end TEXT DEFAULT NULL`, 'alter_roles_gradient_end');
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS gradient_animated BOOLEAN DEFAULT FALSE`, 'alter_roles_gradient_animated');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS display_separately BOOLEAN DEFAULT FALSE`, 'alter_roles_display_separately');
   await runSql(`CREATE TABLE IF NOT EXISTS server_boosts (
     id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,

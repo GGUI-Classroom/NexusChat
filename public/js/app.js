@@ -1929,7 +1929,7 @@
     const server = activeServerData && activeServerData.server;
     const ownerId = server && server.ownerId;
 
-    $('server-member-list').innerHTML = members.map(m => {
+    const memberHtml = m => {
       const isOwner = m.id === ownerId;
       const roleStyle = m.roleGradientStart ? `--role-gradient-start:${m.roleGradientStart};--role-gradient-end:${m.roleGradientEnd}` : (m.roleColor ? `color:${m.roleColor}` : '');
       const canManage = iAmAdmin && m.id !== currentUser.id && !isOwner;
@@ -1951,7 +1951,26 @@
             <button class="member-action-btn ban" onclick="banMember('${m.id}','${esc(m.displayName)}')">Ban</button>
           </div>` : ''}
         </div>`;
-    }).join('');
+    };
+    const roles = [...((activeServerData && activeServerData.roles) || [])]
+      .filter(role => role.displaySeparately)
+      .sort((a, b) => a.position - b.position);
+    const groupedIds = new Set();
+    const sections = [];
+    roles.forEach(role => {
+      const roleMembers = members.filter(member =>
+        member.roleId === role.id && normalizedStatus(visibleStatus(member)) !== 'offline'
+      );
+      if (!roleMembers.length) return;
+      roleMembers.forEach(member => groupedIds.add(member.id));
+      sections.push(`<div class="member-role-heading"><span style="color:${role.color}">${esc(role.name)}</span><small>${roleMembers.length}</small></div>${roleMembers.map(memberHtml).join('')}`);
+    });
+    const remaining = members.filter(member => !groupedIds.has(member.id));
+    const online = remaining.filter(member => normalizedStatus(visibleStatus(member)) !== 'offline');
+    const offline = remaining.filter(member => normalizedStatus(visibleStatus(member)) === 'offline');
+    if (online.length) sections.push(`<div class="member-role-heading"><span>Online</span><small>${online.length}</small></div>${online.map(memberHtml).join('')}`);
+    if (offline.length) sections.push(`<div class="member-role-heading"><span>Offline</span><small>${offline.length}</small></div><div class="member-offline-group">${offline.map(memberHtml).join('')}</div>`);
+    $('server-member-list').innerHTML = sections.join('');
     members.forEach(m => { const el = $(`smav-${m.id}`); if (el) renderAvatar(el, m); });
   }
 
@@ -2924,10 +2943,10 @@
       : '<p style="font-size:13px;color:var(--text-muted);padding:8px 0">No custom roles yet. Create one below.</p>';
   }
 
-  window.editRole = function(roleId) { const role = activeServerData.roles.find(r => r.id === roleId); if (!role) return; $('role-editor').style.display='block'; $('edit-role-id').value=role.id; $('edit-role-name').value=role.name; $('edit-role-color').value=role.color; $('edit-role-admin').value=String(!!role.isAdmin); $('edit-role-gradient').checked=!!role.gradientStart; $('edit-role-gradient-colors').style.display=role.gradientStart?'flex':'none'; $('edit-role-gradient-start').value=role.gradientStart||'#62e6ff'; $('edit-role-gradient-end').value=role.gradientEnd||'#b06cff'; };
+  window.editRole = function(roleId) { const role = activeServerData.roles.find(r => r.id === roleId); if (!role) return; $('role-editor').style.display='block'; $('edit-role-id').value=role.id; $('edit-role-name').value=role.name; $('edit-role-color').value=role.color; $('edit-role-admin').value=String(!!role.isAdmin); $('edit-role-gradient').checked=!!role.gradientStart; $('edit-role-display-separately').checked=!!role.displaySeparately; $('edit-role-gradient-colors').style.display=role.gradientStart?'flex':'none'; $('edit-role-gradient-start').value=role.gradientStart||'#62e6ff'; $('edit-role-gradient-end').value=role.gradientEnd||'#b06cff'; };
   $('edit-role-gradient').addEventListener('change', function(){ $('edit-role-gradient-colors').style.display=this.checked?'flex':'none'; });
   $('cancel-role-editor-btn').addEventListener('click', ()=> $('role-editor').style.display='none');
-  $('save-role-editor-btn').addEventListener('click', async ()=> { const payload={name:$('edit-role-name').value.trim(),color:$('edit-role-color').value,isAdmin:$('edit-role-admin').value==='true',gradientAnimated:$('edit-role-gradient').checked}; if(payload.gradientAnimated){payload.gradientStart=$('edit-role-gradient-start').value;payload.gradientEnd=$('edit-role-gradient-end').value;} const r=await api('PATCH',`/api/servers/${activeServerId}/roles/${$('edit-role-id').value}`,payload); if(r.error)return toast(r.error,'error'); const s=await api('GET',`/api/servers/${activeServerId}`); activeServerData=s; renderRolesList(s.roles||[]); renderMemberList(s.members); $('role-editor').style.display='none'; toast('Role updated','success'); });
+  $('save-role-editor-btn').addEventListener('click', async ()=> { const payload={name:$('edit-role-name').value.trim(),color:$('edit-role-color').value,isAdmin:$('edit-role-admin').value==='true',gradientAnimated:$('edit-role-gradient').checked,displaySeparately:$('edit-role-display-separately').checked}; if(payload.gradientAnimated){payload.gradientStart=$('edit-role-gradient-start').value;payload.gradientEnd=$('edit-role-gradient-end').value;} const r=await api('PATCH',`/api/servers/${activeServerId}/roles/${$('edit-role-id').value}`,payload); if(r.error)return toast(r.error,'error'); const s=await api('GET',`/api/servers/${activeServerId}`); activeServerData=s; renderRolesList(s.roles||[]); renderMemberList(s.members); $('role-editor').style.display='none'; toast('Role updated','success'); });
   window.toggleRoleGradient = function(roleId, enabled) { editRole(roleId); $('edit-role-gradient').checked=enabled; $('edit-role-gradient-colors').style.display=enabled?'flex':'none'; };
 
   window.deleteRole = async function(roleId, name) {

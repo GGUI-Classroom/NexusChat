@@ -73,6 +73,7 @@ function roleForClient(role, gradientsEnabled) {
     color: role.color,
     isAdmin: role.is_admin,
     position: role.position,
+    displaySeparately: !!role.display_separately,
     canDeleteMessages: !!role.can_delete_messages,
     gradientStart: gradientsEnabled ? role.gradient_start : null,
     gradientEnd: gradientsEnabled ? role.gradient_end : null,
@@ -486,7 +487,7 @@ router.post('/:id/roles', async (req, res) => {
 router.patch('/:id/roles/:roleId', async (req, res) => {
   const { id, roleId } = req.params;
   if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
-  const { name, color, isAdmin: roleIsAdmin, gradientStart, gradientEnd, gradientAnimated } = req.body;
+  const { name, color, isAdmin: roleIsAdmin, gradientStart, gradientEnd, gradientAnimated, displaySeparately } = req.body;
   const { canDeleteMessages } = req.body;
   const clearingGradient = gradientAnimated === false;
   const wantsGradient = !clearingGradient && (gradientStart || gradientEnd || gradientAnimated === true);
@@ -497,13 +498,14 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
       return res.status(400).json({ error: 'Choose two valid gradient colors' });
     }
   }
-  const base = [name || null, color || null, roleIsAdmin != null ? !!roleIsAdmin : null, canDeleteMessages != null ? !!canDeleteMessages : null, roleId, id];
+  const separate = displaySeparately != null ? !!displaySeparately : null;
+  const base = [name || null, color || null, roleIsAdmin != null ? !!roleIsAdmin : null, canDeleteMessages != null ? !!canDeleteMessages : null, separate, roleId, id];
   if (wantsGradient) {
-    await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages), gradient_start=$5, gradient_end=$6, gradient_animated=TRUE WHERE id=$7 AND server_id=$8`, [...base.slice(0, 4), gradientStart, gradientEnd, roleId, id]);
+    await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages), display_separately=COALESCE($5,display_separately), gradient_start=$6, gradient_end=$7, gradient_animated=TRUE WHERE id=$8 AND server_id=$9`, [...base.slice(0, 5), gradientStart, gradientEnd, roleId, id]);
   } else if (clearingGradient) {
-    await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages), gradient_start=NULL, gradient_end=NULL, gradient_animated=FALSE WHERE id=$5 AND server_id=$6`, base);
+    await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages), display_separately=COALESCE($5,display_separately), gradient_start=NULL, gradient_end=NULL, gradient_animated=FALSE WHERE id=$6 AND server_id=$7`, base);
   } else {
-    await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages) WHERE id=$5 AND server_id=$6`, base);
+    await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages), display_separately=COALESCE($5,display_separately) WHERE id=$6 AND server_id=$7`, base);
   }
   const r = await pool.query('SELECT * FROM server_roles WHERE id=$1', [roleId]);
   res.json({ role: roleForClient(r.rows[0], (await activeBoostFeatures(id)).has('gradients')) });

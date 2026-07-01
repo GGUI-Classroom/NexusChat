@@ -7242,6 +7242,23 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 }
 .server-members-panel .server-member-list { padding:8px 6px 18px; }
 .server-members-panel .server-member-item { min-height:48px; }
+.member-role-heading {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:14px 8px 5px;
+  color:var(--text-muted);
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+}
+.member-role-heading:first-child { padding-top:6px; }
+.member-role-heading small {
+  color:inherit;
+  font:700 10px 'JetBrains Mono',monospace;
+}
+.member-offline-group .server-member-item { opacity:.58; }
+.member-offline-group .server-member-item:hover { opacity:1; }
 
 .server-context-menu {
   position:fixed;
