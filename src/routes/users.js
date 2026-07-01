@@ -135,7 +135,7 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
     profileBannerUrl: u.has_profile_banner ? `/api/users/banner/${u.id}` : null,
     serverRoles: serverRoles.map(role => ({ id: role.id, name: role.name, color: role.color })),
     availableServerRoles: availableRoles.map(role => ({ id: role.id, name: role.name, color: role.color })),
-    canManageServerRoles: canManageRoles && req.params.userId !== req.session.userId,
+    canManageServerRoles: canManageRoles,
     serverTag: tagRow ? {
       name: tagRow.tag_private ? null : tagRow.name,
       inviteCode: tagRow.tag_private ? null : tagRow.invite_code,
