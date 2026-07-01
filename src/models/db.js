@@ -214,6 +214,24 @@ async function initDb() {
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS private BOOLEAN DEFAULT FALSE`, 'alter_channels_private');
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS channel_type TEXT DEFAULT 'text'`, 'alter_channels_channel_type');
   await runSql(`UPDATE channels SET channel_type='text' WHERE channel_type IS NULL OR channel_type NOT IN ('text','voice','forum')`, 'normalize_channels_channel_type');
+  await runSql(`CREATE TABLE IF NOT EXISTS forum_posts (
+    id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'forum_posts');
+  await runSql(`CREATE TABLE IF NOT EXISTS forum_replies (
+    id TEXT PRIMARY KEY,
+    post_id TEXT NOT NULL REFERENCES forum_posts(id) ON DELETE CASCADE,
+    author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'forum_replies');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_forum_posts_channel ON forum_posts(channel_id, updated_at DESC)`, 'idx_forum_posts_channel');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_forum_replies_post ON forum_replies(post_id, created_at ASC)`, 'idx_forum_replies_post');
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS topic TEXT DEFAULT NULL`, 'alter_channels_topic');
   await runSql(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS slowmode_seconds INTEGER DEFAULT 0`, 'alter_channels_slowmode');
   await runSql(`ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT DEFAULT NULL`, 'alter_channel_messages_reply_to');

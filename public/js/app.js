@@ -2125,6 +2125,9 @@
     activeChannelSlowmode = Math.max(0, parseInt(channel.slowmodeSeconds, 10) || 0);
     setChannelReply(null);
     $('channel-container').classList.toggle('forum-channel-mode', activeChannelType === 'forum');
+    $('forum-view').style.display = activeChannelType === 'forum' ? 'block' : 'none';
+    $('channel-messages-wrap').style.display = activeChannelType === 'forum' ? 'none' : 'flex';
+    $('channel-message-input').closest('.message-input-wrap').style.display = activeChannelType === 'forum' ? 'none' : 'flex';
 
     document.querySelectorAll('.channel-item').forEach(el => {
       el.classList.toggle('active', el.dataset.channelId === channel.id);
@@ -2159,13 +2162,132 @@
     if (isMobile()) closeMobileSidebar();
     $('channel-placeholder').style.display = 'none';
     $('channel-container').style.display = 'flex';
-    loadChannelMessages(channel.id);
+    if (activeChannelType === 'forum') loadForumPosts(channel.id);
+    else loadChannelMessages(channel.id);
     if (activeChannelType === 'voice') {
       setTimeout(() => {
         if (!groupCallState || groupCallState.channelId !== channel.id) $('group-call-btn').click();
       }, 0);
     }
-    $('channel-message-input').focus();
+    if (activeChannelType !== 'forum') $('channel-message-input').focus();
+  };
+
+  let activeForumPostId = null;
+  let forumPostsCache = [];
+
+  function forumDate(timestamp) {
+    return new Date((parseInt(timestamp, 10) || 0) * 1000).toLocaleDateString(undefined, {
+      month: 'short', day: 'numeric', year: 'numeric'
+    });
+  }
+
+  async function loadForumPosts(channelId) {
+    activeForumPostId = null;
+    const host = $('forum-view');
+    host.innerHTML = '<div class="forum-loading">Loading posts...</div>';
+    const result = await api('GET', `/api/servers/${activeServerId}/channels/${channelId}/forum/posts`);
+    if (result.error) {
+      host.innerHTML = `<div class="forum-empty">${esc(result.error)}</div>`;
+      return;
+    }
+    forumPostsCache = result.posts || [];
+    renderForumBrowser('');
+  }
+
+  function renderForumBrowser(query = '') {
+    const host = $('forum-view');
+    const normalized = query.trim().toLowerCase();
+    const posts = forumPostsCache.filter(post =>
+      !normalized || post.title.toLowerCase().includes(normalized) || post.content.toLowerCase().includes(normalized)
+    );
+    host.innerHTML = `
+      <div class="forum-toolbar">
+        <div class="forum-search"><span>⌕</span><input id="forum-search-input" type="search" placeholder="Search posts..." value="${esc(query)}"></div>
+        <button type="button" class="btn-primary" onclick="toggleForumComposer()">New Post</button>
+      </div>
+      <div class="forum-composer" id="forum-composer" style="display:none">
+        <input id="forum-post-title" maxlength="120" placeholder="Post title">
+        <textarea id="forum-post-content" maxlength="4000" rows="5" placeholder="What do you want to discuss?"></textarea>
+        <div><button type="button" class="btn-secondary" onclick="toggleForumComposer()">Cancel</button><button type="button" class="btn-primary" onclick="createForumPost()">Post</button></div>
+      </div>
+      <div class="forum-filter-row"><span>Recent activity</span><small>${posts.length} post${posts.length === 1 ? '' : 's'}</small></div>
+      <div class="forum-post-list">
+        ${posts.length ? posts.map(post => `
+          <button type="button" class="forum-post-card" data-forum-search="${esc((post.title + ' ' + post.content).toLowerCase())}" onclick="openForumPost('${post.id}')">
+            <div class="avatar sm" id="forum-av-${post.id}"></div>
+            <div class="forum-post-copy">
+              <strong>${esc(post.title)}</strong>
+              <p>${esc(post.content.slice(0, 180))}</p>
+              <small>${esc(post.author.displayName)} · ${forumDate(post.updatedAt)}</small>
+            </div>
+            <div class="forum-reply-count"><span>●</span>${post.replyCount}</div>
+          </button>`).join('') : '<div class="forum-empty">No posts yet. Start the conversation.</div>'}
+      </div>`;
+    $('forum-search-input').addEventListener('input', event => {
+      const search = event.target.value.trim().toLowerCase();
+      host.querySelectorAll('.forum-post-card').forEach(card => {
+        card.style.display = !search || card.dataset.forumSearch.includes(search) ? 'grid' : 'none';
+      });
+    });
+    posts.forEach(post => renderAvatar($(`forum-av-${post.id}`), post.author));
+  }
+
+  window.toggleForumComposer = function() {
+    const composer = $('forum-composer');
+    if (!composer) return;
+    composer.style.display = composer.style.display === 'none' ? 'grid' : 'none';
+    if (composer.style.display === 'grid') $('forum-post-title').focus();
+  };
+  window.loadForumPosts = loadForumPosts;
+
+  window.createForumPost = async function() {
+    const title = $('forum-post-title').value.trim();
+    const content = $('forum-post-content').value.trim();
+    if (!title || !content) return toast('Add a title and message', 'error');
+    const result = await api('POST', `/api/servers/${activeServerId}/channels/${activeChannelId}/forum/posts`, { title, content });
+    if (result.error) return toast(result.error, 'error');
+    await loadForumPosts(activeChannelId);
+    toast('Post created', 'success');
+  };
+
+  window.openForumPost = async function(postId) {
+    activeForumPostId = postId;
+    const host = $('forum-view');
+    host.innerHTML = '<div class="forum-loading">Opening thread...</div>';
+    const result = await api('GET', `/api/servers/${activeServerId}/channels/${activeChannelId}/forum/posts/${postId}`);
+    if (result.error) return loadForumPosts(activeChannelId);
+    const post = result.post;
+    host.innerHTML = `
+      <div class="forum-thread-head">
+        <button type="button" class="btn-secondary" onclick="loadForumPosts('${activeChannelId}')">← Posts</button>
+        <div><h2>${esc(post.title)}</h2><span>Started by ${esc(post.author.displayName)} · ${forumDate(post.createdAt)}</span></div>
+      </div>
+      <article class="forum-thread-original">
+        <div class="avatar" id="forum-thread-author"></div>
+        <div><strong>${esc(post.author.displayName)}</strong><p>${esc(post.content)}</p></div>
+      </article>
+      <div class="forum-replies-label">${result.replies.length} ${result.replies.length === 1 ? 'reply' : 'replies'}</div>
+      <div class="forum-replies">
+        ${result.replies.map(reply => `
+          <div class="forum-reply">
+            <div class="avatar sm" id="forum-reply-av-${reply.id}"></div>
+            <div><strong>${esc(reply.author.displayName)} <small>${forumDate(reply.createdAt)}</small></strong><p>${esc(reply.content)}</p></div>
+          </div>`).join('')}
+      </div>
+      <div class="forum-reply-box">
+        <textarea id="forum-reply-input" maxlength="4000" rows="3" placeholder="Reply to this post..."></textarea>
+        <button type="button" class="btn-primary" onclick="submitForumReply()">Reply</button>
+      </div>`;
+    renderAvatar($('forum-thread-author'), post.author);
+    result.replies.forEach(reply => renderAvatar($(`forum-reply-av-${reply.id}`), reply.author));
+  };
+
+  window.submitForumReply = async function() {
+    const content = $('forum-reply-input').value.trim();
+    if (!content || !activeForumPostId) return;
+    const result = await api('POST', `/api/servers/${activeServerId}/channels/${activeChannelId}/forum/posts/${activeForumPostId}/replies`, { content });
+    if (result.error) return toast(result.error, 'error');
+    await openForumPost(activeForumPostId);
   };
 
   window.deleteChannel = async function(e, channelId) {

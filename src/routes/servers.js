@@ -5,6 +5,7 @@ const { pool } = require('../models/db');
 const { requireAuth } = require('../middleware/auth');
 const { syncAll } = require('./achievements');
 const { avatarUrl } = require('../utils/avatar');
+const { enforceGlobalSafety } = require('../utils/globalSafety');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -857,6 +858,94 @@ router.delete('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
   const { id, chId, roleId } = req.params;
   if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
   await pool.query('DELETE FROM channel_permissions WHERE channel_id=$1 AND role_id=$2', [chId, roleId]);
+  res.json({ success: true });
+});
+
+async function requireForumAccess(serverId, channelId, userId) {
+  const result = await pool.query(
+    `SELECT c.id FROM channels c
+     JOIN server_members sm ON sm.server_id=c.server_id AND sm.user_id=$3
+     WHERE c.server_id=$1 AND c.id=$2 AND c.channel_type='forum'`,
+    [serverId, channelId, userId]
+  );
+  return !!result.rows.length;
+}
+
+router.get('/:id/channels/:chId/forum/posts', async (req, res) => {
+  const { id, chId } = req.params;
+  if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
+  const result = await pool.query(
+    `SELECT fp.id, fp.title, fp.content, fp.created_at, fp.updated_at,
+      u.id AS author_id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar,
+      COUNT(fr.id)::int AS reply_count
+     FROM forum_posts fp
+     JOIN users u ON u.id=fp.author_id
+     LEFT JOIN forum_replies fr ON fr.post_id=fp.id
+     WHERE fp.channel_id=$1
+     GROUP BY fp.id,u.id
+     ORDER BY fp.updated_at DESC
+     LIMIT 100`,
+    [chId]
+  );
+  res.json({ posts: result.rows.map(row => ({
+    id: row.id, title: row.title, content: row.content,
+    createdAt: parseInt(row.created_at), updatedAt: parseInt(row.updated_at),
+    replyCount: row.reply_count,
+    author: { id: row.author_id, username: row.username, displayName: row.display_name, avatarDataUrl: avatarUrl(row.author_id, !!row.has_avatar) }
+  })) });
+});
+
+router.post('/:id/channels/:chId/forum/posts', async (req, res) => {
+  const { id, chId } = req.params;
+  if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
+  const title = String(req.body.title || '').trim().slice(0, 120);
+  const content = String(req.body.content || '').trim().slice(0, 4000);
+  if (!title || !content) return res.status(400).json({ error: 'A title and message are required' });
+  const violation = await enforceGlobalSafety({ userId: req.session.userId, content: `${title}\n${content}`, messageType: 'forum_post', serverId: id, channelId: chId });
+  if (violation) return res.status(400).json({ error: 'NexusGuard blocked this post for violating global safety rules' });
+  const postId = uuidv4();
+  await pool.query(
+    'INSERT INTO forum_posts (id,channel_id,author_id,title,content) VALUES ($1,$2,$3,$4,$5)',
+    [postId, chId, req.session.userId, title, content]
+  );
+  res.json({ success: true, postId });
+});
+
+router.get('/:id/channels/:chId/forum/posts/:postId', async (req, res) => {
+  const { id, chId, postId } = req.params;
+  if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
+  const [post, replies] = await Promise.all([
+    pool.query(
+      `SELECT fp.id,fp.title,fp.content,fp.created_at,u.id AS author_id,u.username,u.display_name,(u.avatar_data IS NOT NULL) AS has_avatar
+       FROM forum_posts fp JOIN users u ON u.id=fp.author_id WHERE fp.id=$1 AND fp.channel_id=$2`,
+      [postId, chId]
+    ),
+    pool.query(
+      `SELECT fr.id,fr.content,fr.created_at,u.id AS author_id,u.username,u.display_name,(u.avatar_data IS NOT NULL) AS has_avatar
+       FROM forum_replies fr JOIN users u ON u.id=fr.author_id WHERE fr.post_id=$1 ORDER BY fr.created_at ASC`,
+      [postId]
+    )
+  ]);
+  if (!post.rows.length) return res.status(404).json({ error: 'Post not found' });
+  const formatAuthor = row => ({ id: row.author_id, username: row.username, displayName: row.display_name, avatarDataUrl: avatarUrl(row.author_id, !!row.has_avatar) });
+  const row = post.rows[0];
+  res.json({
+    post: { id: row.id, title: row.title, content: row.content, createdAt: parseInt(row.created_at), author: formatAuthor(row) },
+    replies: replies.rows.map(reply => ({ id: reply.id, content: reply.content, createdAt: parseInt(reply.created_at), author: formatAuthor(reply) }))
+  });
+});
+
+router.post('/:id/channels/:chId/forum/posts/:postId/replies', async (req, res) => {
+  const { id, chId, postId } = req.params;
+  if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
+  const content = String(req.body.content || '').trim().slice(0, 4000);
+  if (!content) return res.status(400).json({ error: 'Reply cannot be empty' });
+  const violation = await enforceGlobalSafety({ userId: req.session.userId, content, messageType: 'forum_reply', serverId: id, channelId: chId });
+  if (violation) return res.status(400).json({ error: 'NexusGuard blocked this reply for violating global safety rules' });
+  const exists = await pool.query('SELECT id FROM forum_posts WHERE id=$1 AND channel_id=$2', [postId, chId]);
+  if (!exists.rows.length) return res.status(404).json({ error: 'Post not found' });
+  await pool.query('INSERT INTO forum_replies (id,post_id,author_id,content) VALUES ($1,$2,$3,$4)', [uuidv4(), postId, req.session.userId, content]);
+  await pool.query('UPDATE forum_posts SET updated_at=EXTRACT(EPOCH FROM NOW())::BIGINT WHERE id=$1', [postId]);
   res.json({ success: true });
 });
 
