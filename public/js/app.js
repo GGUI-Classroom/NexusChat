@@ -2987,14 +2987,14 @@
           <div class="role-row" id="role-row-${r.id}">
             <div class="role-dot" style="background:${r.color}"></div>
             <span class="role-name${r.gradientStart ? ' role-gradient-text' : ''}" style="${r.gradientStart ? `--role-gradient-start:${r.gradientStart};--role-gradient-end:${r.gradientEnd}` : `color:${r.color}`}">${esc(r.name)}</span>
-            <span class="role-badge">${r.isAdmin ? 'Admin' : 'Member'}</span>
-            <span class="role-badge">${memberCount} member${memberCount === 1 ? '' : 's'}</span>
-            ${r.canDeleteMessages ? '<span class="role-badge" style="background:rgba(240,84,84,0.15);color:var(--red)">Can Delete</span>' : ''}
             <div class="role-actions">
               <button class="role-edit-btn" onclick="editRole('${r.id}')">Edit</button>
               <button class="role-del-btn" onclick="deleteRole('${r.id}','${esc(r.name)}')">Delete</button>
             </div>
-            <label class="toggle-row" style="grid-column:1/-1;margin:4px 0 0"><input type="checkbox" ${r.gradientStart ? 'checked' : ''} onchange="toggleRoleGradient('${r.id}',this.checked)"><span class="toggle-label"><span class="toggle-title">Animated gradient</span></span></label>
+            <div class="role-row-meta">
+              <span>${r.isAdmin ? 'Administrator' : 'Custom role'}</span>
+              <span>${memberCount} member${memberCount === 1 ? '' : 's'}</span>
+            </div>
           </div>`;
         }).join('')
       : '<p style="font-size:13px;color:var(--text-muted);padding:8px 0">No custom roles yet. Create one below.</p>';

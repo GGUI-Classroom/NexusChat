@@ -7470,6 +7470,58 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   .admin-tos-publish-row { align-items:stretch;flex-direction:column }
 }
 
+/* Compact Discord-style role sidebar; kept last to override legacy role rows. */
+#settings-tab-roles.active .role-row {
+  display:grid;
+  grid-template-columns:12px minmax(0,1fr) auto;
+  grid-template-rows:auto auto;
+  align-items:center;
+  gap:5px 9px;
+  width:100%;
+  min-width:0;
+  padding:10px;
+  overflow:hidden;
+}
+#settings-tab-roles.active .role-dot { grid-column:1;grid-row:1;width:10px;height:10px }
+#settings-tab-roles.active .role-name {
+  grid-column:2;
+  grid-row:1;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+#settings-tab-roles.active .role-actions {
+  grid-column:3;
+  grid-row:1 / span 2;
+  align-self:center;
+}
+#settings-tab-roles.active .role-actions button {
+  width:32px;
+  height:32px;
+  padding:0;
+  overflow:hidden;
+  font-size:0;
+}
+#settings-tab-roles.active .role-edit-btn::before { content:'Edit';font-size:10px }
+#settings-tab-roles.active .role-del-btn::before { content:'×';font-size:18px }
+#settings-tab-roles.active .role-row-meta {
+  grid-column:2;
+  grid-row:2;
+  display:flex;
+  min-width:0;
+  gap:8px;
+  color:var(--text-muted);
+  font-size:9px;
+  font-weight:700;
+  text-transform:uppercase;
+}
+#settings-tab-roles.active .role-row-meta span {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
 /* Mobile usability pass */
 .mobile-topbar-btn {
   width:38px;
