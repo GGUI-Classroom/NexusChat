@@ -84,7 +84,10 @@ function roleForClient(role, gradientsEnabled) {
       manageMessages: !!role.can_manage_messages,
       mentionEveryone: !!role.can_mention_everyone,
       createInvites: !!role.can_create_invites,
-      connectVoice: role.can_connect_voice !== false
+      connectVoice: role.can_connect_voice !== false,
+      createForumPosts: role.can_create_forum_posts !== false,
+      replyForumPosts: role.can_reply_forum_posts !== false,
+      lockForumPosts: !!role.can_lock_forum_posts
     },
     gradientStart: gradientsEnabled ? role.gradient_start : null,
     gradientEnd: gradientsEnabled ? role.gradient_end : null,
@@ -115,7 +118,8 @@ async function hasPermission(serverId, userId, permission) {
   if (await isAdmin(serverId, userId)) return true;
   const allowed = new Set([
     'can_manage_channels', 'can_manage_roles', 'can_kick_members', 'can_ban_members',
-    'can_manage_messages', 'can_mention_everyone', 'can_create_invites', 'can_connect_voice'
+    'can_manage_messages', 'can_mention_everyone', 'can_create_invites', 'can_connect_voice',
+    'can_create_forum_posts', 'can_reply_forum_posts', 'can_lock_forum_posts'
   ]);
   if (!allowed.has(permission)) return false;
   const result = await pool.query(
@@ -125,7 +129,8 @@ async function hasPermission(serverId, userId, permission) {
     [serverId, userId]
   );
   if (result.rows.length) return true;
-  if (permission === 'can_create_invites' || permission === 'can_connect_voice') {
+  if (permission === 'can_create_invites' || permission === 'can_connect_voice' ||
+      permission === 'can_create_forum_posts' || permission === 'can_reply_forum_posts') {
     const assigned = await pool.query(
       'SELECT 1 FROM server_member_roles WHERE server_id=$1 AND user_id=$2 LIMIT 1',
       [serverId, userId]
@@ -557,9 +562,11 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
     await pool.query(
       `UPDATE server_roles SET can_manage_channels=$1, can_manage_roles=$2, can_kick_members=$3,
        can_ban_members=$4, can_manage_messages=$5, can_mention_everyone=$6,
-       can_create_invites=$7, can_connect_voice=$8 WHERE id=$9 AND server_id=$10`,
+       can_create_invites=$7, can_connect_voice=$8, can_create_forum_posts=$9,
+       can_reply_forum_posts=$10, can_lock_forum_posts=$11 WHERE id=$12 AND server_id=$13`,
       [!!p.manageChannels, !!p.manageRoles, !!p.kickMembers, !!p.banMembers,
-       !!p.manageMessages, !!p.mentionEveryone, !!p.createInvites, p.connectVoice !== false, roleId, id]
+       !!p.manageMessages, !!p.mentionEveryone, !!p.createInvites, p.connectVoice !== false,
+       p.createForumPosts !== false, p.replyForumPosts !== false, !!p.lockForumPosts, roleId, id]
     );
   }
   const updatedRole = await pool.query('SELECT * FROM server_roles WHERE id=$1', [roleId]);
@@ -875,7 +882,7 @@ router.get('/:id/channels/:chId/forum/posts', async (req, res) => {
   const { id, chId } = req.params;
   if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
   const result = await pool.query(
-    `SELECT fp.id, fp.title, fp.content, fp.created_at, fp.updated_at,
+    `SELECT fp.id, fp.title, fp.content, fp.created_at, fp.updated_at, fp.replies_locked,
       u.id AS author_id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar,
       COUNT(fr.id)::int AS reply_count
      FROM forum_posts fp
@@ -887,10 +894,11 @@ router.get('/:id/channels/:chId/forum/posts', async (req, res) => {
      LIMIT 100`,
     [chId]
   );
-  res.json({ posts: result.rows.map(row => ({
+  const canCreatePosts = await hasPermission(id, req.session.userId, 'can_create_forum_posts');
+  res.json({ canCreatePosts, posts: result.rows.map(row => ({
     id: row.id, title: row.title, content: row.content,
     createdAt: parseInt(row.created_at), updatedAt: parseInt(row.updated_at),
-    replyCount: row.reply_count,
+    replyCount: row.reply_count, repliesLocked: !!row.replies_locked,
     author: { id: row.author_id, username: row.username, displayName: row.display_name, avatarDataUrl: avatarUrl(row.author_id, !!row.has_avatar) }
   })) });
 });
@@ -898,6 +906,7 @@ router.get('/:id/channels/:chId/forum/posts', async (req, res) => {
 router.post('/:id/channels/:chId/forum/posts', async (req, res) => {
   const { id, chId } = req.params;
   if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
+  if (!await hasPermission(id, req.session.userId, 'can_create_forum_posts')) return res.status(403).json({ error: 'You do not have permission to create forum posts' });
   const title = String(req.body.title || '').trim().slice(0, 120);
   const content = String(req.body.content || '').trim().slice(0, 4000);
   if (!title || !content) return res.status(400).json({ error: 'A title and message are required' });
@@ -916,7 +925,7 @@ router.get('/:id/channels/:chId/forum/posts/:postId', async (req, res) => {
   if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
   const [post, replies] = await Promise.all([
     pool.query(
-      `SELECT fp.id,fp.title,fp.content,fp.created_at,u.id AS author_id,u.username,u.display_name,(u.avatar_data IS NOT NULL) AS has_avatar
+      `SELECT fp.id,fp.title,fp.content,fp.created_at,fp.replies_locked,u.id AS author_id,u.username,u.display_name,(u.avatar_data IS NOT NULL) AS has_avatar
        FROM forum_posts fp JOIN users u ON u.id=fp.author_id WHERE fp.id=$1 AND fp.channel_id=$2`,
       [postId, chId]
     ),
@@ -929,8 +938,13 @@ router.get('/:id/channels/:chId/forum/posts/:postId', async (req, res) => {
   if (!post.rows.length) return res.status(404).json({ error: 'Post not found' });
   const formatAuthor = row => ({ id: row.author_id, username: row.username, displayName: row.display_name, avatarDataUrl: avatarUrl(row.author_id, !!row.has_avatar) });
   const row = post.rows[0];
+  const [canReply, canLock] = await Promise.all([
+    hasPermission(id, req.session.userId, 'can_reply_forum_posts'),
+    hasPermission(id, req.session.userId, 'can_lock_forum_posts')
+  ]);
   res.json({
-    post: { id: row.id, title: row.title, content: row.content, createdAt: parseInt(row.created_at), author: formatAuthor(row) },
+    post: { id: row.id, title: row.title, content: row.content, createdAt: parseInt(row.created_at), repliesLocked: !!row.replies_locked, author: formatAuthor(row) },
+    permissions: { canReply, canLock },
     replies: replies.rows.map(reply => ({ id: reply.id, content: reply.content, createdAt: parseInt(reply.created_at), author: formatAuthor(reply) }))
   });
 });
@@ -938,15 +952,30 @@ router.get('/:id/channels/:chId/forum/posts/:postId', async (req, res) => {
 router.post('/:id/channels/:chId/forum/posts/:postId/replies', async (req, res) => {
   const { id, chId, postId } = req.params;
   if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
+  if (!await hasPermission(id, req.session.userId, 'can_reply_forum_posts')) return res.status(403).json({ error: 'You do not have permission to reply in forums' });
   const content = String(req.body.content || '').trim().slice(0, 4000);
   if (!content) return res.status(400).json({ error: 'Reply cannot be empty' });
   const violation = await enforceGlobalSafety({ userId: req.session.userId, content, messageType: 'forum_reply', serverId: id, channelId: chId });
   if (violation) return res.status(400).json({ error: 'NexusGuard blocked this reply for violating global safety rules' });
-  const exists = await pool.query('SELECT id FROM forum_posts WHERE id=$1 AND channel_id=$2', [postId, chId]);
+  const exists = await pool.query('SELECT id, replies_locked FROM forum_posts WHERE id=$1 AND channel_id=$2', [postId, chId]);
   if (!exists.rows.length) return res.status(404).json({ error: 'Post not found' });
+  if (exists.rows[0].replies_locked) return res.status(403).json({ error: 'Replies are locked for this post' });
   await pool.query('INSERT INTO forum_replies (id,post_id,author_id,content) VALUES ($1,$2,$3,$4)', [uuidv4(), postId, req.session.userId, content]);
   await pool.query('UPDATE forum_posts SET updated_at=EXTRACT(EPOCH FROM NOW())::BIGINT WHERE id=$1', [postId]);
   res.json({ success: true });
+});
+
+router.patch('/:id/channels/:chId/forum/posts/:postId/lock', async (req, res) => {
+  const { id, chId, postId } = req.params;
+  if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
+  if (!await hasPermission(id, req.session.userId, 'can_lock_forum_posts')) return res.status(403).json({ error: 'You do not have permission to manage forum replies' });
+  const locked = req.body.locked === true;
+  const updated = await pool.query(
+    'UPDATE forum_posts SET replies_locked=$1 WHERE id=$2 AND channel_id=$3 RETURNING id',
+    [locked, postId, chId]
+  );
+  if (!updated.rows.length) return res.status(404).json({ error: 'Post not found' });
+  res.json({ success: true, repliesLocked: locked });
 });
 
 // Get channel messages

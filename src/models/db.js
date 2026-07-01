@@ -380,6 +380,10 @@ async function initDb() {
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_mention_everyone BOOLEAN DEFAULT FALSE`, 'alter_roles_mention_everyone');
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_create_invites BOOLEAN DEFAULT FALSE`, 'alter_roles_create_invites');
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_connect_voice BOOLEAN DEFAULT TRUE`, 'alter_roles_connect_voice');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_create_forum_posts BOOLEAN DEFAULT TRUE`, 'alter_roles_create_forum_posts');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_reply_forum_posts BOOLEAN DEFAULT TRUE`, 'alter_roles_reply_forum_posts');
+  await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_lock_forum_posts BOOLEAN DEFAULT FALSE`, 'alter_roles_lock_forum_posts');
+  await runSql(`ALTER TABLE forum_posts ADD COLUMN IF NOT EXISTS replies_locked BOOLEAN DEFAULT FALSE`, 'alter_forum_posts_replies_locked');
   await runOnceMigration(
     'default_member_invites_v1',
     `UPDATE server_roles SET can_create_invites=TRUE WHERE is_admin=FALSE`,

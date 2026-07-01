@@ -2174,6 +2174,7 @@
 
   let activeForumPostId = null;
   let forumPostsCache = [];
+  let canCreateForumPosts = false;
 
   function forumDate(timestamp) {
     return new Date((parseInt(timestamp, 10) || 0) * 1000).toLocaleDateString(undefined, {
@@ -2191,6 +2192,7 @@
       return;
     }
     forumPostsCache = result.posts || [];
+    canCreateForumPosts = !!result.canCreatePosts;
     renderForumBrowser('');
   }
 
@@ -2203,7 +2205,7 @@
     host.innerHTML = `
       <div class="forum-toolbar">
         <div class="forum-search"><span>⌕</span><input id="forum-search-input" type="search" placeholder="Search posts..." value="${esc(query)}"></div>
-        <button type="button" class="btn-primary" onclick="toggleForumComposer()">New Post</button>
+        ${canCreateForumPosts ? '<button type="button" class="btn-primary" onclick="toggleForumComposer()">New Post</button>' : ''}
       </div>
       <div class="forum-composer" id="forum-composer" style="display:none">
         <input id="forum-post-title" maxlength="120" placeholder="Post title">
@@ -2220,7 +2222,7 @@
               <p>${esc(post.content.slice(0, 180))}</p>
               <small>${esc(post.author.displayName)} · ${forumDate(post.updatedAt)}</small>
             </div>
-            <div class="forum-reply-count"><span>●</span>${post.replyCount}</div>
+            <div class="forum-reply-count"><span>${post.repliesLocked ? '▣' : '●'}</span>${post.replyCount}${post.repliesLocked ? ' · Locked' : ''}</div>
           </button>`).join('') : '<div class="forum-empty">No posts yet. Start the conversation.</div>'}
       </div>`;
     $('forum-search-input').addEventListener('input', event => {
@@ -2261,6 +2263,7 @@
       <div class="forum-thread-head">
         <button type="button" class="btn-secondary" onclick="loadForumPosts('${activeChannelId}')">← Posts</button>
         <div><h2>${esc(post.title)}</h2><span>Started by ${esc(post.author.displayName)} · ${forumDate(post.createdAt)}</span></div>
+        ${result.permissions && result.permissions.canLock ? `<button type="button" class="btn-secondary forum-lock-btn" onclick="toggleForumPostLock(${post.repliesLocked ? 'false' : 'true'})">${post.repliesLocked ? 'Unlock Replies' : 'Lock Replies'}</button>` : ''}
       </div>
       <article class="forum-thread-original">
         <div class="avatar" id="forum-thread-author"></div>
@@ -2274,10 +2277,10 @@
             <div><strong>${esc(reply.author.displayName)} <small>${forumDate(reply.createdAt)}</small></strong><p>${esc(reply.content)}</p></div>
           </div>`).join('')}
       </div>
-      <div class="forum-reply-box">
+      ${(result.permissions && result.permissions.canReply && !post.repliesLocked) ? `<div class="forum-reply-box">
         <textarea id="forum-reply-input" maxlength="4000" rows="3" placeholder="Reply to this post..."></textarea>
         <button type="button" class="btn-primary" onclick="submitForumReply()">Reply</button>
-      </div>`;
+      </div>` : `<div class="forum-replies-locked">${post.repliesLocked ? 'Replies are locked for this post.' : 'You do not have permission to reply in this forum.'}</div>`}`;
     renderAvatar($('forum-thread-author'), post.author);
     result.replies.forEach(reply => renderAvatar($(`forum-reply-av-${reply.id}`), reply.author));
   };
@@ -2288,6 +2291,14 @@
     const result = await api('POST', `/api/servers/${activeServerId}/channels/${activeChannelId}/forum/posts/${activeForumPostId}/replies`, { content });
     if (result.error) return toast(result.error, 'error');
     await openForumPost(activeForumPostId);
+  };
+
+  window.toggleForumPostLock = async function(locked) {
+    if (!activeForumPostId) return;
+    const result = await api('PATCH', `/api/servers/${activeServerId}/channels/${activeChannelId}/forum/posts/${activeForumPostId}/lock`, { locked });
+    if (result.error) return toast(result.error, 'error');
+    await openForumPost(activeForumPostId);
+    toast(locked ? 'Replies locked' : 'Replies unlocked', 'success');
   };
 
   window.deleteChannel = async function(e, channelId) {
