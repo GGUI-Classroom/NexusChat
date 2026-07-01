@@ -1963,13 +1963,13 @@
       );
       if (!roleMembers.length) return;
       roleMembers.forEach(member => groupedIds.add(member.id));
-      sections.push(`<div class="member-role-heading"><span style="color:${role.color}">${esc(role.name)}</span><small>${roleMembers.length}</small></div>${roleMembers.map(memberHtml).join('')}`);
+      sections.push(`<div class="member-role-heading"><span style="color:${role.color}">${esc(role.name)}</span><b>-</b><small>${roleMembers.length}</small></div>${roleMembers.map(memberHtml).join('')}`);
     });
     const remaining = members.filter(member => !groupedIds.has(member.id));
     const online = remaining.filter(member => normalizedStatus(visibleStatus(member)) !== 'offline');
     const offline = remaining.filter(member => normalizedStatus(visibleStatus(member)) === 'offline');
-    if (online.length) sections.push(`<div class="member-role-heading"><span>Online</span><small>${online.length}</small></div>${online.map(memberHtml).join('')}`);
-    if (offline.length) sections.push(`<div class="member-role-heading"><span>Offline</span><small>${offline.length}</small></div><div class="member-offline-group">${offline.map(memberHtml).join('')}</div>`);
+    if (online.length) sections.push(`<div class="member-role-heading"><span>Online</span><b>-</b><small>${online.length}</small></div>${online.map(memberHtml).join('')}`);
+    if (offline.length) sections.push(`<div class="member-role-heading"><span>Offline</span><b>-</b><small>${offline.length}</small></div><div class="member-offline-group">${offline.map(memberHtml).join('')}</div>`);
     $('server-member-list').innerHTML = sections.join('');
     members.forEach(m => { const el = $(`smav-${m.id}`); if (el) renderAvatar(el, m); });
   }

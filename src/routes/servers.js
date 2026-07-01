@@ -187,7 +187,7 @@ router.post('/', upload.single('icon'), async (req, res) => {
       const adminRoleId = uuidv4();
       const memberRoleId = uuidv4();
       await pool.query(
-        `INSERT INTO server_roles (id, server_id, name, color, is_admin, position) VALUES ($1,$2,'Admin','#f05454',true,0),($3,$2,'Member','#8892a4',false,1)`,
+        `INSERT INTO server_roles (id, server_id, name, color, is_admin, position, display_separately) VALUES ($1,$2,'Admin','#f05454',true,0,true),($3,$2,'Member','#8892a4',false,1,false)`,
         [adminRoleId, id, memberRoleId]
       );
       await pool.query(`UPDATE server_members SET role_id=$1 WHERE server_id=$2 AND user_id=$3`, [adminRoleId, id, req.session.userId]);
@@ -477,10 +477,10 @@ router.post('/:id/roles', async (req, res) => {
   const roleId = uuidv4();
   const canDelete = req.body.canDeleteMessages || false;
   await pool.query(
-    'INSERT INTO server_roles (id, server_id, name, color, is_admin, position, can_delete_messages) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-    [roleId, id, name.trim(), color || '#8892a4', !!roleIsAdmin, parseInt(pos.rows[0].count), !!canDelete]
+    'INSERT INTO server_roles (id, server_id, name, color, is_admin, position, can_delete_messages, display_separately) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+    [roleId, id, name.trim(), color || '#8892a4', !!roleIsAdmin, parseInt(pos.rows[0].count), !!canDelete, !!roleIsAdmin]
   );
-  res.json({ role: { id: roleId, name: name.trim(), color: color || '#8892a4', isAdmin: !!roleIsAdmin, canDeleteMessages: !!canDelete } });
+  res.json({ role: { id: roleId, name: name.trim(), color: color || '#8892a4', isAdmin: !!roleIsAdmin, canDeleteMessages: !!canDelete, displaySeparately: !!roleIsAdmin } });
 });
 
 // Update role

@@ -7257,6 +7257,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   color:inherit;
   font:700 10px 'JetBrains Mono',monospace;
 }
+.member-role-heading b { color:var(--text-muted); font-weight:700; }
 .member-offline-group .server-member-item { opacity:.58; }
 .member-offline-group .server-member-item:hover { opacity:1; }
 
