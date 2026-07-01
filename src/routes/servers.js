@@ -191,6 +191,7 @@ router.post('/', upload.single('icon'), async (req, res) => {
         [adminRoleId, id, memberRoleId]
       );
       await pool.query(`UPDATE server_members SET role_id=$1 WHERE server_id=$2 AND user_id=$3`, [adminRoleId, id, req.session.userId]);
+      await pool.query('INSERT INTO server_member_roles (server_id,user_id,role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, req.session.userId, adminRoleId]);
     } catch(roleErr) {
       console.error('Role creation failed (table may not exist yet):', roleErr.message);
     }
@@ -232,6 +233,7 @@ router.get('/:id', async (req, res) => {
     `, [id, req.session.userId]),
     pool.query(
       `SELECT sm.role, sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start, sr.gradient_end, sr.gradient_animated, sr.is_admin,
+       COALESCE((SELECT array_agg(smr.role_id) FROM server_member_roles smr WHERE smr.server_id=sm.server_id AND smr.user_id=sm.user_id), ARRAY[]::text[]) AS role_ids,
        u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.discord_status, u.discord_activity, CASE WHEN u.id=$2 THEN 'online' ELSE u.status END AS status, u.active_decoration, u.active_nameplate, u.active_color, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private
        FROM server_members sm
        JOIN users u ON u.id=sm.user_id
@@ -270,7 +272,7 @@ router.get('/:id', async (req, res) => {
     members: memRes.rows.map(m => ({
       id: m.id, username: m.username, displayName: m.display_name,
       avatarDataUrl: avatarUrl(m.id, !!m.has_avatar),
-      status: m.status, discordStatus: m.discord_status || 'offline', discordActivity: m.discord_activity || null, role: m.role, roleId: m.role_id,
+      status: m.status, discordStatus: m.discord_status || 'offline', discordActivity: m.discord_activity || null, role: m.role, roleId: m.role_id, roleIds: m.role_ids || [],
       roleName: m.role_name, roleColor: m.role_color, roleGradientStart: boostRes.has('gradients') ? m.gradient_start : null, roleGradientEnd: boostRes.has('gradients') ? m.gradient_end : null, isAdmin: m.is_admin,
       activeDecoration: m.active_decoration || null,
       activeNameplate: m.active_nameplate || null,
@@ -532,10 +534,56 @@ router.patch('/:id/members/:userId/role', async (req, res) => {
     if (!role.rows.length) return res.status(400).json({ error: 'Role not found' });
     const newRole = role.rows[0].is_admin ? 'admin' : 'member';
     await pool.query('UPDATE server_members SET role_id=$1, role=$2 WHERE server_id=$3 AND user_id=$4', [roleId, newRole, id, userId]);
+    await pool.query('INSERT INTO server_member_roles (server_id,user_id,role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, userId, roleId]);
   } else {
     await pool.query('UPDATE server_members SET role_id=NULL, role=\'member\' WHERE server_id=$1 AND user_id=$2', [id, userId]);
   }
   await syncAll(userId);
+  res.json({ success: true });
+});
+
+router.post('/:id/members/:userId/roles/:roleId', async (req, res) => {
+  const { id, userId, roleId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  const serverOwner = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [id]);
+  if (serverOwner.rows[0]?.owner_id === userId && userId !== req.session.userId) return res.status(403).json({ error: 'The server owner manages their own roles' });
+  const [member, role] = await Promise.all([
+    pool.query('SELECT id, role_id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, userId]),
+    pool.query('SELECT id, is_admin FROM server_roles WHERE server_id=$1 AND id=$2', [id, roleId])
+  ]);
+  if (!member.rows.length || !role.rows.length) return res.status(404).json({ error: 'Member or role not found' });
+  await pool.query('INSERT INTO server_member_roles (server_id,user_id,role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, userId, roleId]);
+  if (!member.rows[0].role_id) {
+    await pool.query('UPDATE server_members SET role_id=$1, role=$2 WHERE server_id=$3 AND user_id=$4', [roleId, role.rows[0].is_admin ? 'admin' : 'member', id, userId]);
+  } else if (role.rows[0].is_admin) {
+    await pool.query("UPDATE server_members SET role='admin' WHERE server_id=$1 AND user_id=$2", [id, userId]);
+  }
+  res.json({ success: true });
+});
+
+router.delete('/:id/members/:userId/roles/:roleId', async (req, res) => {
+  const { id, userId, roleId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
+  const serverOwner = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [id]);
+  if (serverOwner.rows[0]?.owner_id === userId && userId !== req.session.userId) return res.status(403).json({ error: 'The server owner manages their own roles' });
+  await pool.query('DELETE FROM server_member_roles WHERE server_id=$1 AND user_id=$2 AND role_id=$3', [id, userId, roleId]);
+  const stillAdmin = await pool.query(
+    `SELECT 1 FROM server_member_roles smr JOIN server_roles sr ON sr.id=smr.role_id
+     WHERE smr.server_id=$1 AND smr.user_id=$2 AND sr.is_admin=TRUE LIMIT 1`,
+    [id, userId]
+  );
+  await pool.query('UPDATE server_members SET role=$1 WHERE server_id=$2 AND user_id=$3', [stillAdmin.rows.length ? 'admin' : 'member', id, userId]);
+  const member = await pool.query('SELECT role_id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, userId]);
+  if (member.rows[0]?.role_id === roleId) {
+    const next = await pool.query(
+      `SELECT sr.id, sr.is_admin FROM server_member_roles smr JOIN server_roles sr ON sr.id=smr.role_id
+       WHERE smr.server_id=$1 AND smr.user_id=$2 ORDER BY sr.position ASC LIMIT 1`,
+      [id, userId]
+    );
+    await pool.query('UPDATE server_members SET role_id=$1, role=$2 WHERE server_id=$3 AND user_id=$4', [
+      next.rows[0]?.id || null, next.rows[0]?.is_admin ? 'admin' : 'member', id, userId
+    ]);
+  }
   res.json({ success: true });
 });
 

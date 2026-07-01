@@ -88,6 +88,38 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
   const u = r.rows[0];
   const tag = await pool.query(`SELECT s.name, s.invite_code, s.server_tag, s.tag_background, s.icon_data, s.icon_mime, s.tag_private FROM servers s JOIN server_boost_allocations a ON a.server_id=s.id AND a.feature='tag' WHERE s.id=$1`, [u.active_server_tag_id]);
   const tagRow = tag.rows[0];
+  let serverRoles = [];
+  let availableRoles = [];
+  let canManageRoles = false;
+  const serverId = String(req.query.serverId || '');
+  if (serverId) {
+    const membership = await pool.query(
+      `SELECT sm.role, sr.is_admin
+       FROM server_members sm
+       LEFT JOIN server_roles sr ON sr.id=sm.role_id
+       WHERE sm.server_id=$1 AND sm.user_id=$2`,
+      [serverId, req.session.userId]
+    );
+    const server = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [serverId]);
+    canManageRoles = server.rows[0]?.owner_id === req.session.userId ||
+      membership.rows.some(row => row.role === 'admin' || row.is_admin);
+    const assigned = await pool.query(
+      `SELECT sr.id, sr.name, sr.color, sr.position
+       FROM server_member_roles smr
+       JOIN server_roles sr ON sr.id=smr.role_id
+       WHERE smr.server_id=$1 AND smr.user_id=$2
+       ORDER BY sr.position ASC`,
+      [serverId, req.params.userId]
+    );
+    serverRoles = assigned.rows;
+    if (canManageRoles) {
+      const roles = await pool.query(
+        'SELECT id, name, color, position FROM server_roles WHERE server_id=$1 ORDER BY position ASC',
+        [serverId]
+      );
+      availableRoles = roles.rows;
+    }
+  }
   res.json({
     id: u.id, username: u.username, displayName: u.display_name,
     avatarDataUrl: avatarUrl(u.id, !!u.has_avatar),
@@ -101,6 +133,9 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
     profileNameEffect: u.profile_name_effect,
     profileEffect: u.profile_effect || 'none',
     profileBannerUrl: u.has_profile_banner ? `/api/users/banner/${u.id}` : null,
+    serverRoles: serverRoles.map(role => ({ id: role.id, name: role.name, color: role.color })),
+    availableServerRoles: availableRoles.map(role => ({ id: role.id, name: role.name, color: role.color })),
+    canManageServerRoles: canManageRoles && req.params.userId !== req.session.userId,
     serverTag: tagRow ? {
       name: tagRow.tag_private ? null : tagRow.name,
       inviteCode: tagRow.tag_private ? null : tagRow.invite_code,
@@ -148,6 +183,12 @@ router.get('/client-state', requireAuth, async (req, res) => {
     paused: !!(row && row.is_paused),
     message: row && row.pause_message ? row.pause_message : null
   });
+});
+
+router.patch('/preferences', requireAuth, async (req, res) => {
+  if (typeof req.body.developerMode !== 'boolean') return res.status(400).json({ error: 'Invalid preference' });
+  await pool.query('UPDATE users SET developer_mode=$1 WHERE id=$2', [req.body.developerMode, req.session.userId]);
+  res.json({ success: true, developerMode: req.body.developerMode });
 });
 
 router.post('/tutorial/complete', requireAuth, async (req, res) => {

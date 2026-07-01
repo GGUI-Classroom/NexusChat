@@ -52,6 +52,7 @@ async function initDb() {
   )`, 'users');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS accepted_tos_version INTEGER NOT NULL DEFAULT 0`, 'alter_users_accepted_tos_version');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS accepted_tos_at BIGINT DEFAULT NULL`, 'alter_users_accepted_tos_at');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS developer_mode BOOLEAN DEFAULT FALSE`, 'alter_users_developer_mode');
 
   await runSql(`CREATE TABLE IF NOT EXISTS terms_of_service (
     id TEXT PRIMARY KEY,
@@ -145,6 +146,13 @@ async function initDb() {
     joined_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
     UNIQUE(server_id, user_id)
   )`, 'server_members');
+  await runSql(`CREATE TABLE IF NOT EXISTS server_member_roles (
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id TEXT NOT NULL REFERENCES server_roles(id) ON DELETE CASCADE,
+    assigned_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    PRIMARY KEY(server_id, user_id, role_id)
+  )`, 'server_member_roles');
 
   await runSql(`CREATE TABLE IF NOT EXISTS channels (
     id TEXT PRIMARY KEY,
@@ -293,6 +301,19 @@ async function initDb() {
     id TEXT PRIMARY KEY,
     applied_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
   )`, 'app_migrations');
+  await runOnceMigration(
+    'seed_server_member_roles_v1',
+    `INSERT INTO server_member_roles (server_id, user_id, role_id)
+     SELECT server_id, user_id, role_id FROM server_members WHERE role_id IS NOT NULL
+     ON CONFLICT DO NOTHING`,
+    'seed_server_member_roles'
+  );
+  await runOnceMigration(
+    'reserve_mod_server_tag_v1',
+    `UPDATE servers SET server_tag=NULL
+     WHERE UPPER(COALESCE(server_tag,''))='MOD' AND invite_code<>'02UAG7CR'`,
+    'reserve_mod_server_tag'
+  );
 
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_decoration TEXT DEFAULT NULL`, 'alter_users_decoration');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_nameplate TEXT DEFAULT NULL`, 'alter_users_nameplate');

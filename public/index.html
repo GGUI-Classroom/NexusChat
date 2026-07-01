@@ -414,6 +414,7 @@
     <button type="button" data-server-action="invite">Invite Friends</button>
     <button type="button" data-server-action="boost">Boost Server</button>
     <button type="button" data-server-action="settings">Server Settings</button>
+    <button type="button" data-server-action="copy-id" id="server-context-copy-id" style="display:none">Copy Server ID</button>
     <div></div>
     <button type="button" class="danger" data-server-action="leave">Leave Server</button>
   </div>
@@ -449,7 +450,7 @@
           <label class="toggle-row"><input type="checkbox" id="nexus-link-call-notify" /><span class="toggle-label"><span class="toggle-title">Discord Call Notifications</span><span class="toggle-hint">Notify me on Discord when someone calls on Nexus.</span></span></label>
           <div class="form-error" id="nexus-link-error"></div>
         </div>
-        </section><section class="profile-settings-panel" data-ppanel="appearance"><div class="section-label">APPEARANCE</div><p class="field-hint">Choose how Nexus looks on this device.</p><div class="field-group"><label>Decoration</label><select id="appearance-decoration-select"></select></div><div class="field-group"><label>Nameplate</label><select id="appearance-nameplate-select"></select></div><div class="field-group"><label>Phone Ringtone</label><select id="appearance-ringtone-select"></select></div><div class="settings-actions"><button class="btn-secondary" id="theme-dark-btn">Dark Mode</button><button class="btn-secondary" id="theme-light-btn">Light Mode</button></div></section><section class="profile-settings-panel" data-ppanel="account"><div class="profile-divider"></div>
+        </section><section class="profile-settings-panel" data-ppanel="appearance"><div class="section-label">APPEARANCE</div><p class="field-hint">Choose how Nexus looks on this device.</p><div class="field-group"><label>Decoration</label><select id="appearance-decoration-select"></select></div><div class="field-group"><label>Nameplate</label><select id="appearance-nameplate-select"></select></div><div class="field-group"><label>Phone Ringtone</label><select id="appearance-ringtone-select"></select></div><div class="settings-actions"><button class="btn-secondary" id="theme-dark-btn">Dark Mode</button><button class="btn-secondary" id="theme-light-btn">Light Mode</button></div><label class="toggle-row" style="margin-top:18px"><input type="checkbox" id="developer-mode-toggle"><span class="toggle-label"><span class="toggle-title">Developer Mode</span><span class="toggle-hint">Show Copy Server ID when you right-click a server.</span></span></label></section><section class="profile-settings-panel" data-ppanel="account"><div class="profile-divider"></div>
         <div class="section-label" style="margin-bottom:12px">CHANGE PASSWORD</div>
         <div class="field-group"><label>Current Password</label><input type="password" id="profile-old-password" placeholder="••••••••" autocomplete="current-password" /></div>
         <div class="field-group"><label>New Password</label><input type="password" id="profile-new-password" placeholder="••••••••" autocomplete="new-password" /></div>
@@ -1042,6 +1043,7 @@
       <div class="profile-popup-username" id="popup-username">–</div>
       <div class="profile-popup-discord-activity" id="popup-discord-activity" style="display:none"></div>
       <div class="profile-popup-role" id="popup-role" style="display:none"></div>
+      <div class="profile-popup-roles" id="popup-server-roles" style="display:none"></div>
       <button class="profile-popup-tag" id="popup-server-tag" style="display:none"></button>
       <div class="profile-popup-tag-invite" id="popup-tag-invite" style="display:none"></div>
       <div class="profile-popup-divider"></div>

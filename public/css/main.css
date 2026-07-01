@@ -1845,6 +1845,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   overflow: visible;
   text-overflow: clip;
 }
+.profile-popup { max-height:calc(100dvh - 20px);overflow-y:auto }
 .profile-popup-username {
   font-size: 12px; color: var(--text-muted);
   margin-bottom: 6px;
@@ -1886,6 +1887,34 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   background:linear-gradient(145deg,color-mix(in srgb,var(--profile-start) 24%,#111522),color-mix(in srgb,var(--profile-end) 18%,#181d2b));
   border-color:color-mix(in srgb,var(--profile-end) 52%,rgba(255,255,255,.2));
 }
+.profile-popup-roles { display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 }
+.profile-role-chip {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:28px;
+  padding:4px 8px;
+  border:1px solid var(--border-bright);
+  border-radius:5px;
+  background:var(--bg-surface);
+  color:var(--text-secondary);
+  font-size:11px;
+  font-weight:700;
+}
+.profile-role-chip i { width:9px;height:9px;border-radius:50%;background:var(--role-color) }
+.profile-role-chip button { border:0;background:transparent;color:var(--text-muted);cursor:pointer;padding:0;font-size:14px }
+.profile-role-add { color:var(--text-primary);cursor:pointer }
+.profile-role-menu {
+  width:100%;
+  max-height:150px;
+  overflow-y:auto;
+  padding:5px;
+  border:1px solid var(--border-bright);
+  border-radius:5px;
+  background:var(--bg-void);
+}
+.profile-role-menu button { width:100%;padding:8px;border:0;background:transparent;color:var(--text-secondary);text-align:left;cursor:pointer }
+.profile-role-menu button:hover { background:var(--bg-hover);color:var(--text-primary) }
 .pro-profile-card .dm-profile-banner,
 .pro-profile-card .pro-preview-banner,
 .profile-popup.pro-profile .profile-popup-banner {

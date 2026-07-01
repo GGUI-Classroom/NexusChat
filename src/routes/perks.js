@@ -106,6 +106,10 @@ router.patch('/servers/:serverId/tag', async (req, res) => {
   const { serverId } = req.params;
   const tag = String(req.body.tag || '').trim().toUpperCase();
   if (!/^[A-Z0-9]{1,4}$/.test(tag)) return res.status(400).json({ error: 'Server tag must be 1 to 4 letters or numbers' });
+  if (tag === 'MOD') {
+    const reservedServer = await pool.query('SELECT id FROM servers WHERE id=$1 AND invite_code=$2', [serverId, '02UAG7CR']);
+    if (!reservedServer.rows.length) return res.status(403).json({ error: 'MOD is reserved for the authorized Nexus moderation server' });
+  }
   if (!await isServerAdmin(serverId, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
   const allocation = await pool.query(`SELECT id FROM server_boost_allocations WHERE server_id=$1 AND feature='tag'`, [serverId]);
   if (!allocation.rows.length) return res.status(403).json({ error: 'Spend two boosts on the server tag first' });

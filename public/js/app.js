@@ -1964,7 +1964,6 @@
           </div>
           <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
           ${canManage ? `<div class="member-actions">
-            <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
             <button class="member-action-btn kick" onclick="kickMember('${m.id}','${esc(m.displayName)}')">Kick</button>
             <button class="member-action-btn ban" onclick="banMember('${m.id}','${esc(m.displayName)}')">Ban</button>
           </div>` : ''}
@@ -1977,7 +1976,9 @@
     const sections = [];
     roles.forEach(role => {
       const roleMembers = members.filter(member =>
-        member.roleId === role.id && normalizedStatus(visibleStatus(member)) !== 'offline'
+        !groupedIds.has(member.id) &&
+        ((member.roleIds || [member.roleId]).includes(role.id)) &&
+        normalizedStatus(visibleStatus(member)) !== 'offline'
       );
       if (!roleMembers.length) return;
       roleMembers.forEach(member => groupedIds.add(member.id));
@@ -2004,6 +2005,7 @@
   function openServerContextMenu(event, serverId) {
     const menu = $('server-context-menu');
     contextServerId = serverId;
+    if ($('server-context-copy-id')) $('server-context-copy-id').style.display = currentUser && currentUser.developerMode ? 'block' : 'none';
     menu.classList.add('active');
     menu.setAttribute('aria-hidden', 'false');
     const bounds = menu.getBoundingClientRect();
@@ -2029,6 +2031,18 @@
     const actionButton = event.target.closest('[data-server-action]');
     if (!actionButton) return;
     const action = actionButton.dataset.serverAction;
+    if (action === 'copy-id') {
+      const serverId = contextServerId;
+      closeServerContextMenu();
+      if (!serverId) return;
+      try {
+        await navigator.clipboard.writeText(serverId);
+        toast('Server ID copied', 'success');
+      } catch (_) {
+        toast(`Server ID: ${serverId}`, 'info');
+      }
+      return;
+    }
     const ready = await prepareContextServer();
     closeServerContextMenu();
     if (!ready) return;
@@ -5105,6 +5119,7 @@
     loadProfileTagChoices();
     loadNexusLinkSettings();
     loadAppearanceSettings();
+    $('developer-mode-toggle').checked = !!currentUser.developerMode;
     $('profile-modal').classList.add('active');
   });
   $('profile-modal-close').addEventListener('click', () => $('profile-modal').classList.remove('active'));
@@ -5117,6 +5132,16 @@
   applyTheme(localStorage.getItem('nexus-theme') || 'dark');
   $('theme-dark-btn').addEventListener('click', () => applyTheme('dark'));
   $('theme-light-btn').addEventListener('click', () => applyTheme('light'));
+  $('developer-mode-toggle').addEventListener('change', async e => {
+    const enabled = e.target.checked;
+    const r = await api('PATCH', '/api/users/preferences', { developerMode: enabled });
+    if (r.error) {
+      e.target.checked = !enabled;
+      return toast(r.error, 'error');
+    }
+    currentUser.developerMode = enabled;
+    toast(`Developer Mode ${enabled ? 'enabled' : 'disabled'}`, 'success');
+  });
   $('connect-discord-btn').addEventListener('click', () => { window.location.href = '/api/nexus-link/connect'; });
   $('appearance-decoration-select').addEventListener('change', async e => { const r = await api('POST', '/api/shop/equip', { decorationId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeDecoration = e.target.value || null; toast('Decoration updated', 'success'); });
   $('appearance-nameplate-select').addEventListener('change', async e => { const r = await api('POST', '/api/shop/nameplates/equip', { nameplateId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeNameplate = e.target.value || null; updateSelfCard(); toast('Nameplate updated', 'success'); });
@@ -7679,6 +7704,8 @@
     $('popup-bio').textContent = '';
 
     $('popup-role').style.display = 'none';
+    $('popup-server-roles').style.display = 'none';
+    $('popup-server-roles').innerHTML = '';
     const reportBtn = $('popup-report-user');
     if (reportBtn) {
       const canReport = currentUser && data.id && data.id !== currentUser.id;
@@ -7704,7 +7731,8 @@
 
     // Fetch full profile for bio
     try {
-      const r = await api('GET', '/api/users/profile/' + data.id);
+      const profileQuery = activeServerId ? `?serverId=${encodeURIComponent(activeServerId)}` : '';
+      const r = await api('GET', '/api/users/profile/' + data.id + profileQuery);
       if (r.bio) {
         $('popup-bio').textContent = r.bio;
         $('popup-bio-section').style.display = 'block';
@@ -7724,6 +7752,7 @@
         popupBanner.style.backgroundImage = `linear-gradient(180deg,transparent,rgba(0,0,0,.18)),url('${normalizeAssetUrl(r.profileBannerUrl)}')`;
       }
       $('popup-name').className = 'profile-popup-name';
+      renderPopupServerRoles(data.id, r);
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');
@@ -7744,6 +7773,58 @@
         };
       } else { tag.style.display = 'none'; $('popup-tag-invite').style.display = 'none'; }
     } catch(err) {}
+  };
+
+  function renderPopupServerRoles(userId, profile) {
+    const host = $('popup-server-roles');
+    const assigned = profile.serverRoles || [];
+    const available = profile.availableServerRoles || [];
+    if (!activeServerId || (!assigned.length && !profile.canManageServerRoles)) {
+      host.style.display = 'none';
+      host.innerHTML = '';
+      return;
+    }
+    const chips = assigned.map(role => `
+      <span class="profile-role-chip" style="--role-color:${esc(role.color || '#8892a4')}">
+        <i></i>${esc(role.name)}
+        ${profile.canManageServerRoles ? `<button type="button" title="Remove role" onclick="removePopupRole('${userId}','${role.id}')">&times;</button>` : ''}
+      </span>`).join('');
+    const assignedIds = new Set(assigned.map(role => role.id));
+    const choices = available.filter(role => !assignedIds.has(role.id));
+    host.innerHTML = chips + (profile.canManageServerRoles ? `
+      <button type="button" class="profile-role-chip profile-role-add" onclick="togglePopupRoleMenu()">+ Add role</button>
+      <div class="profile-role-menu" id="popup-role-menu" style="display:none">
+        ${choices.length ? choices.map(role => `<button type="button" onclick="addPopupRole('${userId}','${role.id}')"><span style="color:${esc(role.color || '#8892a4')}">&#9679;</span> ${esc(role.name)}</button>`).join('') : '<button type="button" disabled>All roles assigned</button>'}
+      </div>` : '');
+    host.style.display = 'flex';
+  }
+
+  window.togglePopupRoleMenu = function() {
+    const menu = $('popup-role-menu');
+    if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  };
+
+  async function refreshPopupRoles(userId) {
+    const r = await api('GET', `/api/users/profile/${userId}?serverId=${encodeURIComponent(activeServerId)}`);
+    if (r.error) return toast(r.error, 'error');
+    renderPopupServerRoles(userId, r);
+    const server = await api('GET', `/api/servers/${activeServerId}`);
+    if (!server.error) {
+      activeServerData = server;
+      renderMemberList(server.members || []);
+    }
+  }
+
+  window.addPopupRole = async function(userId, roleId) {
+    const r = await api('POST', `/api/servers/${activeServerId}/members/${userId}/roles/${roleId}`, {});
+    if (r.error) return toast(r.error, 'error');
+    await refreshPopupRoles(userId);
+  };
+
+  window.removePopupRole = async function(userId, roleId) {
+    const r = await api('DELETE', `/api/servers/${activeServerId}/members/${userId}/roles/${roleId}`);
+    if (r.error) return toast(r.error, 'error');
+    await refreshPopupRoles(userId);
   };
 
   let profileHoverTimer = null;
@@ -7785,6 +7866,7 @@
     $('popup-name').textContent = tag.private ? 'Private Server' : (tag.serverName || 'Server');
     $('popup-username').textContent = tag.private ? `[${tag.tag}]` : 'Server invite';
     $('popup-role').style.display = 'none'; $('popup-bio-section').style.display = 'none';
+    $('popup-server-roles').style.display = 'none';
     $('popup-discord-activity').style.display = 'none';
     $('popup-server-tag').style.display = 'none';
     if ($('popup-report-user')) $('popup-report-user').style.display = 'none';
