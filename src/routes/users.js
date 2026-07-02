@@ -30,6 +30,15 @@ router.post('/avatar', requireAuth, upload.single('avatar'), async (req, res) =>
   res.json({ success: true, avatarDataUrl: avatarUrl(req.session.userId, true) });
 });
 
+const bannerUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Banner must be a JPEG, PNG, GIF, or WebP image'));
+  }
+});
+
 router.get('/avatar/:userId', requireAuth, async (req, res) => {
   const avatar = await getAvatar(pool, req.params.userId);
   if (!avatar) return res.sendStatus(404);
@@ -57,7 +66,13 @@ router.get('/banner/:userId', requireAuth, async (req, res) => {
   res.send(data);
 });
 
-router.post('/profile-banner', requireAuth, upload.single('banner'), async (req, res) => {
+router.post('/profile-banner', requireAuth, (req, res, next) => {
+  bannerUpload.single('banner')(req, res, error => {
+    if (!error) return next();
+    if (error.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Banner must be smaller than 8 MB' });
+    return res.status(400).json({ error: error.message || 'Could not upload banner' });
+  });
+}, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Choose a banner image' });
   const user = await pool.query('SELECT pro_expires_at FROM users WHERE id=$1', [req.session.userId]);
   if ((user.rows[0]?.pro_expires_at || 0) <= Math.floor(Date.now() / 1000)) {

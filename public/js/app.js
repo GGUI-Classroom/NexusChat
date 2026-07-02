@@ -2335,9 +2335,11 @@
       return;
     }
     if (!prepend) {
+      chInitialScrollPending = true;
       list.innerHTML = '';
       messages.forEach(m => appendChannelMessage(m, false));
-      requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
+      settleMessageViewAtLatest(wrap);
+      setTimeout(() => { chInitialScrollPending = false; }, 900);
     } else {
       const distFromBottom = wrap.scrollHeight - wrap.scrollTop;
       messages.forEach(m => prependChannelMessage(m));
@@ -2349,9 +2351,17 @@
   }
 
   let chLoadingOlder = false;
+  let chInitialScrollPending = false;
+
+  function settleMessageViewAtLatest(wrap) {
+    if (!wrap) return;
+    const scrollLatest = () => { wrap.scrollTop = wrap.scrollHeight; };
+    requestAnimationFrame(scrollLatest);
+    [60, 180, 420, 800].forEach(delay => setTimeout(scrollLatest, delay));
+  }
 
   $('channel-messages-wrap').addEventListener('scroll', function() {
-    if (this.scrollTop < 80 && activeChannelId && !chLoadingOlder) {
+    if (this.scrollTop < 80 && activeChannelId && !chLoadingOlder && !chInitialScrollPending) {
       loadChannelMessages(activeChannelId, true);
     }
   });
@@ -2797,9 +2807,27 @@
     reader.readAsDataURL(file);
   });
 
+  let serverCreationPending = false;
+  function finishServerCreation() {
+    serverCreationPending = false;
+    $('create-server-btn').disabled = false;
+    $('create-server-btn').textContent = 'Create Server';
+    $('create-server-progress').style.display = 'none';
+  }
+  function failServerCreation(message) {
+    showError('create-server-error', message);
+    finishServerCreation();
+  }
+
   $('create-server-btn').addEventListener('click', async () => {
+    if (serverCreationPending) return;
     const name = $('server-name-input').value.trim();
     if (!name) return showError('create-server-error', 'Name required');
+    serverCreationPending = true;
+    $('create-server-btn').disabled = true;
+    $('create-server-btn').textContent = 'Creating...';
+    $('create-server-progress').style.display = 'block';
+    showError('create-server-error', '');
     const fd = new FormData();
     fd.append('name', name);
     const iconFile = $('server-icon-input').files[0];
@@ -2809,13 +2837,13 @@
       const res = await fetch('/api/servers', { method: 'POST', body: fd, credentials: 'include', headers: deviceHeaders() });
       const text = await res.text();
       try { r = JSON.parse(text); } catch(e) {
-        return showError('create-server-error', 'Server error: ' + text.slice(0, 120));
+        return failServerCreation('Server error: ' + text.slice(0, 120));
       }
     } catch(e) {
-      return showError('create-server-error', 'Network error: ' + e.message);
+      return failServerCreation('Network error: ' + e.message);
     }
-    if (r.error) return showError('create-server-error', r.error);
-    servers.push(r.server);
+    if (r.error) return failServerCreation(r.error);
+    if (!servers.find(server => server.id === r.server.id)) servers.push(r.server);
     renderServerRail();
     $('server-modal').classList.remove('active');
     $('server-name-input').value = '';
@@ -2824,6 +2852,7 @@
     showError('create-server-error', '');
     railSelect(r.server.id);
     toast('Server created!', 'success');
+    finishServerCreation();
   });
 
   $('join-server-btn').addEventListener('click', async () => {
@@ -3658,6 +3687,7 @@
   }
 
   let dmLoadingOlder = false; // lock to prevent multiple simultaneous loads
+  let dmInitialScrollPending = false;
 
   async function loadMessages(userId, prepend = false) {
     if (prepend && dmLoadingOlder) return; // prevent double-fire
@@ -3679,10 +3709,11 @@
     }
 
     if (!prepend) {
+      dmInitialScrollPending = true;
       list.innerHTML = '';
       messages.forEach(m => appendMessage(m, false));
-      // Use requestAnimationFrame so DOM is painted before we scroll
-      requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
+      settleMessageViewAtLatest(wrap);
+      setTimeout(() => { dmInitialScrollPending = false; }, 900);
     } else {
       // Save scroll position from the bottom before adding content
       const distFromBottom = wrap.scrollHeight - wrap.scrollTop;
@@ -3948,7 +3979,7 @@
 
   // Infinite scroll (load older) — only fires when near the top
   $('messages-wrap').addEventListener('scroll', function () {
-    if (this.scrollTop < 80 && activeDmUserId && !dmLoadingOlder) {
+    if (this.scrollTop < 80 && activeDmUserId && !dmLoadingOlder && !dmInitialScrollPending) {
       loadMessages(activeDmUserId, true);
     }
   });
@@ -7174,10 +7205,29 @@
   window.uploadProBanner = async function(input) {
     const file = input?.files?.[0];
     if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+      input.value = '';
+      return toast('Choose a JPEG, PNG, GIF, or WebP banner', 'error');
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      input.value = '';
+      return toast('Banner must be smaller than 8 MB', 'error');
+    }
     const form = new FormData();
     form.append('banner', file);
-    const response = await fetch('/api/users/profile-banner', { method: 'POST', body: form, credentials: 'same-origin', headers: deviceHeaders() });
-    const result = await response.json().catch(() => ({ error: 'Could not upload banner' }));
+    toast('Uploading profile banner...', 'info', 1800);
+    let response;
+    try {
+      response = await fetch(normalizeAssetUrl('/api/users/profile-banner'), { method: 'POST', body: form, credentials: 'include', headers: deviceHeaders() });
+    } catch (error) {
+      input.value = '';
+      return toast('Banner upload could not reach Nexus', 'error');
+    }
+    const responseText = await response.text();
+    let result;
+    try { result = JSON.parse(responseText); }
+    catch (_) { result = { error: responseText.slice(0, 140) || 'Could not upload banner' }; }
+    input.value = '';
     if (!response.ok || result.error) return toast(result.error || 'Could not upload banner', 'error');
     currentUser.profileBannerUrl = result.profileBannerUrl;
     const banner = $('pro-preview-banner');
