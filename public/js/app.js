@@ -6422,7 +6422,6 @@
                 <div class="avatar-wrap auction-preview" data-deco-id="${esc(a.decoration.id)}"><div class="avatar">N</div></div>
                 <span class="shop-rarity rarity-${esc(String(a.decoration.rarity || 'common').toLowerCase())}">${esc(a.decoration.rarity)}</span>
                 <h3>${esc(a.decoration.name)}</h3>
-                <p>${esc(a.decoration.description || '')}</p>
                 <div class="auction-seller">Seller: @${esc(a.sellerUsername || a.sellerName || 'user')}</div>
                 <strong>${a.price.toLocaleString()} Nexals</strong>
                 ${a.isMine
@@ -6499,7 +6498,6 @@
           <span class="shop-rarity ${rarityClass}">${d.rarity}</span>
           ${d.packOnly ? '<span class="pack-only-chip">PACK-ONLY</span>' : ''}
           <div class="shop-card-name">${esc(d.name)}</div>
-          <div class="shop-card-desc">${esc(d.description)}</div>
           ${isOwned && d.packOnly ? `<div class="shop-card-desc">Owned: ${d.quantity || 1} | Sell: ${(d.sellPrice || 0).toLocaleString()} Nexals</div>` : ''}
           ${(!isOwned && priceLabel) ? `<div class="shop-card-price">${priceLabel}</div>` : ''}
           <button class="shop-card-btn ${btnClass}" onclick="shopAction('${d.id}','${isEquipped ? 'unequip' : isOwned ? 'equip' : canBuy ? 'buy' : 'locked'}')">
@@ -6519,7 +6517,6 @@
           <span class="pack-only-chip">PACK-ONLY</span>
         </div>
         <div class="shop-card-name">${esc(nameplate.name)}</div>
-        <div class="shop-card-desc">${esc(nameplate.description)}</div>
         ${owned ? `<div class="shop-card-desc">Owned: ${nameplate.quantity} | Sell: ${nameplate.sellPrice.toLocaleString()} Nexals</div>` : ''}
         <button class="shop-card-btn ${equipped ? 'unequip' : owned ? 'equip' : 'locked'}" onclick="nameplateAction('${nameplate.id}','${equipped ? 'unequip' : owned ? 'equip' : 'locked'}')">${equipped ? 'Equipped' : owned ? 'Equip' : 'Pack Only'}</button>
         ${owned ? `<button class="shop-card-btn shop-sell-btn" onclick="sellNameplate('${nameplate.id}','${esc(nameplate.name)}',${nameplate.sellPrice})">Sell One</button>` : ''}
@@ -6537,7 +6534,6 @@
           <div><span>PACK COLLECTION</span><strong>Pack-only decorations and nameplates</strong></div>
           <small>${packDecorations.length + nameplates.length} collectibles</small>
         </summary>
-        <div class="shop-drawer-copy">These collectibles only drop from packs. Open this collection to browse, equip, or sell them.</div>
         <h3>Avatar Decorations</h3>
         <div class="shop-grid-inner">${packDecorations.map(decorationCard).join('')}</div>
         <h3>Nameplates</h3>
@@ -6612,7 +6608,6 @@
     tabsHost.innerHTML = `
       <div class="shop-subsection shop-pack-section">
         <h2>Collectible Packs</h2>
-        <p>Open packs for exclusive avatar decorations and nameplates. Every item shows its exact odds.</p>
       </div>
       <div class="shop-pack-grid">
         ${(packs || []).map(pack => {
@@ -6628,7 +6623,6 @@
               </div>
               <div class="shop-card-name">${esc(pack.name)}</div>
               <div class="shop-pack-owned">${esc(pack.raritySummary || '')}</div>
-              <div class="shop-card-desc">${esc(pack.description)}</div>
               <div class="shop-pack-previews">
                 ${(pack.collectibles || pack.decorations || []).map(item => `
                   <div class="${item.collectibleType === 'nameplate' ? 'shop-pack-nameplate-mini nameplate-' + esc(item.id) : 'avatar-wrap shop-pack-mini'} ${item.owned ? 'owned' : ''}" ${item.collectibleType === 'nameplate' ? '' : `data-deco-id="${item.id}"`} title="${esc(item.name)} - ${item.chance}%${item.quantity ? ' - Owned: ' + item.quantity : ''}">
@@ -6843,7 +6837,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="30" height="30"><path d="M12 3v18"/><path d="M8 7v10"/><path d="M16 7v10"/><path d="M4 10v4"/><path d="M20 10v4"/></svg>
           </div>
           <div class="shop-card-name">${esc(r.name)}</div>
-          <div class="shop-card-desc">${esc(r.description)}</div>
           <div class="shop-card-price">${r.price.toLocaleString()} Nexals</div>
           <button class="shop-card-btn preview" onclick="ringtoneAction('${r.id}','preview')">Preview</button>
           <button class="shop-card-btn ${btnClass}" onclick="ringtoneAction('${r.id}','${action}')">${btnText}</button>
@@ -7391,7 +7384,8 @@
 
       // Set text
       $('claim-name').textContent = decoration.name;
-      $('claim-desc').textContent = decoration.description;
+      $('claim-desc').textContent = '';
+      $('claim-desc').style.display = 'none';
       $('claim-stamp').style.opacity = '0';
       $('claim-dismiss').style.opacity = '0';
 
@@ -7654,9 +7648,10 @@
       card.style.transform = 'translateY(22px) scale(0.93)';
 
       if (nameEl) nameEl.textContent = decoration && decoration.name ? decoration.name : 'The Stormveil';
-      if (descEl) descEl.textContent = decoration && (decoration.flavorText || decoration.description)
-        ? (decoration.flavorText || decoration.description)
-        : "It doesn't rain here. It hunts.";
+      if (descEl) {
+        descEl.textContent = '';
+        descEl.style.display = 'none';
+      }
       if (rarityEl) rarityEl.textContent = decoration && decoration.rarity ? decoration.rarity : '??SECRET??';
 
       const secretPreviewId = decoration && decoration.id ? decoration.id : SECRET_DECORATION_ID;

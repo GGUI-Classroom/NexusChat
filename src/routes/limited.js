@@ -38,7 +38,6 @@ function publicDecoration(decoration) {
   return {
     id: decoration.id,
     name: decoration.name,
-    description: decoration.description,
     rarity: decoration.rarity,
     preview: decoration.preview || decoration.id
   };

@@ -15,7 +15,6 @@ function clientAuction(row) {
     id: row.decoration_id,
     name: row.decoration_id,
     rarity: 'unknown',
-    description: '',
     preview: row.decoration_id
   };
   return {
@@ -31,7 +30,6 @@ function clientAuction(row) {
       id: decoration.id,
       name: decoration.name,
       rarity: decoration.rarity,
-      description: decoration.description,
       preview: decoration.preview
     }
   };
@@ -56,7 +54,6 @@ async function loadInventory(userId) {
       id: decoration.id,
       name: decoration.name,
       rarity: decoration.rarity,
-      description: decoration.description,
       preview: decoration.preview
     };
   }).filter(Boolean);
