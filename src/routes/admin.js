@@ -120,6 +120,7 @@ router.use((req, res, next) => {
   res.on('finish', () => {
     if (res.statusCode < 200 || res.statusCode >= 400) return;
     const path = req.originalUrl.split('?')[0];
+    if (path.endsWith('/dm-context')) return; // Logged with reviewed-message details by the route itself.
     const targetMatch = path.match(/\/user-reports\/([^/]+)/)
       || path.match(/\/users\/([^/]+)/)
       || path.match(/\/servers\/([^/]+)/)
@@ -563,9 +564,16 @@ router.post('/user-reports/:reportId/reopen', requireCoreAdmin, async (req, res)
 router.get('/audit-log', async (req, res) => {
   const result = await pool.query(
     `SELECT log.id, log.action, log.target_type, log.target_id, log.details, log.created_at,
-       actor.username AS actor_username, actor.display_name AS actor_display_name
+       actor.username AS actor_username, actor.display_name AS actor_display_name,
+       target_user.username AS target_username,
+       report_target.username AS report_target_username,
+       target_server.name AS target_server_name
      FROM admin_audit_logs log
      LEFT JOIN users actor ON actor.id=log.actor_id
+     LEFT JOIN users target_user ON log.target_type='user' AND target_user.id=log.target_id
+     LEFT JOIN user_reports report ON log.target_type='user_report' AND report.id=log.target_id
+     LEFT JOIN users report_target ON report_target.id=report.target_user_id
+     LEFT JOIN servers target_server ON log.target_type='server' AND target_server.id=log.target_id
      ORDER BY log.created_at DESC
      LIMIT 200`
   );
@@ -576,7 +584,12 @@ router.get('/audit-log', async (req, res) => {
     targetId: row.target_id,
     details: row.details || {},
     createdAt: Number(row.created_at),
-    actor: row.actor_username ? { username: row.actor_username, displayName: row.actor_display_name } : null
+    actor: row.actor_username ? { username: row.actor_username, displayName: row.actor_display_name } : null,
+    targetLabel: row.target_username
+      ? `@${row.target_username}`
+      : row.report_target_username
+        ? `Report about @${row.report_target_username}`
+        : row.target_server_name || null
   })) });
 });
 

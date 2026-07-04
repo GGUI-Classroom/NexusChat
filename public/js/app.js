@@ -3433,7 +3433,7 @@
     $('invite-friends-list').innerHTML = nonMembers.length
       ? nonMembers.map(f => `
           <div class="invite-friend-row">
-            <div class="avatar" id="invav-${f.id}" style="width:32px;height:32px;font-size:13px;flex-shrink:0"></div>
+            <div class="invite-avatar-viewport"><div class="avatar-wrap invite-avatar-host"><div class="avatar" id="invav-${f.id}"></div></div></div>
             <div class="person-info"><div class="display-name" style="font-size:13px">${esc(f.displayName)}</div><div class="username">@${esc(f.username)}</div></div>
             <button class="action-btn primary" onclick="inviteFriend('${f.id}', this)">Invite</button>
           </div>`).join('')
@@ -6577,19 +6577,77 @@
       list.innerHTML = '<div style="color:var(--text-muted)">No admin actions logged yet</div>';
       return;
     }
-    list.innerHTML = r.logs.map(log => {
-      const details = Object.entries(log.details || {}).map(([key, value]) =>
-        `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`
-      ).join(' | ');
-      return `<div class="admin-history-row">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-          <span class="admin-history-user">${esc(log.action)}</span>
-          <span style="font-size:11px;color:var(--text-muted)">${new Date(log.createdAt * 1000).toLocaleString()}</span>
+    list.innerHTML = r.logs.map(renderAdminAuditLog).join('');
+  }
+
+  function adminAuditPresentation(action) {
+    const value = String(action || '');
+    if (value === 'VIEW_DM_REPORT_CONTEXT' || value.endsWith('/dm-context')) return ['DM context reviewed', 'privacy'];
+    if (value.includes('/user-reports/') && value.endsWith('/resolve')) return ['User report resolved', 'moderation'];
+    if (value.includes('/user-reports/') && value.endsWith('/reopen')) return ['User report reopened', 'moderation'];
+    if (value.endsWith('/nexals')) return ['Nexal balance changed', 'economy'];
+    if (value.endsWith('/password')) return ['User password reset', 'account'];
+    if (value.endsWith('/identity')) return ['User profile changed', 'account'];
+    if (value.includes('/decorations')) return [value.startsWith('DELETE') ? 'Decoration removed' : 'Decoration granted', 'inventory'];
+    if (value.includes('/nameplates')) return [value.startsWith('DELETE') ? 'Nameplate removed' : 'Nameplate granted', 'inventory'];
+    if (value.endsWith('/pro')) return [value.startsWith('DELETE') ? 'Nexus Pro removed' : 'Nexus Pro granted', 'economy'];
+    if (value.includes('/fonts')) return [value.startsWith('DELETE') ? 'Font removed' : 'Font granted', 'inventory'];
+    if (value.endsWith('/warn')) return ['User warned', 'moderation'];
+    if (value.endsWith('/client-control')) return ['Remote client control used', 'account'];
+    if (value.endsWith('/suspend')) return ['User suspended', 'moderation'];
+    if (value.endsWith('/unsuspend')) return ['User suspension removed', 'moderation'];
+    if (value.includes('/ip-ban')) return [value.startsWith('DELETE') ? 'Device ban removed' : 'Device banned', 'moderation'];
+    if (value.includes('/admins')) return [value.startsWith('DELETE') ? 'Administrator removed' : 'Administrator added', 'security'];
+    if (value.endsWith('/tos')) return ['Terms of Service published', 'policy'];
+    if (value.endsWith('/safety-terms')) return ['NexusGuard policy updated', 'policy'];
+    if (value.endsWith('/system-report')) return [value.startsWith('DELETE') ? 'System alert cleared' : 'System alert published', 'policy'];
+    if (value.includes('/servers/') && value.endsWith('/join')) return ['Administrator joined server', 'server'];
+    if (value.includes('/servers/')) return ['Server deleted', 'server'];
+    return ['Admin setting changed', 'account'];
+  }
+
+  function adminAuditDetailChips(details) {
+    const labels = {
+      username: 'User',
+      nexals: 'New balance',
+      duration: 'Duration',
+      unit: 'Unit',
+      reason: 'Reason',
+      displayName: 'Display name',
+      decorationId: 'Decoration',
+      nameplateId: 'Nameplate',
+      fontId: 'Font',
+      days: 'Days',
+      category: 'Category',
+      title: 'Title',
+      contentLength: 'Document length',
+      messageCount: 'Messages reviewed',
+      categoryCounts: 'Filter counts'
+    };
+    return Object.entries(details || {})
+      .filter(([key]) => labels[key])
+      .map(([key, value]) => `<span><b>${esc(labels[key])}</b>${esc(typeof value === 'object' ? JSON.stringify(value) : String(value))}</span>`)
+      .join('');
+  }
+
+  function renderAdminAuditLog(log) {
+    const [title, kind] = adminAuditPresentation(log.action);
+    const target = log.targetLabel || (log.details && log.details.username ? '@' + log.details.username : '');
+    const chips = adminAuditDetailChips(log.details);
+    return `<article class="admin-audit-card audit-${kind}">
+      <div class="admin-audit-icon" aria-hidden="true"></div>
+      <div class="admin-audit-main">
+        <div class="admin-audit-heading">
+          <strong>${esc(title)}</strong>
+          <time>${new Date(log.createdAt * 1000).toLocaleString()}</time>
         </div>
-        <div class="admin-history-meta">By: ${log.actor ? '@' + esc(log.actor.username) : 'system'}${log.targetId ? ` | ${esc(log.targetType || 'target')}: ${esc(log.targetId)}` : ''}</div>
-        ${details ? `<div class="admin-history-meta" style="margin-top:5px">${esc(details)}</div>` : ''}
-      </div>`;
-    }).join('');
+        <div class="admin-audit-summary">
+          <span>Performed by <b>${log.actor ? '@' + esc(log.actor.username) : 'System'}</b></span>
+          ${target ? `<span class="admin-audit-target">${esc(target)}</span>` : ''}
+        </div>
+        ${chips ? `<div class="admin-audit-details">${chips}</div>` : ''}
+      </div>
+    </article>`;
   }
 
   // ---- Shop ----
