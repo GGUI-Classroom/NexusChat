@@ -135,6 +135,10 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
               <span>Shop</span>
             </button>
+            <button class="nav-btn" data-view="ringtones">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M12 3v18M8 7v10M16 7v10M4 10v4M20 10v4"/></svg>
+              <span>Ringtones</span>
+            </button>
             <button class="nav-btn" data-view="pro">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.3"/></svg>
               <span>Pro</span>
@@ -344,8 +348,12 @@
           </div>
           <div id="shop-dynamic-tabs"></div>
           <div id="shop-grid" class="shop-grid"></div>
-          <div class="shop-subsection">
-            <h2>Phone Ringtones</h2>
+        </div>
+
+        <div class="view" id="view-ringtones" style="overflow-y:auto">
+          <div class="view-header" style="padding:20px 20px 0;justify-content:space-between">
+            <h1>Ringtones</h1>
+            <div class="nexal-balance"><span id="ringtone-nexal-count">0</span> Nexals</div>
           </div>
           <div id="ringtone-grid" class="shop-grid ringtone-grid"></div>
         </div>

@@ -3366,6 +3366,7 @@
     const el = $('view-' + view);
     if (el) el.classList.add('active');
     if (view === 'shop') loadShop();
+    if (view === 'ringtones') loadRingtones();
     if (view === 'achievements') loadAchievements();
     if (view === 'stats') loadCollectionStats();
     if (view === 'quests') loadQuests();
@@ -3468,6 +3469,7 @@
     const r = await api('GET', '/api/friends');
     friends = r.friends || [];
     renderFriendsList();
+    renderDmList();
   }
 
   function renderFriendsList() {
@@ -6362,7 +6364,6 @@
     updateNexalDisplay(r.nexals || 0);
     renderPackShop(r.packs || []);
     renderShop(r.decorations, r.active, r.nameplates || [], r.activeNameplate || null);
-    await loadRingtones();
   }
 
   if ($('admin-verify-code-btn')) {
@@ -6380,9 +6381,11 @@
     const el1 = $('shop-nexal-count');
     const el2 = $('ach-nexal-count');
     const el3 = $('auction-nexal-count');
+    const el4 = $('ringtone-nexal-count');
     if (el1) el1.textContent = fmt;
     if (el2) el2.textContent = fmt;
     if (el3) el3.textContent = fmt;
+    if (el4) el4.textContent = fmt;
   }
 
   let auctionData = null;
@@ -6798,10 +6801,12 @@
     if (r.error) {
       const fallback = Object.entries(RINGTONE_PRESETS).map(([id, preset]) => ({ id, name: preset.name || id.replace(/_/g, ' '), description: 'Premium call ringtone.', price: 5000, owned: false }));
       ringtoneShopData = { ringtones: fallback, active: null, nexals: currentUser?.nexals || 0 };
+      updateNexalDisplay(ringtoneShopData.nexals);
       renderRingtoneShop(fallback, null);
       return;
     }
     ringtoneShopData = r;
+    updateNexalDisplay(r.nexals || 0);
     renderRingtoneShop(r.ringtones, r.active);
   }
 
@@ -6863,7 +6868,8 @@
       const r = await api('POST', '/api/ringtones/buy', { ringtoneId });
       if (r.error) return toast(r.error, 'error');
       toast('Ringtone purchased! 🔔', 'success');
-      await loadShop();
+      if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals);
+      await loadRingtones();
       return;
     }
 
