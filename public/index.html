@@ -871,7 +871,7 @@
         <button class="admin-tab" data-tab="control">🎛 Control</button>
         <button class="admin-tab" data-tab="reports">Reports</button>
         <button class="admin-tab" data-tab="userreports">User Reports</button>
-        <button class="admin-tab" data-tab="tos">Terms of Service</button>
+        <button class="admin-tab" data-tab="tos" style="display:none">Terms of Service</button>
         <button class="admin-tab" data-tab="admins">🛡 Admins</button>
         <button class="admin-tab" data-tab="history">📋 Log</button>
       </div>
@@ -1041,6 +1041,32 @@
             <div id="admin-admin-list" style="background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px"></div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="dm-context-review-modal" style="z-index:1100">
+    <div class="modal dm-context-review-modal">
+      <div class="modal-header">
+        <div><h2>Review Reported DM Context</h2><p id="dm-context-step-label">Confirmation 1 of 2</p></div>
+        <button class="modal-close" id="dm-context-close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <section id="dm-context-confirm-one">
+          <div class="dm-context-warning"><strong>Confirm reasonable suspicion</strong><p>Private-message context may only be reviewed when this report creates a genuine moderation or safety concern.</p></div>
+          <label class="toggle-row"><input type="checkbox" id="dm-context-suspicion-check"><span class="toggle-label"><span class="toggle-title">I believe this report provides reasonable suspicion</span><span class="toggle-hint">I am not opening this conversation out of curiosity or for an unrelated purpose.</span></span></label>
+          <button class="btn-primary" id="dm-context-next">Continue</button>
+        </section>
+        <section id="dm-context-confirm-two" style="display:none">
+          <div class="dm-context-warning"><strong>Confirm accountable access</strong><p>This access will be permanently recorded with your admin identity, report ID, timestamp, and number of messages viewed.</p></div>
+          <label class="toggle-row"><input type="checkbox" id="dm-context-privacy-check"><span class="toggle-label"><span class="toggle-title">I understand and accept this responsibility</span><span class="toggle-hint">I will use the context only to investigate this report.</span></span></label>
+          <div style="display:flex;gap:8px"><button class="btn-secondary" id="dm-context-back">Back</button><button class="btn-primary" id="dm-context-view">View Context</button></div>
+        </section>
+        <section id="dm-context-results" style="display:none">
+          <div id="dm-context-participants" class="dm-context-participants"></div>
+          <div id="dm-context-messages" class="dm-context-messages"></div>
+        </section>
+        <div class="form-error" id="dm-context-error"></div>
       </div>
     </div>
   </div>

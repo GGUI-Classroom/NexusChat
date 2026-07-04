@@ -87,6 +87,54 @@ function requireCoreAdmin(req, res, next) {
   next();
 }
 
+async function writeAudit(actorId, action, targetType = null, targetId = null, details = {}) {
+  try {
+    await pool.query(
+      `INSERT INTO admin_audit_logs (id, actor_id, action, target_type, target_id, details)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+      [uuidv4(), actorId || null, action, targetType, targetId, JSON.stringify(details || {})]
+    );
+  } catch (error) {
+    console.error('Admin audit log failed:', error.message);
+  }
+}
+
+function auditDetails(req) {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const allowed = ['username', 'duration', 'unit', 'reason', 'nexals', 'displayName', 'decorationId',
+    'nameplateId', 'fontId', 'days', 'category', 'title', 'action', 'active'];
+  const details = {};
+  allowed.forEach(key => {
+    if (body[key] !== undefined) details[key] = String(body[key]).slice(0, 300);
+  });
+  if (body.content !== undefined) details.contentLength = String(body.content).length;
+  if (body.categories && typeof body.categories === 'object') {
+    details.categoryCounts = Object.fromEntries(Object.entries(body.categories).map(([key, value]) => [key, Array.isArray(value) ? value.length : 0]));
+  }
+  return details;
+}
+
+// Record every successful admin mutation, including Nexal edits and moderation changes.
+router.use((req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  res.on('finish', () => {
+    if (res.statusCode < 200 || res.statusCode >= 400) return;
+    const path = req.originalUrl.split('?')[0];
+    const targetMatch = path.match(/\/user-reports\/([^/]+)/)
+      || path.match(/\/users\/([^/]+)/)
+      || path.match(/\/servers\/([^/]+)/)
+      || path.match(/\/ip-bans\/([^/]+)/);
+    const targetId = targetMatch ? decodeURIComponent(targetMatch[1]) : null;
+    const targetType = path.includes('/user-reports/') ? 'user_report'
+      : path.includes('/users/') ? 'user'
+        : path.includes('/servers/') ? 'server'
+          : path.includes('/ip-bans/') ? 'device_ban'
+            : null;
+    writeAudit(req.session?.userId, `${req.method} ${path}`, targetType, targetId, auditDetails(req));
+  });
+  next();
+});
+
 // Check if current user is admin (used by frontend on load)
 router.get('/check', (req, res) => {
   res.json({ isAdmin: true, isCoreAdmin: ADMIN_IDS.has(req.session.userId) });
@@ -377,6 +425,63 @@ router.get('/user-reports', async (req, res) => {
   }))});
 });
 
+router.post('/user-reports/:reportId/dm-context', requireCoreAdmin, async (req, res) => {
+  if (req.body.confirmSuspicion !== true || req.body.confirmPrivacy !== true) {
+    return res.status(400).json({ error: 'Both review confirmations are required' });
+  }
+  const reportId = String(req.params.reportId || '').trim();
+  const reportResult = await pool.query(
+    `SELECT ur.id, ur.reporter_id, ur.target_user_id, ur.message_id, ur.created_at,
+       reporter.username AS reporter_username, reporter.display_name AS reporter_display_name,
+       target.username AS target_username, target.display_name AS target_display_name
+     FROM user_reports ur
+     JOIN users reporter ON reporter.id=ur.reporter_id
+     JOIN users target ON target.id=ur.target_user_id
+     WHERE ur.id=$1 AND ur.message_type='dm'`,
+    [reportId]
+  );
+  if (!reportResult.rows.length) return res.status(404).json({ error: 'DM report not found' });
+  const report = reportResult.rows[0];
+  const anchorResult = report.message_id
+    ? await pool.query('SELECT created_at FROM messages WHERE id=$1 LIMIT 1', [report.message_id])
+    : { rows: [] };
+  const anchor = Number(anchorResult.rows[0]?.created_at || report.created_at);
+  const messages = await pool.query(
+    `SELECT context.id, context.from_id, context.to_id, context.content, context.created_at,
+       u.username, u.display_name
+     FROM (
+       SELECT m.*
+       FROM messages m
+       WHERE ((m.from_id=$1 AND m.to_id=$2) OR (m.from_id=$2 AND m.to_id=$1))
+         AND m.created_at BETWEEN $3::bigint - 604800 AND $3::bigint + 604800
+       ORDER BY ABS(m.created_at - $3::bigint) ASC
+       LIMIT 40
+     ) context
+     JOIN users u ON u.id=context.from_id
+     ORDER BY context.created_at ASC`,
+    [report.reporter_id, report.target_user_id, anchor]
+  );
+  await writeAudit(req.session.userId, 'VIEW_DM_REPORT_CONTEXT', 'user_report', reportId, {
+    reporterId: report.reporter_id,
+    targetUserId: report.target_user_id,
+    messageCount: messages.rows.length,
+    anchor
+  });
+  res.json({
+    reportId,
+    reporter: { id: report.reporter_id, username: report.reporter_username, displayName: report.reporter_display_name },
+    target: { id: report.target_user_id, username: report.target_username, displayName: report.target_display_name },
+    messages: messages.rows.map(message => ({
+      id: message.id,
+      fromId: message.from_id,
+      toId: message.to_id,
+      content: message.content,
+      createdAt: Number(message.created_at),
+      author: { username: message.username, displayName: message.display_name }
+    }))
+  });
+});
+
 router.get('/safety-terms', requireCoreAdmin, async (req, res) => {
   const result = await pool.query('SELECT term, category FROM global_safety_terms ORDER BY category, term ASC');
   const categories = { discriminatory: [], nsfw: [], child_safety: [] };
@@ -431,13 +536,48 @@ router.put('/safety-terms', requireCoreAdmin, async (req, res) => {
 
 router.post('/user-reports/:reportId/resolve', async (req, res) => {
   const reportId = String(req.params.reportId || '').trim();
-  await pool.query(
+  const result = await pool.query(
     `UPDATE user_reports
      SET status='resolved', resolved_at=EXTRACT(EPOCH FROM NOW())::BIGINT, resolved_by=$1
-     WHERE id=$2`,
+     WHERE id=$2 AND status='open'
+     RETURNING id`,
     [req.session.userId, reportId]
   );
+  if (!result.rows.length) return res.status(404).json({ error: 'Open report not found' });
   res.json({ success: true });
+});
+
+router.post('/user-reports/:reportId/reopen', requireCoreAdmin, async (req, res) => {
+  const reportId = String(req.params.reportId || '').trim();
+  const result = await pool.query(
+    `UPDATE user_reports
+     SET status='open', resolved_at=NULL, resolved_by=NULL
+     WHERE id=$1 AND status='resolved'
+     RETURNING id`,
+    [reportId]
+  );
+  if (!result.rows.length) return res.status(404).json({ error: 'Resolved report not found' });
+  res.json({ success: true });
+});
+
+router.get('/audit-log', async (req, res) => {
+  const result = await pool.query(
+    `SELECT log.id, log.action, log.target_type, log.target_id, log.details, log.created_at,
+       actor.username AS actor_username, actor.display_name AS actor_display_name
+     FROM admin_audit_logs log
+     LEFT JOIN users actor ON actor.id=log.actor_id
+     ORDER BY log.created_at DESC
+     LIMIT 200`
+  );
+  res.json({ logs: result.rows.map(row => ({
+    id: row.id,
+    action: row.action,
+    targetType: row.target_type,
+    targetId: row.target_id,
+    details: row.details || {},
+    createdAt: Number(row.created_at),
+    actor: row.actor_username ? { username: row.actor_username, displayName: row.actor_display_name } : null
+  })) });
 });
 
 // Get user info (nexals + servers)

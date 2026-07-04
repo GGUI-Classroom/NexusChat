@@ -616,6 +616,17 @@ async function initDb() {
     resolved_by TEXT DEFAULT NULL REFERENCES users(id)
   )`, 'user_reports');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_user_reports_status_created ON user_reports(status, created_at DESC)`, 'idx_user_reports_status_created');
+  await runSql(`CREATE TABLE IF NOT EXISTS admin_audit_logs (
+    id TEXT PRIMARY KEY,
+    actor_id TEXT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    target_type TEXT DEFAULT NULL,
+    target_id TEXT DEFAULT NULL,
+    details JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'admin_audit_logs');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created ON admin_audit_logs(created_at DESC)`, 'idx_admin_audit_logs_created');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_actor ON admin_audit_logs(actor_id, created_at DESC)`, 'idx_admin_audit_logs_actor');
 
   await runSql(`CREATE TABLE IF NOT EXISTS global_safety_terms (
     id TEXT PRIMARY KEY,

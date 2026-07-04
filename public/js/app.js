@@ -5674,6 +5674,7 @@
   });
 
   function adminSwitchTab(tab) {
+    if ((tab === 'tos' || tab === 'reports') && !isCoreAdmin) return toast('Core admins only', 'error');
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
     document.querySelectorAll('.admin-pane').forEach(p => p.classList.remove('active'));
     const pane = $('admin-pane-' + tab);
@@ -6237,7 +6238,9 @@
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn-secondary" style="font-size:11px;padding:5px 9px" onclick="adminFillSuspend('${esc(report.target.username)}')">Suspend</button>
+          ${report.messageType === 'dm' && isCoreAdmin ? `<button class="btn-secondary" style="font-size:11px;padding:5px 9px" onclick="adminOpenDmContextReview('${report.id}')">See Context</button>` : ''}
           ${report.status === 'open' ? `<button class="action-btn ghost" style="font-size:11px;padding:5px 9px" onclick="adminResolveUserReport('${report.id}')">Resolve</button>` : ''}
+          ${report.status === 'resolved' && isCoreAdmin ? `<button class="action-btn ghost" style="font-size:11px;padding:5px 9px" onclick="adminReopenUserReport('${report.id}')">Reopen</button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -6319,6 +6322,84 @@
     toast('Report resolved', 'success');
     await adminLoadUserReports();
   };
+
+  window.adminReopenUserReport = async function(reportId) {
+    if (!isCoreAdmin) return toast('Core admins only', 'error');
+    if (!confirm('Reopen this resolved report?')) return;
+    const r = await api('POST', '/api/admin/user-reports/' + reportId + '/reopen');
+    if (r.error) return toast(r.error, 'error');
+    toast('Report reopened', 'success');
+    await adminLoadUserReports();
+  };
+
+  let dmContextReportId = null;
+
+  function resetDmContextReview() {
+    $('dm-context-confirm-one').style.display = 'block';
+    $('dm-context-confirm-two').style.display = 'none';
+    $('dm-context-results').style.display = 'none';
+    $('dm-context-step-label').textContent = 'Confirmation 1 of 2';
+    $('dm-context-suspicion-check').checked = false;
+    $('dm-context-privacy-check').checked = false;
+    $('dm-context-participants').innerHTML = '';
+    $('dm-context-messages').innerHTML = '';
+    showError('dm-context-error', '');
+  }
+
+  window.adminOpenDmContextReview = function(reportId) {
+    if (!isCoreAdmin) return toast('Core admins only', 'error');
+    dmContextReportId = reportId;
+    resetDmContextReview();
+    $('dm-context-review-modal').classList.add('active');
+  };
+
+  function closeDmContextReview() {
+    dmContextReportId = null;
+    $('dm-context-review-modal').classList.remove('active');
+    resetDmContextReview();
+  }
+
+  $('dm-context-close').addEventListener('click', closeDmContextReview);
+  $('dm-context-review-modal').addEventListener('click', event => {
+    if (event.target === $('dm-context-review-modal')) closeDmContextReview();
+  });
+  $('dm-context-next').addEventListener('click', () => {
+    if (!$('dm-context-suspicion-check').checked) return showError('dm-context-error', 'You must confirm reasonable suspicion to continue.');
+    showError('dm-context-error', '');
+    $('dm-context-confirm-one').style.display = 'none';
+    $('dm-context-confirm-two').style.display = 'block';
+    $('dm-context-step-label').textContent = 'Confirmation 2 of 2';
+  });
+  $('dm-context-back').addEventListener('click', () => {
+    showError('dm-context-error', '');
+    $('dm-context-confirm-two').style.display = 'none';
+    $('dm-context-confirm-one').style.display = 'block';
+    $('dm-context-step-label').textContent = 'Confirmation 1 of 2';
+  });
+  $('dm-context-view').addEventListener('click', async () => {
+    if (!$('dm-context-privacy-check').checked) return showError('dm-context-error', 'You must accept the accountability notice to continue.');
+    if (!dmContextReportId) return;
+    const button = $('dm-context-view');
+    button.disabled = true;
+    button.textContent = 'Loading...';
+    const result = await api('POST', `/api/admin/user-reports/${dmContextReportId}/dm-context`, {
+      confirmSuspicion: true,
+      confirmPrivacy: true
+    });
+    button.disabled = false;
+    button.textContent = 'View Context';
+    if (result.error) return showError('dm-context-error', result.error);
+    $('dm-context-confirm-two').style.display = 'none';
+    $('dm-context-results').style.display = 'block';
+    $('dm-context-step-label').textContent = 'Audited report context';
+    $('dm-context-participants').innerHTML = `Conversation between <strong>@${esc(result.reporter.username)}</strong> and <strong>@${esc(result.target.username)}</strong>`;
+    $('dm-context-messages').innerHTML = (result.messages || []).length
+      ? result.messages.map(message => `<div class="dm-context-message ${message.fromId === result.target.id ? 'reported-user' : ''}">
+          <div><strong>${esc(message.author.displayName || message.author.username)}</strong><span>${new Date(message.createdAt * 1000).toLocaleString()}</span></div>
+          <p>${esc(message.content)}</p>
+        </div>`).join('')
+      : '<div class="empty-state">No nearby messages remain available.</div>';
+  });
 
   if ($('admin-userreports-refresh')) $('admin-userreports-refresh').addEventListener('click', adminLoadUserReports);
   if ($('admin-userreports-status')) $('admin-userreports-status').addEventListener('change', adminLoadUserReports);
@@ -6464,7 +6545,7 @@
     });
   }
 
-  async function adminLoadHistory() {
+  async function adminLoadSuspensionHistory() {
     const list = $('admin-history-list');
     list.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center">Loading…</div>';
     const r = await api('GET', '/api/admin/suspensions');
@@ -6480,6 +6561,33 @@
           <span class="${isActive ? 'susp-active' : 'susp-expired'}">${isActive ? '● Active' : '○ Expired'}</span>
         </div>
         <div class="admin-history-meta">Until: ${until.toLocaleString()} · By: @${esc(s.adminUsername)}${s.reason ? ' · "' + esc(s.reason) + '"' : ''}</div>
+      </div>`;
+    }).join('');
+  }
+
+  async function adminLoadHistory() {
+    const list = $('admin-history-list');
+    list.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center">Loading...</div>';
+    const r = await api('GET', '/api/admin/audit-log');
+    if (r.error) {
+      list.innerHTML = '<div style="color:var(--red)">' + esc(r.error) + '</div>';
+      return;
+    }
+    if (!(r.logs || []).length) {
+      list.innerHTML = '<div style="color:var(--text-muted)">No admin actions logged yet</div>';
+      return;
+    }
+    list.innerHTML = r.logs.map(log => {
+      const details = Object.entries(log.details || {}).map(([key, value]) =>
+        `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`
+      ).join(' | ');
+      return `<div class="admin-history-row">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <span class="admin-history-user">${esc(log.action)}</span>
+          <span style="font-size:11px;color:var(--text-muted)">${new Date(log.createdAt * 1000).toLocaleString()}</span>
+        </div>
+        <div class="admin-history-meta">By: ${log.actor ? '@' + esc(log.actor.username) : 'system'}${log.targetId ? ` | ${esc(log.targetType || 'target')}: ${esc(log.targetId)}` : ''}</div>
+        ${details ? `<div class="admin-history-meta" style="margin-top:5px">${esc(details)}</div>` : ''}
       </div>`;
     }).join('');
   }

@@ -8027,3 +8027,90 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
     left: 60px;
   }
 }
+/* Audited DM report context */
+.dm-context-review-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, calc(100vw - 32px));
+  max-width: 760px;
+  max-height: min(820px, calc(100dvh - 32px));
+}
+.dm-context-review-modal .modal-header p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.dm-context-review-modal .modal-body {
+  overflow-y: auto;
+}
+.dm-context-review-modal section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dm-context-warning {
+  padding: 16px;
+  border: 1px solid rgba(245, 158, 11, .4);
+  background: rgba(245, 158, 11, .08);
+}
+.dm-context-warning strong {
+  display: block;
+  margin-bottom: 7px;
+  color: #fbbf24;
+}
+.dm-context-warning p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.dm-context-participants {
+  padding: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.dm-context-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.dm-context-message {
+  padding: 11px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-surface);
+}
+.dm-context-message.reported-user {
+  border-left-color: var(--red);
+}
+.dm-context-message > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dm-context-message strong {
+  font-size: 12px;
+}
+.dm-context-message span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.dm-context-message p {
+  margin: 7px 0 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 680px) {
+  .dm-context-review-modal {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: calc(100dvh - 18px) !important;
+  }
+}
