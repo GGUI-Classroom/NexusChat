@@ -9,43 +9,43 @@ router.use(requireAuth);
 const RINGTONES = [
   {
     id: 'neon_surge',
-    name: 'Neon Surge',
+    name: 'Arcade',
     price: 5000,
     description: 'Bright arcade-style sweeps with a crisp lead tone.'
   },
   {
     id: 'cyber_echo',
-    name: 'Cyber Echo',
+    name: 'Double Tap',
     price: 5000,
     description: 'Layered digital beeps with a bounce-back echo feel.'
   },
   {
     id: 'starlight_ping',
-    name: 'Starlight Ping',
+    name: 'Glass Bell',
     price: 5000,
     description: 'Shimmering high notes with a clean modern pulse.'
   },
   {
     id: 'thunder_hop',
-    name: 'Thunder Hop',
+    name: 'Bass Step',
     price: 5000,
     description: 'Punchy bass hit followed by energetic stepping tones.'
   },
   {
     id: 'velvet_alarm',
-    name: 'Velvet Alarm',
+    name: 'Soft Bell',
     price: 5000,
     description: 'Smooth warm synth chime that still cuts through noise.'
   },
   {
     id: 'quantum_drift',
-    name: 'Quantum Drift',
+    name: 'Quick Rise',
     price: 5000,
     description: 'Crazy stuff'
   },
   {
     id: 'nova_breaker',
-    name: 'Nova Breaker',
+    name: 'Red Alert',
     price: 5000,
     description: 'Explosive bass bloom with stuttering starship alert bursts.'
   }
