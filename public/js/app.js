@@ -1871,12 +1871,15 @@
     host.innerHTML = results.map(server => {
       const initials = server.name.split(/\s+/).map(word => word[0]).join('').slice(0, 2).toUpperCase();
       const tags = String(server.inviteTags || '').split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 5);
-      return `<article class="discovery-card">
-        <div class="discovery-card-banner" style="${discoveryBannerStyle(server)}"></div>
+      const customized = !!(server.inviteDescription || tags.length || server.inviteBannerMode === 'gradient' || server.inviteBannerMode === 'image');
+      return `<article class="discovery-card ${customized ? 'customized' : ''}">
+        <div class="discovery-card-banner" style="${discoveryBannerStyle(server)}">
+          ${customized ? '<span class="discovery-invite-label">CUSTOM SERVER INVITE</span>' : ''}
+        </div>
         <div class="discovery-card-body">
           <div class="discovery-card-icon">${server.iconDataUrl ? `<img src="${server.iconDataUrl}" alt="">` : esc(initials)}</div>
           <h3>${esc(server.name)}</h3>
-          <p>${esc(server.inviteDescription || 'A community on Nexus.')}</p>
+          <p>${esc(server.inviteDescription || 'Join this community on Nexus.')}</p>
           <div class="discovery-card-meta"><span>${Number(server.memberCount || 0).toLocaleString()} members</span></div>
           ${tags.length ? `<div class="discovery-card-tags">${tags.map(tag => `<span>${esc(tag)}</span>`).join('')}</div>` : ''}
           <button class="${server.joined ? 'btn-secondary' : 'btn-primary'}" onclick="joinDiscoveredServer('${server.id}')">${server.joined ? 'Open Server' : 'Join Server'}</button>
