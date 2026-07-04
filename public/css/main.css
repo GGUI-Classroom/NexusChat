@@ -7845,7 +7845,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   border-color: #39c985;
 }
 #server-discovery-modal {
-  left: calc(72px + var(--sidebar-w));
+  left: 72px;
   background: var(--bg-base);
   backdrop-filter: none;
   align-items: stretch;
@@ -8024,6 +8024,6 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 }
 @media (min-width: 681px) and (max-width: 900px) {
   #server-discovery-modal {
-    left: 250px;
+    left: 60px;
   }
 }

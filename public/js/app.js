@@ -3145,9 +3145,8 @@
     $('settings-invite-banner-image-wrap').style.display = mode === 'image' ? 'block' : 'none';
   }
   $('settings-invite-banner-mode').addEventListener('change', updateInviteBannerControls);
-  $('save-invite-style-btn').addEventListener('click', async () => {
-    if (!activeServerId) return;
-    const r = await api('PATCH', `/api/servers/${activeServerId}/invite-style`, {
+  function inviteStylePayload() {
+    return {
       description: $('settings-invite-description').value,
       tags: $('settings-invite-tags').value,
       bannerMode: $('settings-invite-banner-mode').value,
@@ -3155,11 +3154,22 @@
       bannerEnd: $('settings-invite-banner-end').value,
       bannerImage: $('settings-invite-banner-image').value,
       tagPrivate: $('settings-tag-private').checked
-    });
-    if (r.error) return toast(r.error, 'error');
+    };
+  }
+
+  async function saveInviteStyle() {
+    if (!activeServerId) return;
+    const r = await api('PATCH', `/api/servers/${activeServerId}/invite-style`, inviteStylePayload());
+    if (r.error) return r;
     activeServerData.server = { ...activeServerData.server, ...r.server };
     const index = servers.findIndex(server => server.id === activeServerId);
     if (index >= 0) servers[index] = { ...servers[index], ...r.server };
+    return r;
+  }
+
+  $('save-invite-style-btn').addEventListener('click', async () => {
+    const r = await saveInviteStyle();
+    if (!r || r.error) return toast(r?.error || 'Could not save invite card', 'error');
     toast('Invite card saved', 'success');
   });
 
@@ -3372,6 +3382,10 @@
   $('save-server-btn').addEventListener('click', async () => {
     const name = $('settings-server-name').value.trim();
     if (!name) return showError('settings-server-error', 'Name required');
+    const inviteResult = await saveInviteStyle();
+    if (!inviteResult || inviteResult.error) {
+      return showError('settings-server-error', inviteResult?.error || 'Could not save invite card');
+    }
     const fd = new FormData();
     fd.append('name', name);
     const iconFile = $('settings-icon-input').files[0];
