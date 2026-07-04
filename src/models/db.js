@@ -440,6 +440,9 @@ async function initDb() {
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_banner_start TEXT DEFAULT '#5865f2'`, 'alter_servers_invite_banner_start');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_banner_end TEXT DEFAULT '#a855f7'`, 'alter_servers_invite_banner_end');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS invite_banner_image TEXT DEFAULT NULL`, 'alter_servers_invite_banner_image');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS discovery_enabled BOOLEAN DEFAULT FALSE`, 'alter_servers_discovery_enabled');
+  await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS discovery_expires_at BIGINT DEFAULT NULL`, 'alter_servers_discovery_expires_at');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_servers_discovery ON servers(discovery_enabled, discovery_expires_at)`, 'idx_servers_discovery');
   await runSql(`UPDATE users SET active_color=NULL, active_font=NULL WHERE active_color IS NOT NULL OR active_font IS NOT NULL`, 'clear_retired_color_font');
   await runSql(`ALTER TABLE servers ADD COLUMN IF NOT EXISTS bot_spam_window INTEGER DEFAULT 6`, 'alter_servers_bot_spam_window');
   await runSql(`CREATE TABLE IF NOT EXISTS user_fonts (

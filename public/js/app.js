@@ -1844,6 +1844,86 @@
     });
   }
 
+  let discoverableServers = [];
+
+  function discoveryBannerStyle(server) {
+    if (server.inviteBannerMode === 'image' && /^https:\/\//i.test(server.inviteBannerImage || '')) {
+      return `background-image:linear-gradient(90deg,rgba(8,12,22,.12),rgba(8,12,22,.55)),url('${esc(server.inviteBannerImage)}')`;
+    }
+    if (server.inviteBannerMode === 'gradient') {
+      return `background:linear-gradient(135deg,${esc(server.inviteBannerStart || '#5865f2')},${esc(server.inviteBannerEnd || '#a855f7')})`;
+    }
+    return `background:${esc(server.inviteBannerStart || '#5865f2')}`;
+  }
+
+  function renderServerDiscovery() {
+    const host = $('server-discovery-list');
+    if (!host) return;
+    const query = ($('server-discovery-search')?.value || '').trim().toLowerCase();
+    const results = discoverableServers.filter(server => {
+      const haystack = `${server.name} ${server.inviteDescription || ''} ${server.inviteTags || ''}`.toLowerCase();
+      return !query || haystack.includes(query);
+    });
+    if (!results.length) {
+      host.innerHTML = `<div class="empty-state">${query ? 'No servers match that search.' : 'No servers are listed in Discovery yet.'}</div>`;
+      return;
+    }
+    host.innerHTML = results.map(server => {
+      const initials = server.name.split(/\s+/).map(word => word[0]).join('').slice(0, 2).toUpperCase();
+      const tags = String(server.inviteTags || '').split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 5);
+      return `<article class="discovery-card">
+        <div class="discovery-card-banner" style="${discoveryBannerStyle(server)}"></div>
+        <div class="discovery-card-body">
+          <div class="discovery-card-icon">${server.iconDataUrl ? `<img src="${server.iconDataUrl}" alt="">` : esc(initials)}</div>
+          <h3>${esc(server.name)}</h3>
+          <p>${esc(server.inviteDescription || 'A community on Nexus.')}</p>
+          <div class="discovery-card-meta"><span>${Number(server.memberCount || 0).toLocaleString()} members</span></div>
+          ${tags.length ? `<div class="discovery-card-tags">${tags.map(tag => `<span>${esc(tag)}</span>`).join('')}</div>` : ''}
+          <button class="${server.joined ? 'btn-secondary' : 'btn-primary'}" onclick="joinDiscoveredServer('${server.id}')">${server.joined ? 'Open Server' : 'Join Server'}</button>
+        </div>
+      </article>`;
+    }).join('');
+  }
+
+  async function loadServerDiscovery() {
+    const host = $('server-discovery-list');
+    if (host) host.innerHTML = '<div class="loading">Loading servers...</div>';
+    const result = await api('GET', '/api/servers/discover');
+    if (result.error) {
+      if (host) host.innerHTML = `<div class="form-error">${esc(result.error)}</div>`;
+      return;
+    }
+    discoverableServers = result.servers || [];
+    renderServerDiscovery();
+  }
+
+  window.joinDiscoveredServer = async function(serverId) {
+    const server = discoverableServers.find(item => item.id === serverId);
+    if (!server) return;
+    if (server.joined) {
+      $('server-discovery-modal').classList.remove('active');
+      return railSelect(serverId);
+    }
+    const result = await api('POST', `/api/servers/join/${server.inviteCode}`);
+    if (result.error) return toast(result.error, 'error');
+    if (result.server && !servers.some(item => item.id === result.server.id)) servers.push(result.server);
+    server.joined = true;
+    renderServerRail();
+    renderServerDiscovery();
+    toast(`Joined ${server.name}`, 'success');
+  };
+
+  $('discover-servers-btn').addEventListener('click', () => {
+    $('server-discovery-modal').classList.add('active');
+    loadServerDiscovery();
+  });
+  $('server-discovery-close').addEventListener('click', () => $('server-discovery-modal').classList.remove('active'));
+  $('server-discovery-modal').addEventListener('click', event => {
+    if (event.target === $('server-discovery-modal')) $('server-discovery-modal').classList.remove('active');
+  });
+  $('server-discovery-refresh').addEventListener('click', loadServerDiscovery);
+  $('server-discovery-search').addEventListener('input', renderServerDiscovery);
+
   async function loadServerSidebar(serverId) {
     const r = await api('GET', `/api/servers/${serverId}`);
     if (r.error) return toast(r.error, 'error');
@@ -2906,6 +2986,7 @@
     await loadNexusGuardSettings();
     renderRolesList(activeServerData.roles || []);
     renderBoostSettings(s);
+    renderDiscoverySettings(s);
     await loadServerEconomy();
     loadBansList();
     $('server-settings-modal').classList.add('active');
@@ -3471,6 +3552,39 @@
     renderFriendsList();
     renderDmList();
   }
+
+  function renderDiscoverySettings(server) {
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = Number(server.discoveryExpiresAt || 0);
+    const active = expiresAt > now;
+    $('settings-discovery-toggle').checked = active && !!server.discoveryEnabled;
+    $('settings-discovery-status').innerHTML = active
+      ? `<strong>${server.discoveryEnabled ? 'Listed in Discovery' : 'Listing hidden'}</strong><br>Paid through ${new Date(expiresAt * 1000).toLocaleDateString()}. You can turn the listing back on without paying again before then.`
+      : '<strong>No active subscription</strong><br>Enabling Discovery will charge 15,000 Nexals and list the server for 30 days.';
+    $('save-discovery-btn').textContent = active ? 'Save Discovery Setting' : 'Activate for 15,000 Nexals';
+  }
+
+  $('save-discovery-btn').addEventListener('click', async () => {
+    if (!activeServerId || !activeServerData) return;
+    const enabled = $('settings-discovery-toggle').checked;
+    const expiresAt = Number(activeServerData.server.discoveryExpiresAt || 0);
+    const expired = expiresAt <= Math.floor(Date.now() / 1000);
+    if (enabled && expired && !confirm('Activate Server Discovery for 15,000 Nexals for 30 days?')) {
+      $('settings-discovery-toggle').checked = false;
+      return;
+    }
+    const button = $('save-discovery-btn');
+    button.disabled = true;
+    showError('settings-discovery-error', '');
+    const result = await api('POST', `/api/servers/${activeServerId}/discovery`, { enabled });
+    button.disabled = false;
+    if (result.error) return showError('settings-discovery-error', result.error);
+    activeServerData.server.discoveryEnabled = result.discoveryEnabled;
+    if (result.discoveryExpiresAt) activeServerData.server.discoveryExpiresAt = result.discoveryExpiresAt;
+    if (typeof result.nexals === 'number') updateNexalDisplay(result.nexals);
+    renderDiscoverySettings(activeServerData.server);
+    toast(result.charged ? 'Server listed in Discovery for 30 days' : (enabled ? 'Discovery listing enabled' : 'Discovery listing hidden'), 'success');
+  });
 
   function renderFriendsList() {
     const list = $('friends-list');

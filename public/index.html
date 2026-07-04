@@ -105,6 +105,9 @@
           <button class="rail-btn add-server" title="Add a Server" id="add-server-rail-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
+          <button class="rail-btn discover-server" title="Discover Servers" id="discover-servers-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="22" height="22"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9z"/><circle cx="12" cy="12" r="1"/></svg>
+          </button>
           <!-- Admin Panel (only shown to admins) -->
           <button class="rail-btn" id="rail-admin-btn" title="Admin Panel" style="display:none;background:rgba(255,40,40,0.1);border:1px solid rgba(255,40,40,0.3)" onclick="openAdminPanel()">
             <svg viewBox="0 0 24 24" fill="none" stroke="#ff4444" stroke-width="1.5" width="20" height="20"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -500,6 +503,20 @@
     </div>
   </div>
 
+  <!-- Server Discovery -->
+  <div class="modal-overlay" id="server-discovery-modal">
+    <div class="modal server-discovery-modal">
+      <div class="modal-header"><div><h2>Discover Servers</h2><p>Find active communities and join instantly.</p></div><button class="modal-close" id="server-discovery-close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div class="modal-body">
+        <div class="discovery-toolbar">
+          <input type="search" id="server-discovery-search" placeholder="Search servers" autocomplete="off" />
+          <button class="btn-secondary" id="server-discovery-refresh">Refresh</button>
+        </div>
+        <div id="server-discovery-list" class="server-discovery-grid"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Server Settings Modal -->
   <div class="modal-overlay" id="server-settings-modal">
     <div class="modal server-settings-full">
@@ -509,6 +526,7 @@
         <button class="settings-tab" data-stab="nexusguard" onclick="switchSettingsTab('nexusguard')">NexusGuard</button>
         <button class="settings-tab" data-stab="roles" onclick="switchSettingsTab('roles')">Roles</button>
         <button class="settings-tab" data-stab="economy" onclick="switchSettingsTab('economy')">Economy</button>
+        <button class="settings-tab" data-stab="discovery" onclick="switchSettingsTab('discovery')">Discovery</button>
         <button class="settings-tab" data-stab="boosts" onclick="switchSettingsTab('boosts')">Boosts</button>
         <button class="settings-tab" data-stab="bans" onclick="switchSettingsTab('bans')">Bans</button>
       </div>
@@ -638,6 +656,22 @@
         </div>
         <div class="settings-tab-panel" id="settings-tab-economy" style="display:none">
           <div id="server-economy-content"></div>
+        </div>
+        <div class="settings-tab-panel" id="settings-tab-discovery" style="display:none">
+          <div class="discovery-settings-card">
+            <div>
+              <div class="section-label">SERVER DISCOVERY</div>
+              <h3>List this server publicly</h3>
+              <p>Discovery costs 15,000 Nexals for 30 days. Anyone browsing Discovery can view this server and join it.</p>
+            </div>
+            <div id="settings-discovery-status" class="discovery-subscription-status"></div>
+            <label class="toggle-row">
+              <input type="checkbox" id="settings-discovery-toggle" />
+              <span class="toggle-label"><span class="toggle-title">Show in Server Discovery</span><span class="toggle-hint">Turning this on starts a paid month if the previous month has expired.</span></span>
+            </label>
+            <button class="btn-primary" id="save-discovery-btn">Save Discovery Setting</button>
+            <div class="form-error" id="settings-discovery-error"></div>
+          </div>
         </div>
         <div class="settings-tab-panel" id="settings-tab-bans" style="display:none">
           <div id="bans-list"></div>

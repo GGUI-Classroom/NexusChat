@@ -51,7 +51,9 @@ function fmtServer(s) {
     inviteBannerMode: s.invite_banner_mode || 'solid',
     inviteBannerStart: s.invite_banner_start || '#5865f2',
     inviteBannerEnd: s.invite_banner_end || '#a855f7',
-    inviteBannerImage: s.invite_banner_image || null
+    inviteBannerImage: s.invite_banner_image || null,
+    discoveryEnabled: !!s.discovery_enabled,
+    discoveryExpiresAt: s.discovery_expires_at ? Number(s.discovery_expires_at) : null
   };
 }
 
@@ -148,6 +150,87 @@ router.get('/', async (req, res) => {
     [req.session.userId]
   );
   res.json({ servers: r.rows.map(fmtServer) });
+});
+
+// Browse servers with an active Discovery subscription.
+router.get('/discover', async (req, res) => {
+  const now = Math.floor(Date.now() / 1000);
+  const result = await pool.query(
+    `SELECT s.*, COUNT(sm.user_id)::int AS member_count,
+       EXISTS(
+         SELECT 1 FROM server_members mine
+         WHERE mine.server_id=s.id AND mine.user_id=$2
+       ) AS joined
+     FROM servers s
+     LEFT JOIN server_members sm ON sm.server_id=s.id
+     WHERE s.discovery_enabled=TRUE AND s.discovery_expires_at>$1
+     GROUP BY s.id
+     ORDER BY member_count DESC, s.name ASC`,
+    [now, req.session.userId]
+  );
+  res.json({
+    servers: result.rows.map(row => ({
+      ...fmtServer(row),
+      memberCount: row.member_count || 0,
+      joined: !!row.joined
+    }))
+  });
+});
+
+router.post('/:id/discovery', async (req, res) => {
+  const { id } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Server admins only' });
+  const enabled = req.body.enabled === true;
+  const now = Math.floor(Date.now() / 1000);
+
+  if (!enabled) {
+    await pool.query('UPDATE servers SET discovery_enabled=FALSE WHERE id=$1', [id]);
+    return res.json({ success: true, discoveryEnabled: false });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const server = await client.query('SELECT discovery_expires_at FROM servers WHERE id=$1 FOR UPDATE', [id]);
+    if (!server.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Server not found' });
+    }
+    const currentExpiry = Number(server.rows[0].discovery_expires_at || 0);
+    if (currentExpiry > now) {
+      await client.query('UPDATE servers SET discovery_enabled=TRUE WHERE id=$1', [id]);
+      await client.query('COMMIT');
+      return res.json({ success: true, discoveryEnabled: true, discoveryExpiresAt: currentExpiry, charged: false });
+    }
+    const user = await client.query('SELECT nexals FROM users WHERE id=$1 FOR UPDATE', [req.session.userId]);
+    if (!user.rows.length || user.rows[0].nexals < 15000) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'You need 15,000 Nexals to activate Discovery for 30 days' });
+    }
+    const expiresAt = now + (30 * 24 * 60 * 60);
+    const balance = await client.query(
+      'UPDATE users SET nexals=nexals-15000 WHERE id=$1 RETURNING nexals',
+      [req.session.userId]
+    );
+    await client.query(
+      'UPDATE servers SET discovery_enabled=TRUE, discovery_expires_at=$1 WHERE id=$2',
+      [expiresAt, id]
+    );
+    await client.query('COMMIT');
+    res.json({
+      success: true,
+      discoveryEnabled: true,
+      discoveryExpiresAt: expiresAt,
+      charged: true,
+      nexals: balance.rows[0].nexals
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Discovery subscription error:', error);
+    res.status(500).json({ error: 'Could not activate Server Discovery' });
+  } finally {
+    client.release();
+  }
 });
 
 // Get pending server invites for me
