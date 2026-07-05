@@ -705,6 +705,64 @@ async function initDb() {
   await runSql(`CREATE INDEX IF NOT EXISTS idx_server_mutes_lookup ON server_mutes(server_id, user_id, muted_until)`, 'idx_server_mutes_lookup');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_moderation_logs_server_time ON moderation_logs(server_id, created_at DESC)`, 'idx_moderation_logs_server_time');
 
+  await runSql(`CREATE TABLE IF NOT EXISTS global_mutes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    muted_by TEXT NOT NULL REFERENCES users(id),
+    reason TEXT DEFAULT NULL,
+    muted_until BIGINT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'global_mutes');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_global_mutes_user_active ON global_mutes(user_id, active, muted_until)`, 'idx_global_mutes_user_active');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS server_onboarding (
+    server_id TEXT PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    welcome_title TEXT NOT NULL DEFAULT 'Welcome',
+    welcome_message TEXT NOT NULL DEFAULT '',
+    rules JSONB NOT NULL DEFAULT '[]'::jsonb,
+    allow_role_selection BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'server_onboarding');
+  await runSql(`CREATE TABLE IF NOT EXISTS server_onboarding_completions (
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    completed_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    PRIMARY KEY(server_id, user_id)
+  )`, 'server_onboarding_completions');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS server_events (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    creator_id TEXT NOT NULL REFERENCES users(id),
+    title TEXT NOT NULL,
+    description TEXT DEFAULT NULL,
+    location TEXT DEFAULT NULL,
+    starts_at BIGINT NOT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+  )`, 'server_events');
+  await runSql(`CREATE TABLE IF NOT EXISTS server_event_rsvps (
+    event_id TEXT NOT NULL REFERENCES server_events(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'interested',
+    updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    PRIMARY KEY(event_id, user_id)
+  )`, 'server_event_rsvps');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_events_upcoming ON server_events(server_id, starts_at)`, 'idx_server_events_upcoming');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS server_emojis (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    image_data TEXT NOT NULL,
+    image_mime TEXT NOT NULL,
+    uploaded_by TEXT NOT NULL REFERENCES users(id),
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    UNIQUE(server_id, name)
+  )`, 'server_emojis');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_emojis_server ON server_emojis(server_id, created_at)`, 'idx_server_emojis_server');
+
   await runSql(`CREATE TABLE IF NOT EXISTS server_blocked_words (
     id TEXT PRIMARY KEY,
     server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,

@@ -9,6 +9,7 @@ const { enforceGlobalSafety } = require('../utils/globalSafety');
 
 const router = express.Router();
 router.use(requireAuth);
+const BOOST_FEATURE_COSTS = { tag: 2, gradients: 2, invite_banner: 2, emojis: 1 };
 
 // Parse <@user:ID> and <@role:ID> tokens and resolve to display names
 async function resolveMentions(content, serverId) {
@@ -66,7 +67,16 @@ async function activeBoostCount(serverId) {
 async function activeBoostFeatures(serverId) {
   const count = await activeBoostCount(serverId);
   const allocations = await pool.query('SELECT feature FROM server_boost_allocations WHERE server_id=$1 ORDER BY created_at ASC', [serverId]);
-  return new Set(allocations.rows.slice(0, Math.floor(count / 2)).map(row => row.feature));
+  let remaining = count;
+  const active = new Set();
+  allocations.rows.forEach(row => {
+    const cost = BOOST_FEATURE_COSTS[row.feature] || 2;
+    if (remaining >= cost) {
+      active.add(row.feature);
+      remaining -= cost;
+    }
+  });
+  return active;
 }
 
 function roleForClient(role, gradientsEnabled) {
@@ -140,6 +150,25 @@ async function hasPermission(serverId, userId, permission) {
     return !assigned.rows.length;
   }
   return false;
+}
+
+async function addModerationLog(serverId, action, actorUserId, targetUserId = null, details = null, channelId = null) {
+  await pool.query(
+    `INSERT INTO moderation_logs (id, server_id, channel_id, action, actor_user_id, target_user_id, details)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [uuidv4(), serverId, channelId, action, actorUserId, targetUserId, details]
+  );
+}
+
+async function activeTextMute(serverId, userId) {
+  const now = Math.floor(Date.now() / 1000);
+  const [globalMute, serverMute] = await Promise.all([
+    pool.query('SELECT muted_until FROM global_mutes WHERE user_id=$1 AND active=TRUE AND muted_until>$2 ORDER BY created_at DESC LIMIT 1', [userId, now]),
+    pool.query('SELECT muted_until FROM server_mutes WHERE server_id=$1 AND user_id=$2 AND muted_until>$3 LIMIT 1', [serverId, userId, now])
+  ]);
+  if (globalMute.rows.length) return 'You are globally muted and cannot post.';
+  if (serverMute.rows.length) return 'You are muted in this server and cannot post.';
+  return null;
 }
 
 // List my servers
@@ -523,6 +552,258 @@ router.post('/:id/channels', async (req, res) => {
   res.json({ channel: { id: chId, name: chName, type: channelType, serverId: id } });
 });
 
+router.get('/:id/onboarding', async (req, res) => {
+  const { id } = req.params;
+  const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  const [config, completion, roles] = await Promise.all([
+    pool.query('SELECT * FROM server_onboarding WHERE server_id=$1', [id]),
+    pool.query('SELECT 1 FROM server_onboarding_completions WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]),
+    pool.query('SELECT id, name, color, is_admin FROM server_roles WHERE server_id=$1 ORDER BY position ASC', [id])
+  ]);
+  const row = config.rows[0] || {};
+  res.json({
+    enabled: !!row.enabled,
+    welcomeTitle: row.welcome_title || 'Welcome',
+    welcomeMessage: row.welcome_message || '',
+    rules: Array.isArray(row.rules) ? row.rules : [],
+    allowRoleSelection: !!row.allow_role_selection,
+    completed: !!completion.rows.length,
+    roles: roles.rows.filter(role => !role.is_admin).map(role => ({ id: role.id, name: role.name, color: role.color }))
+  });
+});
+
+router.patch('/:id/onboarding', async (req, res) => {
+  const { id } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Server admins only' });
+  const enabled = req.body.enabled === true;
+  const welcomeTitle = String(req.body.welcomeTitle || 'Welcome').trim().slice(0, 80) || 'Welcome';
+  const welcomeMessage = String(req.body.welcomeMessage || '').trim().slice(0, 1200);
+  const rules = (Array.isArray(req.body.rules) ? req.body.rules : [])
+    .map(rule => String(rule || '').trim().slice(0, 220)).filter(Boolean).slice(0, 12);
+  const allowRoleSelection = req.body.allowRoleSelection === true;
+  const previous = await pool.query('SELECT enabled FROM server_onboarding WHERE server_id=$1', [id]);
+  await pool.query(
+    `INSERT INTO server_onboarding (server_id, enabled, welcome_title, welcome_message, rules, allow_role_selection)
+     VALUES ($1,$2,$3,$4,$5::jsonb,$6)
+     ON CONFLICT (server_id) DO UPDATE SET enabled=$2, welcome_title=$3, welcome_message=$4,
+       rules=$5::jsonb, allow_role_selection=$6, updated_at=EXTRACT(EPOCH FROM NOW())::BIGINT`,
+    [id, enabled, welcomeTitle, welcomeMessage, JSON.stringify(rules), allowRoleSelection]
+  );
+  if (enabled && !previous.rows[0]?.enabled) {
+    await pool.query(
+      `INSERT INTO server_onboarding_completions (server_id,user_id)
+       SELECT $1,user_id FROM server_members WHERE server_id=$1
+       ON CONFLICT (server_id,user_id) DO NOTHING`,
+      [id]
+    );
+  }
+  await addModerationLog(id, 'onboarding_updated', req.session.userId, null, enabled ? 'Enabled' : 'Disabled');
+  res.json({ success: true });
+});
+
+router.post('/:id/onboarding/complete', async (req, res) => {
+  const { id } = req.params;
+  const member = await pool.query('SELECT role FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  const config = await pool.query('SELECT enabled, allow_role_selection FROM server_onboarding WHERE server_id=$1', [id]);
+  if (!config.rows[0]?.enabled) return res.status(400).json({ error: 'Onboarding is not enabled' });
+  const roleId = String(req.body.roleId || '').trim() || null;
+  if (roleId && config.rows[0].allow_role_selection && member.rows[0].role !== 'admin') {
+    const role = await pool.query('SELECT id FROM server_roles WHERE id=$1 AND server_id=$2 AND is_admin=FALSE', [roleId, id]);
+    if (role.rows.length) {
+      await pool.query(
+        'INSERT INTO server_member_roles (server_id,user_id,role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+        [id, req.session.userId, roleId]
+      );
+      await pool.query('UPDATE server_members SET role_id=$1 WHERE server_id=$2 AND user_id=$3', [roleId, id, req.session.userId]);
+    }
+  }
+  await pool.query(
+    `INSERT INTO server_onboarding_completions (server_id,user_id) VALUES ($1,$2)
+     ON CONFLICT (server_id,user_id) DO UPDATE SET completed_at=EXTRACT(EPOCH FROM NOW())::BIGINT`,
+    [id, req.session.userId]
+  );
+  res.json({ success: true });
+});
+
+router.get('/:id/events', async (req, res) => {
+  const { id } = req.params;
+  const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  const result = await pool.query(
+    `SELECT event.*, creator.username AS creator_username,
+       COUNT(rsvp.user_id)::int AS interested_count,
+       BOOL_OR(rsvp.user_id=$2) AS interested
+     FROM server_events event
+     JOIN users creator ON creator.id=event.creator_id
+     LEFT JOIN server_event_rsvps rsvp ON rsvp.event_id=event.id AND rsvp.status='interested'
+     WHERE event.server_id=$1 AND event.starts_at>EXTRACT(EPOCH FROM NOW())::BIGINT-86400
+     GROUP BY event.id, creator.username
+     ORDER BY event.starts_at ASC LIMIT 50`,
+    [id, req.session.userId]
+  );
+  res.json({ events: result.rows.map(event => ({
+    id: event.id, title: event.title, description: event.description || '', location: event.location || '',
+    startsAt: Number(event.starts_at), creatorUsername: event.creator_username,
+    interestedCount: event.interested_count || 0, interested: !!event.interested
+  })), canManage: await isAdmin(id, req.session.userId) });
+});
+
+router.post('/:id/events', async (req, res) => {
+  const { id } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Server admins only' });
+  const title = String(req.body.title || '').trim().slice(0, 100);
+  const description = String(req.body.description || '').trim().slice(0, 1000);
+  const location = String(req.body.location || '').trim().slice(0, 100);
+  const startsAt = Number(req.body.startsAt);
+  if (!title || !Number.isFinite(startsAt) || startsAt <= Math.floor(Date.now() / 1000)) {
+    return res.status(400).json({ error: 'Enter a title and future start time' });
+  }
+  const eventId = uuidv4();
+  await pool.query(
+    'INSERT INTO server_events (id,server_id,creator_id,title,description,location,starts_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+    [eventId, id, req.session.userId, title, description || null, location || null, Math.floor(startsAt)]
+  );
+  await addModerationLog(id, 'event_created', req.session.userId, null, title);
+  res.json({ success: true, eventId });
+});
+
+router.post('/:id/events/:eventId/rsvp', async (req, res) => {
+  const { id, eventId } = req.params;
+  const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  const event = await pool.query('SELECT id FROM server_events WHERE id=$1 AND server_id=$2', [eventId, id]);
+  if (!event.rows.length) return res.status(404).json({ error: 'Event not found' });
+  if (req.body.interested === false) {
+    await pool.query('DELETE FROM server_event_rsvps WHERE event_id=$1 AND user_id=$2', [eventId, req.session.userId]);
+  } else {
+    await pool.query(
+      `INSERT INTO server_event_rsvps (event_id,user_id,status) VALUES ($1,$2,'interested')
+       ON CONFLICT (event_id,user_id) DO UPDATE SET status='interested', updated_at=EXTRACT(EPOCH FROM NOW())::BIGINT`,
+      [eventId, req.session.userId]
+    );
+  }
+  res.json({ success: true });
+});
+
+router.delete('/:id/events/:eventId', async (req, res) => {
+  const { id, eventId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Server admins only' });
+  const deleted = await pool.query('DELETE FROM server_events WHERE id=$1 AND server_id=$2 RETURNING title', [eventId, id]);
+  if (!deleted.rows.length) return res.status(404).json({ error: 'Event not found' });
+  await addModerationLog(id, 'event_deleted', req.session.userId, null, deleted.rows[0].title);
+  res.json({ success: true });
+});
+
+router.get('/:id/emojis', async (req, res) => {
+  const { id } = req.params;
+  const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
+  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  const result = await pool.query('SELECT id,name FROM server_emojis WHERE server_id=$1 ORDER BY name ASC', [id]);
+  res.json({ emojis: result.rows.map(emoji => ({
+    id: emoji.id, name: emoji.name, imageDataUrl: `/api/servers/${id}/emojis/${emoji.id}/image`
+  })), enabled: (await activeBoostFeatures(id)).has('emojis'), canManage: await isAdmin(id, req.session.userId) });
+});
+
+router.get('/:id/emojis/:emojiId/image', async (req, res) => {
+  const { id, emojiId } = req.params;
+  const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
+  if (!member.rows.length) return res.status(403).end();
+  const result = await pool.query('SELECT image_data,image_mime FROM server_emojis WHERE id=$1 AND server_id=$2', [emojiId, id]);
+  if (!result.rows.length) return res.status(404).end();
+  res.set('Cache-Control', 'private, max-age=604800, immutable');
+  res.type(result.rows[0].image_mime).send(Buffer.from(result.rows[0].image_data, 'base64'));
+});
+
+router.post('/:id/emojis', upload.single('image'), async (req, res) => {
+  const { id } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Server admins only' });
+  if (!(await activeBoostFeatures(id)).has('emojis')) return res.status(403).json({ error: 'Allocate one boost to Custom Emojis first' });
+  const name = String(req.body.name || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 32);
+  if (name.length < 2 || !req.file) return res.status(400).json({ error: 'Enter an emoji name and choose an image' });
+  if (req.file.size > 256 * 1024) return res.status(400).json({ error: 'Custom emoji images must be 256 KB or smaller' });
+  const count = await pool.query('SELECT COUNT(*)::int AS count FROM server_emojis WHERE server_id=$1', [id]);
+  if (count.rows[0].count >= 50) return res.status(400).json({ error: 'This server has reached 50 custom emojis' });
+  try {
+    await pool.query(
+      'INSERT INTO server_emojis (id,server_id,name,image_data,image_mime,uploaded_by) VALUES ($1,$2,$3,$4,$5,$6)',
+      [uuidv4(), id, name, req.file.buffer.toString('base64'), req.file.mimetype, req.session.userId]
+    );
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'That emoji name already exists' });
+    throw error;
+  }
+  await addModerationLog(id, 'emoji_uploaded', req.session.userId, null, `:${name}:`);
+  res.json({ success: true });
+});
+
+router.delete('/:id/emojis/:emojiId', async (req, res) => {
+  const { id, emojiId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Server admins only' });
+  const deleted = await pool.query('DELETE FROM server_emojis WHERE id=$1 AND server_id=$2 RETURNING name', [emojiId, id]);
+  if (!deleted.rows.length) return res.status(404).json({ error: 'Emoji not found' });
+  await addModerationLog(id, 'emoji_deleted', req.session.userId, null, `:${deleted.rows[0].name}:`);
+  res.json({ success: true });
+});
+
+router.get('/:id/moderation', async (req, res) => {
+  const { id } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Server admins only' });
+  const [logs, mutes] = await Promise.all([
+    pool.query(
+      `SELECT log.id,log.action,log.details,log.created_at,
+         actor.username AS actor_username,target.username AS target_username,ch.name AS channel_name
+       FROM moderation_logs log JOIN users actor ON actor.id=log.actor_user_id
+       LEFT JOIN users target ON target.id=log.target_user_id
+       LEFT JOIN channels ch ON ch.id=log.channel_id
+       WHERE log.server_id=$1 ORDER BY log.created_at DESC LIMIT 200`,
+      [id]
+    ),
+    pool.query(
+      `SELECT mute.user_id, mute.reason, mute.muted_until, target.username
+       FROM server_mutes mute JOIN users target ON target.id=mute.user_id
+       WHERE mute.server_id=$1 AND mute.muted_until>EXTRACT(EPOCH FROM NOW())::BIGINT ORDER BY mute.muted_until DESC`,
+      [id]
+    )
+  ]);
+  res.json({
+    logs: logs.rows.map(log => ({
+      id: log.id, action: log.action, details: log.details || '', createdAt: Number(log.created_at),
+      actorUsername: log.actor_username, targetUsername: log.target_username || null, channelName: log.channel_name || null
+    })),
+    mutes: mutes.rows.map(mute => ({ userId: mute.user_id, username: mute.username, reason: mute.reason || '', mutedUntil: Number(mute.muted_until) }))
+  });
+});
+
+router.post('/:id/mutes', async (req, res) => {
+  const { id } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Server admins only' });
+  const userId = String(req.body.userId || '');
+  const durationSeconds = Math.max(60, Math.min(Number(req.body.durationSeconds) || 3600, 2592000));
+  const reason = String(req.body.reason || '').trim().slice(0, 300);
+  const target = await pool.query('SELECT role FROM server_members WHERE server_id=$1 AND user_id=$2', [id, userId]);
+  if (!target.rows.length) return res.status(404).json({ error: 'Member not found' });
+  const server = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [id]);
+  if (server.rows[0]?.owner_id === userId) return res.status(403).json({ error: 'The server owner cannot be muted' });
+  const until = Math.floor(Date.now() / 1000) + durationSeconds;
+  await pool.query(
+    `INSERT INTO server_mutes (id,server_id,user_id,muted_by,reason,muted_until) VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (server_id,user_id) DO UPDATE SET muted_by=$4,reason=$5,muted_until=$6,created_at=EXTRACT(EPOCH FROM NOW())::BIGINT`,
+    [uuidv4(), id, userId, req.session.userId, reason || null, until]
+  );
+  await addModerationLog(id, 'mute', req.session.userId, userId, `${durationSeconds}s${reason ? ` | ${reason}` : ''}`);
+  res.json({ success: true, mutedUntil: until });
+});
+
+router.delete('/:id/mutes/:userId', async (req, res) => {
+  const { id, userId } = req.params;
+  if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Server admins only' });
+  await pool.query('DELETE FROM server_mutes WHERE server_id=$1 AND user_id=$2', [id, userId]);
+  await addModerationLog(id, 'unmute', req.session.userId, userId);
+  res.json({ success: true });
+});
+
 router.patch('/:id/invite-style', async (req, res) => {
   const { id } = req.params;
   if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
@@ -685,6 +966,7 @@ router.patch('/:id/members/:userId/role', async (req, res) => {
     await pool.query('UPDATE server_members SET role_id=NULL, role=\'member\' WHERE server_id=$1 AND user_id=$2', [id, userId]);
   }
   await syncAll(userId);
+  await addModerationLog(id, 'role_changed', req.session.userId, userId, roleId || 'Role cleared');
   res.json({ success: true });
 });
 
@@ -746,6 +1028,7 @@ router.post('/join/:code', async (req, res) => {
   if (already.rows.length) return res.json({ server: fmtServer(server), alreadyMember: true });
   await pool.query('INSERT INTO server_members (id, server_id, user_id) VALUES ($1,$2,$3)', [uuidv4(), server.id, req.session.userId]);
   await syncAll(req.session.userId);
+  await addModerationLog(server.id, 'member_joined', req.session.userId, req.session.userId);
   res.json({ server: fmtServer(server) });
 });
 
@@ -793,6 +1076,7 @@ router.delete('/:id/leave', async (req, res) => {
   const { id } = req.params;
   const s = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [id]);
   if (s.rows[0]?.owner_id === req.session.userId) return res.status(400).json({ error: 'Owner cannot leave — delete the server instead' });
+  await addModerationLog(id, 'member_left', req.session.userId, req.session.userId);
   await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   res.json({ success: true });
 });
@@ -812,6 +1096,7 @@ router.post('/:id/kick/:userId', async (req, res) => {
   if (!await hasPermission(id, req.session.userId, 'can_kick_members')) return res.status(403).json({ error: 'You need Kick Members permission' });
   const server = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [id]);
   if (server.rows[0]?.owner_id === userId) return res.status(400).json({ error: 'Cannot kick the owner' });
+  await addModerationLog(id, 'member_kicked', req.session.userId, userId);
   await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [id, userId]);
   try {
     if (req.io) req.io.to(`user:${userId}`).emit('kicked_from_server', { serverId: id });
@@ -825,6 +1110,7 @@ router.post('/:id/ban/:userId', async (req, res) => {
   const server = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [id]);
   if (server.rows[0]?.owner_id === userId) return res.status(400).json({ error: 'Cannot ban the owner' });
   const { reason } = req.body;
+  await addModerationLog(id, 'member_banned', req.session.userId, userId, reason || null);
   await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [id, userId]);
   await pool.query(
     `INSERT INTO server_bans (id, server_id, user_id, banned_by, reason) VALUES ($1,$2,$3,$4,$5)
@@ -841,6 +1127,7 @@ router.post('/:id/unban/:userId', async (req, res) => {
   const { id, userId } = req.params;
   if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
   await pool.query('DELETE FROM server_bans WHERE server_id=$1 AND user_id=$2', [id, userId]);
+  await addModerationLog(id, 'member_unbanned', req.session.userId, userId);
   res.json({ success: true });
 });
 
@@ -990,6 +1277,8 @@ router.post('/:id/channels/:chId/forum/posts', async (req, res) => {
   const { id, chId } = req.params;
   if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
   if (!await hasPermission(id, req.session.userId, 'can_create_forum_posts')) return res.status(403).json({ error: 'You do not have permission to create forum posts' });
+  const muteError = await activeTextMute(id, req.session.userId);
+  if (muteError) return res.status(403).json({ error: muteError });
   const title = String(req.body.title || '').trim().slice(0, 120);
   const content = String(req.body.content || '').trim().slice(0, 4000);
   if (!title || !content) return res.status(400).json({ error: 'A title and message are required' });
@@ -1036,6 +1325,8 @@ router.post('/:id/channels/:chId/forum/posts/:postId/replies', async (req, res) 
   const { id, chId, postId } = req.params;
   if (!await requireForumAccess(id, chId, req.session.userId)) return res.status(403).json({ error: 'Forum unavailable' });
   if (!await hasPermission(id, req.session.userId, 'can_reply_forum_posts')) return res.status(403).json({ error: 'You do not have permission to reply in forums' });
+  const muteError = await activeTextMute(id, req.session.userId);
+  if (muteError) return res.status(403).json({ error: muteError });
   const content = String(req.body.content || '').trim().slice(0, 4000);
   if (!content) return res.status(400).json({ error: 'Reply cannot be empty' });
   const violation = await enforceGlobalSafety({ userId: req.session.userId, content, messageType: 'forum_reply', serverId: id, channelId: chId });

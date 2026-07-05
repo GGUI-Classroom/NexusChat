@@ -101,7 +101,7 @@ async function writeAudit(actorId, action, targetType = null, targetId = null, d
 
 function auditDetails(req) {
   const body = req.body && typeof req.body === 'object' ? req.body : {};
-  const allowed = ['username', 'duration', 'unit', 'reason', 'nexals', 'displayName', 'decorationId',
+  const allowed = ['username', 'duration', 'durationSeconds', 'unit', 'reason', 'nexals', 'displayName', 'decorationId',
     'nameplateId', 'fontId', 'days', 'category', 'title', 'action', 'active'];
   const details = {};
   allowed.forEach(key => {
@@ -274,6 +274,44 @@ router.post('/unsuspend', async (req, res) => {
   const user = await pool.query('SELECT id FROM users WHERE LOWER(username)=LOWER($1)', [username]);
   if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
   await pool.query('UPDATE suspensions SET active=FALSE WHERE user_id=$1', [user.rows[0].id]);
+  res.json({ success: true });
+});
+
+router.get('/global-mutes', async (req, res) => {
+  const result = await pool.query(
+    `SELECT mute.id,mute.user_id,mute.reason,mute.muted_until,target.username,
+       actor.username AS admin_username
+     FROM global_mutes mute JOIN users target ON target.id=mute.user_id
+     JOIN users actor ON actor.id=mute.muted_by
+     WHERE mute.active=TRUE AND mute.muted_until>EXTRACT(EPOCH FROM NOW())::BIGINT
+     ORDER BY mute.muted_until DESC`
+  );
+  res.json({ mutes: result.rows.map(mute => ({
+    id: mute.id, userId: mute.user_id, username: mute.username, reason: mute.reason || '',
+    mutedUntil: Number(mute.muted_until), adminUsername: mute.admin_username
+  })) });
+});
+
+router.post('/global-mutes', async (req, res) => {
+  const username = String(req.body.username || '').trim();
+  const durationSeconds = Math.max(60, Math.min(Number(req.body.durationSeconds) || 3600, 2592000));
+  const reason = String(req.body.reason || '').trim().slice(0, 300);
+  const target = await pool.query('SELECT id,username FROM users WHERE LOWER(username)=LOWER($1)', [username]);
+  if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
+  if (ADMIN_IDS.has(target.rows[0].id)) return res.status(403).json({ error: 'A core admin cannot be globally muted' });
+  await pool.query('UPDATE global_mutes SET active=FALSE WHERE user_id=$1 AND active=TRUE', [target.rows[0].id]);
+  const id = uuidv4();
+  const mutedUntil = Math.floor(Date.now() / 1000) + durationSeconds;
+  await pool.query(
+    'INSERT INTO global_mutes (id,user_id,muted_by,reason,muted_until) VALUES ($1,$2,$3,$4,$5)',
+    [id, target.rows[0].id, req.session.userId, reason || null, mutedUntil]
+  );
+  res.json({ success: true, id, username: target.rows[0].username, mutedUntil });
+});
+
+router.delete('/global-mutes/:muteId', async (req, res) => {
+  const result = await pool.query('UPDATE global_mutes SET active=FALSE WHERE id=$1 AND active=TRUE RETURNING id', [req.params.muteId]);
+  if (!result.rows.length) return res.status(404).json({ error: 'Active global mute not found' });
   res.json({ success: true });
 });
 

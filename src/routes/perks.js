@@ -122,7 +122,8 @@ router.patch('/servers/:serverId/tag', async (req, res) => {
 router.post('/servers/:serverId/spend', async (req, res) => {
   const { serverId } = req.params;
   const feature = String(req.body.feature || '');
-  if (!['tag', 'gradients', 'invite_banner'].includes(feature)) return res.status(400).json({ error: 'Invalid boost feature' });
+  const featureCosts = { tag: 2, gradients: 2, invite_banner: 2, emojis: 1 };
+  if (!Object.prototype.hasOwnProperty.call(featureCosts, feature)) return res.status(400).json({ error: 'Invalid boost feature' });
   if (!await isServerAdmin(serverId, req.session.userId)) return res.status(403).json({ error: 'Owners and admins only' });
   const now = nowSeconds();
   const [boosts, allocations] = await Promise.all([
@@ -130,7 +131,11 @@ router.post('/servers/:serverId/spend', async (req, res) => {
     pool.query('SELECT feature FROM server_boost_allocations WHERE server_id=$1', [serverId])
   ]);
   if (allocations.rows.some(row => row.feature === feature)) return res.status(409).json({ error: 'This feature already has boosts allocated' });
-  if (boosts.rows[0].count < (allocations.rows.length + 1) * 2) return res.status(400).json({ error: 'Two unallocated active boosts are required' });
+  const allocatedBoosts = allocations.rows.reduce((total, row) => total + (featureCosts[row.feature] || 2), 0);
+  const required = featureCosts[feature];
+  if (boosts.rows[0].count - allocatedBoosts < required) {
+    return res.status(400).json({ error: `${required} unallocated active boost${required === 1 ? '' : 's'} required` });
+  }
   await pool.query('INSERT INTO server_boost_allocations (id, server_id, feature) VALUES ($1,$2,$3)', [uuidv4(), serverId, feature]);
   res.json({ success: true, feature });
 });

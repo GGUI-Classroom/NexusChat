@@ -84,6 +84,8 @@
   let activeServerId = null;
   let activeChannelId = null;
   let activeServerData = null; // { server, channels, members }
+  let activeServerEmojis = [];
+  let serverModerationData = { logs: [], mutes: [] };
   let isCurrentServerAdmin = false;
   let pendingChannelReply = null;
   let activeChannelTopic = null;
@@ -1950,12 +1952,14 @@
 
     renderChannelList(r.channels, canManageChannels);
     renderMemberList(r.members);
+    loadActiveServerEmojis(serverId);
 
     // Join socket room
     if (socket) socket.emit('join_server_room', { serverId });
 
     // Open first channel
     if (r.channels.length) openChannel(r.channels[0]);
+    checkServerOnboarding(serverId);
   }
 
   function renderChannelList(channels, isAdmin) {
@@ -2953,6 +2957,49 @@
   });
 
   // ---- Server Settings ----
+  $('server-events-btn').addEventListener('click', async () => {
+    if (!activeServerId) return;
+    $('server-events-modal').classList.add('active');
+    await loadServerEvents();
+  });
+  $('server-events-close').addEventListener('click', () => $('server-events-modal').classList.remove('active'));
+  $('server-events-modal').addEventListener('click', event => {
+    if (event.target === $('server-events-modal')) $('server-events-modal').classList.remove('active');
+  });
+
+  async function loadServerEvents() {
+    const result = await api('GET', `/api/servers/${activeServerId}/events`);
+    const list = $('server-events-list');
+    if (result.error) { list.innerHTML = `<div class="form-error">${esc(result.error)}</div>`; return; }
+    $('server-events-create').innerHTML = result.canManage ? `<div class="event-create-form"><input id="event-title" maxlength="100" placeholder="Event title"><input id="event-start" type="datetime-local"><input id="event-location" maxlength="100" placeholder="Voice channel or location"><textarea id="event-description" maxlength="1000" placeholder="What is happening?"></textarea><button class="btn-primary" onclick="createServerEvent()">Create Event</button></div>` : '';
+    list.innerHTML = (result.events || []).length
+      ? result.events.map(event => `<article class="server-event-card"><div class="server-event-date"><b>${new Date(event.startsAt * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })}</b><span>${new Date(event.startsAt * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></div><div class="server-event-info"><h3>${esc(event.title)}</h3><p>${esc(event.description || 'No description')}</p><span>${event.location ? esc(event.location) + ' · ' : ''}${event.interestedCount} interested · hosted by @${esc(event.creatorUsername)}</span></div><div class="server-event-actions"><button class="${event.interested ? 'btn-secondary' : 'btn-primary'}" onclick="rsvpServerEvent('${event.id}',${event.interested ? 'false' : 'true'})">${event.interested ? 'Interested ✓' : 'Interested'}</button>${result.canManage ? `<button class="icon-btn" onclick="deleteServerEvent('${event.id}')" title="Delete">×</button>` : ''}</div></article>`).join('')
+      : '<div class="empty-state">No upcoming events.</div>';
+  }
+
+  window.createServerEvent = async function() {
+    const startsAt = Math.floor(new Date($('event-start').value).getTime() / 1000);
+    const result = await api('POST', `/api/servers/${activeServerId}/events`, {
+      title: $('event-title').value,
+      startsAt,
+      location: $('event-location').value,
+      description: $('event-description').value
+    });
+    if (result.error) return toast(result.error, 'error');
+    await loadServerEvents();
+  };
+  window.rsvpServerEvent = async function(eventId, interested) {
+    const result = await api('POST', `/api/servers/${activeServerId}/events/${eventId}/rsvp`, { interested });
+    if (result.error) return toast(result.error, 'error');
+    await loadServerEvents();
+  };
+  window.deleteServerEvent = async function(eventId) {
+    if (!confirm('Delete this event?')) return;
+    const result = await api('DELETE', `/api/servers/${activeServerId}/events/${eventId}`);
+    if (result.error) return toast(result.error, 'error');
+    await loadServerEvents();
+  };
+
   $('server-economy-btn').addEventListener('click', async () => {
     if (!activeServerId) return;
     $('member-server-economy-content').innerHTML = '<div class="loading">Loading server shop...</div>';
@@ -2990,6 +3037,9 @@
     renderRolesList(activeServerData.roles || []);
     renderBoostSettings(s);
     renderDiscoverySettings(s);
+    await loadOnboardingSettings();
+    await loadServerEmojiSettings();
+    await loadServerModeration();
     await loadServerEconomy();
     loadBansList();
     $('server-settings-modal').classList.add('active');
@@ -3002,7 +3052,136 @@
   function renderBoostSettings(server) {
     const features = new Set(server.boostFeatures || []);
     $('boosts-settings-content').innerHTML = `<div class="shop-card"><div class="shop-card-name">${server.boostCount || 0} active boosts</div><div class="shop-card-desc">Allocate two boosts per server feature. Expired boosts automatically disable the feature they funded.</div></div><div class="shop-grid" style="margin-top:12px"><div class="shop-card"><div class="shop-card-name">Server Tag</div><div class="shop-card-desc">A clickable tag card shown beside members across DMs and servers.</div><button class="shop-card-btn ${features.has('tag') ? 'equip' : 'buy'}" onclick="spendBoosts('tag')">${features.has('tag') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Role Gradients</div><div class="shop-card-desc">Unlock animated gradient colors in the role editor.</div><button class="shop-card-btn ${features.has('gradients') ? 'equip' : 'buy'}" onclick="spendBoosts('gradients')">${features.has('gradients') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Invite Banners</div><div class="shop-card-desc">Unlock a gradient or secure image banner for rich server invites.</div><button class="shop-card-btn ${features.has('invite_banner') ? 'equip' : 'buy'}" onclick="spendBoosts('invite_banner')">${features.has('invite_banner') ? 'Allocated' : 'Spend 2 Boosts'}</button></div></div>`;
+    $('boosts-settings-content').querySelector('.shop-card-desc').textContent = 'Allocate boosts to server features. Expired boosts automatically disable the features they funded.';
+    $('boosts-settings-content').querySelector('.shop-grid').insertAdjacentHTML('beforeend', `<div class="shop-card"><div class="shop-card-name">Custom Emojis</div><div class="shop-card-desc">Upload up to 50 custom server emojis.</div><button class="shop-card-btn ${features.has('emojis') ? 'equip' : 'buy'}" onclick="spendBoosts('emojis')">${features.has('emojis') ? 'Allocated' : 'Spend 1 Boost'}</button></div>`);
   }
+
+  async function loadOnboardingSettings() {
+    if (!activeServerId) return;
+    const result = await api('GET', `/api/servers/${activeServerId}/onboarding`);
+    if (result.error) return showError('onboarding-error', result.error);
+    $('onboarding-enabled').checked = !!result.enabled;
+    $('onboarding-title').value = result.welcomeTitle || 'Welcome';
+    $('onboarding-message').value = result.welcomeMessage || '';
+    $('onboarding-rules').value = (result.rules || []).join('\n');
+    $('onboarding-role-selection').checked = !!result.allowRoleSelection;
+  }
+
+  $('save-onboarding-btn').addEventListener('click', async () => {
+    const result = await api('PATCH', `/api/servers/${activeServerId}/onboarding`, {
+      enabled: $('onboarding-enabled').checked,
+      welcomeTitle: $('onboarding-title').value,
+      welcomeMessage: $('onboarding-message').value,
+      rules: $('onboarding-rules').value.split(/\r?\n/).map(rule => rule.trim()).filter(Boolean),
+      allowRoleSelection: $('onboarding-role-selection').checked
+    });
+    if (result.error) return showError('onboarding-error', result.error);
+    showError('onboarding-error', '');
+    toast('Onboarding saved', 'success');
+  });
+
+  async function checkServerOnboarding(serverId) {
+    const result = await api('GET', `/api/servers/${serverId}/onboarding`);
+    if (activeServerId !== serverId) return;
+    if (result.error || !result.enabled || result.completed) return;
+    $('onboarding-view-title').textContent = result.welcomeTitle || 'Welcome';
+    $('onboarding-view-message').textContent = result.welcomeMessage || '';
+    $('onboarding-view-rules').innerHTML = (result.rules || []).map((rule, index) => `<div class="onboarding-rule"><b>${index + 1}</b><span>${esc(rule)}</span></div>`).join('');
+    $('onboarding-view-role-wrap').style.display = result.allowRoleSelection && result.roles.length ? 'block' : 'none';
+    $('onboarding-view-role').innerHTML = `<option value="">No role</option>${(result.roles || []).map(role => `<option value="${role.id}">${esc(role.name)}</option>`).join('')}`;
+    $('onboarding-agree').checked = false;
+    $('server-onboarding-modal').classList.add('active');
+  }
+
+  $('complete-onboarding-btn').addEventListener('click', async () => {
+    if (!$('onboarding-agree').checked) return showError('onboarding-view-error', 'Read and accept the rules first.');
+    const result = await api('POST', `/api/servers/${activeServerId}/onboarding/complete`, { roleId: $('onboarding-view-role').value || null });
+    if (result.error) return showError('onboarding-view-error', result.error);
+    $('server-onboarding-modal').classList.remove('active');
+    toast('Welcome to the server', 'success');
+    await loadServerSidebar(activeServerId);
+  });
+
+  async function loadActiveServerEmojis(serverId) {
+    const result = await api('GET', `/api/servers/${serverId}/emojis`);
+    activeServerEmojis = result.error || !result.enabled ? [] : (result.emojis || []);
+  }
+
+  async function loadServerEmojiSettings() {
+    if (!activeServerId) return;
+    const result = await api('GET', `/api/servers/${activeServerId}/emojis`);
+    if (result.error) return showError('server-emoji-error', result.error);
+    activeServerEmojis = result.emojis || [];
+    $('upload-server-emoji-btn').disabled = !result.enabled;
+    $('server-emoji-settings-grid').innerHTML = activeServerEmojis.length
+      ? activeServerEmojis.map(emoji => `<div class="server-emoji-item"><img src="${emoji.imageDataUrl}" alt=""><span>:${esc(emoji.name)}:</span><button class="icon-btn" onclick="deleteServerEmoji('${emoji.id}')" title="Delete">×</button></div>`).join('')
+      : '<div class="empty-state">No custom emojis yet.</div>';
+  }
+
+  $('upload-server-emoji-btn').addEventListener('click', async () => {
+    const file = $('server-emoji-file').files[0];
+    const name = $('server-emoji-name').value.trim();
+    if (!file || !name) return showError('server-emoji-error', 'Choose an image and enter a name.');
+    const form = new FormData();
+    form.append('name', name);
+    form.append('image', file);
+    const response = await fetch(`/api/servers/${activeServerId}/emojis`, { method: 'POST', body: form, credentials: 'include', headers: deviceHeaders() });
+    const result = await response.json().catch(() => ({ error: 'Invalid server response' }));
+    if (!response.ok || result.error) return showError('server-emoji-error', result.error || 'Upload failed');
+    $('server-emoji-name').value = '';
+    $('server-emoji-file').value = '';
+    showError('server-emoji-error', '');
+    await loadServerEmojiSettings();
+    toast('Emoji uploaded', 'success');
+  });
+
+  window.deleteServerEmoji = async function(emojiId) {
+    const result = await api('DELETE', `/api/servers/${activeServerId}/emojis/${emojiId}`);
+    if (result.error) return toast(result.error, 'error');
+    await loadServerEmojiSettings();
+  };
+
+  async function loadServerModeration() {
+    if (!activeServerId || !isCurrentServerAdmin) return;
+    const result = await api('GET', `/api/servers/${activeServerId}/moderation`);
+    if (result.error) return showError('server-moderation-error', result.error);
+    serverModerationData = result;
+    $('server-mute-user').innerHTML = (activeServerData.members || [])
+      .filter(member => member.id !== activeServerData.server.ownerId)
+      .map(member => `<option value="${member.id}">@${esc(member.username)}</option>`).join('');
+    renderServerModeration();
+  }
+
+  function renderServerModeration() {
+    const query = ($('moderation-timeline-search').value || '').toLowerCase();
+    $('server-active-mutes').innerHTML = (serverModerationData.mutes || []).length
+      ? serverModerationData.mutes.map(mute => `<div class="active-mute-row"><div><b>@${esc(mute.username)}</b><span>Until ${new Date(mute.mutedUntil * 1000).toLocaleString()}${mute.reason ? ` · ${esc(mute.reason)}` : ''}</span></div><button class="btn-secondary" onclick="unmuteServerMember('${mute.userId}')">Unmute</button></div>`).join('')
+      : '<p class="field-hint">No active server mutes.</p>';
+    const logs = (serverModerationData.logs || []).filter(log => `${log.action} ${log.actorUsername} ${log.targetUsername || ''} ${log.details || ''}`.toLowerCase().includes(query));
+    $('moderation-timeline').innerHTML = logs.length
+      ? logs.map(log => `<div class="moderation-entry"><i></i><div><b>${esc(log.action.replace(/_/g, ' '))}</b><span>${new Date(log.createdAt * 1000).toLocaleString()} · by @${esc(log.actorUsername)}</span>${log.targetUsername ? `<p>Target: @${esc(log.targetUsername)}</p>` : ''}${log.details ? `<p>${esc(log.details)}</p>` : ''}</div></div>`).join('')
+      : '<div class="empty-state">No matching moderation activity.</div>';
+  }
+
+  $('moderation-timeline-search').addEventListener('input', renderServerModeration);
+  $('server-mute-btn').addEventListener('click', async () => {
+    const durationSeconds = Number($('server-mute-duration').value) * Number($('server-mute-unit').value);
+    const result = await api('POST', `/api/servers/${activeServerId}/mutes`, {
+      userId: $('server-mute-user').value,
+      durationSeconds,
+      reason: $('server-mute-reason').value
+    });
+    if (result.error) return showError('server-moderation-error', result.error);
+    $('server-mute-reason').value = '';
+    await loadServerModeration();
+    toast('Member muted', 'success');
+  });
+
+  window.unmuteServerMember = async function(userId) {
+    const result = await api('DELETE', `/api/servers/${activeServerId}/mutes/${userId}`);
+    if (result.error) return toast(result.error, 'error');
+    await loadServerModeration();
+  };
 
   let serverEconomyData = null;
   async function loadServerEconomy(targetId = 'server-economy-content') {
@@ -5685,7 +5864,7 @@
     if (tab === 'reports') adminLoadSystemReport();
     if (tab === 'userreports') adminLoadUserReports();
     if (tab === 'tos') adminLoadTos();
-    if (tab === 'suspend') adminLoadIpBans();
+    if (tab === 'suspend') { adminLoadIpBans(); adminLoadGlobalMutes(); }
     if (tab === 'userinfo') { $('admin-userinfo-result').innerHTML = ''; }
   }
 
@@ -5721,6 +5900,34 @@
     $('admin-unsuspend-username').value = '';
     toast('✓ @' + username + ' unsuspended', 'success');
   });
+
+  async function adminLoadGlobalMutes() {
+    const result = await api('GET', '/api/admin/global-mutes');
+    if (result.error) return showError('admin-global-mute-error', result.error);
+    $('admin-global-mutes-list').innerHTML = (result.mutes || []).length
+      ? result.mutes.map(mute => `<div class="active-mute-row"><div><b>@${esc(mute.username)}</b><span>Until ${new Date(mute.mutedUntil * 1000).toLocaleString()}${mute.reason ? ` · ${esc(mute.reason)}` : ''}</span></div><button class="btn-secondary" onclick="adminRemoveGlobalMute('${mute.id}')">Unmute</button></div>`).join('')
+      : '<p class="field-hint">No active global mutes.</p>';
+  }
+
+  $('admin-global-mute-btn').addEventListener('click', async () => {
+    const durationSeconds = Number($('admin-global-mute-duration').value) * Number($('admin-global-mute-unit').value);
+    const result = await api('POST', '/api/admin/global-mutes', {
+      username: $('admin-global-mute-username').value,
+      durationSeconds,
+      reason: $('admin-global-mute-reason').value
+    });
+    if (result.error) return showError('admin-global-mute-error', result.error);
+    $('admin-global-mute-username').value = '';
+    $('admin-global-mute-reason').value = '';
+    await adminLoadGlobalMutes();
+    toast(`@${result.username} globally muted`, 'success');
+  });
+
+  window.adminRemoveGlobalMute = async function(muteId) {
+    const result = await api('DELETE', `/api/admin/global-mutes/${muteId}`);
+    if (result.error) return toast(result.error, 'error');
+    await adminLoadGlobalMutes();
+  };
 
   if ($('admin-ipban-btn')) {
     $('admin-ipban-btn').addEventListener('click', async () => {
@@ -6596,6 +6803,7 @@
     if (value.endsWith('/client-control')) return ['Remote client control used', 'account'];
     if (value.endsWith('/suspend')) return ['User suspended', 'moderation'];
     if (value.endsWith('/unsuspend')) return ['User suspension removed', 'moderation'];
+    if (value.includes('/global-mutes')) return [value.startsWith('DELETE') ? 'Global mute removed' : 'User globally muted', 'moderation'];
     if (value.includes('/ip-ban')) return [value.startsWith('DELETE') ? 'Device ban removed' : 'Device banned', 'moderation'];
     if (value.includes('/admins')) return [value.startsWith('DELETE') ? 'Administrator removed' : 'Administrator added', 'security'];
     if (value.endsWith('/tos')) return ['Terms of Service published', 'policy'];
@@ -8621,9 +8829,75 @@
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  function buildUnicodeEmojiCatalog() {
+    const emojis = new Set('😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥸 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 ☹️ 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🫣 🤭 🫢 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕 👍 👎 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 🤝 👏 🙌 🫶 👐 🤲 🙏 ✍️ 💅 🤳 💪 🦾 🦿 🦵 🦶 👂 👃 🧠 🫀 🫁 👀 👁️ 💋 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 🔥 ✨ 🎉 🎊 💯 ✅ ❌ ⚠️ ⭐ 🌟 💫 ⚡ ☀️ 🌙 ☁️ 🌈 ❄️ ☔ 🍎 🍕 🍔 🍟 🌮 🍿 🍪 🎂 ☕ 🥤 ⚽ 🏀 🏈 ⚾ 🎾 🏐 🎮 🎲 🎯 🏆 🚗 ✈️ 🚀 🛸 🏠 🎵 🎶 🎤 🎧 📱 💻 ⌨️ 🖥️ 📷 💡 🔒 🔑 🎁 📌 📣 💬 🗨️ 💤'.split(/\s+/));
+    try {
+      const pictographic = /\p{Extended_Pictographic}/u;
+      [[0x2300, 0x27ff], [0x1f000, 0x1faff]].forEach(([start, end]) => {
+        for (let code = start; code <= end; code++) {
+          const symbol = String.fromCodePoint(code);
+          if (pictographic.test(symbol)) emojis.add(symbol);
+        }
+      });
+    } catch (_) {}
+    return [...emojis];
+  }
+  const unicodeEmojiCatalog = buildUnicodeEmojiCatalog();
+
+  function openGlobalEmojiPicker(button, targetId) {
+    const picker = $('global-emoji-picker');
+    const rect = button.getBoundingClientRect();
+    picker.dataset.target = targetId;
+    picker.style.display = 'block';
+    picker.style.left = `${Math.max(8, Math.min(window.innerWidth - 338, rect.right - 330))}px`;
+    picker.style.top = `${Math.max(8, rect.top - 390)}px`;
+    renderGlobalEmojiPicker('');
+  }
+
+  function renderGlobalEmojiPicker(query) {
+    const picker = $('global-emoji-picker');
+    const normalized = String(query || '').trim().toLowerCase();
+    const custom = activeView === 'channel'
+      ? activeServerEmojis.filter(emoji => !normalized || emoji.name.includes(normalized))
+      : [];
+    picker.innerHTML = `<div class="global-emoji-search"><input id="global-emoji-search-input" placeholder="Search emojis" value="${esc(query || '')}"><button type="button" id="global-emoji-close">×</button></div>
+      ${custom.length ? `<div class="emoji-section-title">SERVER EMOJIS</div><div class="global-emoji-grid custom">${custom.map(emoji => `<button type="button" data-custom-emoji="${esc(emoji.name)}" title=":${esc(emoji.name)}:"><img src="${emoji.imageDataUrl}" alt=""></button>`).join('')}</div>` : ''}
+      <div class="emoji-section-title">STANDARD EMOJIS</div>
+      <div class="global-emoji-grid">${unicodeEmojiCatalog.map(emoji => `<button type="button" data-unicode-emoji="${emoji}">${emoji}</button>`).join('')}</div>`;
+    $('global-emoji-search-input').addEventListener('input', event => renderGlobalEmojiPicker(event.target.value));
+    $('global-emoji-close').addEventListener('click', () => { picker.style.display = 'none'; });
+  }
+
+  document.querySelectorAll('.message-emoji-btn').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      openGlobalEmojiPicker(button, button.dataset.emojiTarget);
+    });
+  });
+  $('global-emoji-picker').addEventListener('click', event => {
+    const button = event.target.closest('[data-unicode-emoji],[data-custom-emoji]');
+    if (!button) return;
+    const input = $(event.currentTarget.dataset.target);
+    if (!input) return;
+    const value = button.dataset.unicodeEmoji || `:${button.dataset.customEmoji}:`;
+    const start = input.selectionStart;
+    input.value = input.value.slice(0, start) + value + input.value.slice(input.selectionEnd);
+    input.selectionStart = input.selectionEnd = start + value.length;
+    input.focus();
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('#global-emoji-picker,.message-emoji-btn')) $('global-emoji-picker').style.display = 'none';
+  });
+
   // ---- Render message content with mentions ----
   function renderContent(rawContent, mentions, authorColor) {
     let html = esc(rawContent);
+    if (activeView === 'channel' && activeServerEmojis.length) {
+      activeServerEmojis.forEach(emoji => {
+        const token = `:${emoji.name}:`;
+        html = html.split(token).join(`<img class="inline-custom-emoji" src="${emoji.imageDataUrl}" alt="${token}" title="${token}">`);
+      });
+    }
     html = html.replace(/&lt;@(everyone|here)&gt;/g, (match, name) => {
       return `<span class="mention-role mention-special">@${name}</span>`;
     });

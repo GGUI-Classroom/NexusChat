@@ -182,6 +182,8 @@ app.post('/api/nexus-link/inbound-dm', async (req, res) => {
   const toId = String(req.body.nexusPeerId || '');
   const content = String(req.body.content || '').trim().slice(0, 4000);
   if (!fromId || !toId || !content) return res.status(400).json({ error: 'A sender, recipient, and message are required' });
+  const globalMute = await getGlobalMuteState(fromId);
+  if (globalMute) return res.status(403).json({ error: 'Your Nexus account is globally muted' });
   const friendship = await pool.query(
     `SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1`,
     [fromId, toId]
@@ -220,6 +222,8 @@ app.post('/api/nexus-link/outbound-dm', async (req, res) => {
   const username = String(req.body.username || '').trim().replace(/^@/, '');
   const content = String(req.body.content || '').trim().slice(0, 4000);
   if (!fromId || !username || !content) return res.status(400).json({ error: 'A recipient and message are required' });
+  const globalMute = await getGlobalMuteState(fromId);
+  if (globalMute) return res.status(403).json({ error: 'Your Nexus account is globally muted' });
 
   const recipientResult = await pool.query(
     `SELECT id, username, display_name FROM users WHERE LOWER(username)=LOWER($1) LIMIT 1`,
@@ -271,6 +275,10 @@ app.post('/api/nexus-link/inbound-channel', async (req, res) => {
   const channelId = String(req.body.channelId || '');
   const content = String(req.body.content || '').trim().slice(0, 4000);
   if (!userId || !serverId || !channelId || !content) return res.status(400).json({ error: 'A mapped Nexus channel and message are required' });
+  const globalMute = await getGlobalMuteState(userId);
+  if (globalMute) return res.status(403).json({ error: 'Your Nexus account is globally muted' });
+  const serverMute = await getMuteState(serverId, userId);
+  if (serverMute) return res.status(403).json({ error: 'Your Nexus account is muted in this server' });
   const result = await pool.query(
     `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate,
       sm.role, sr.name AS role_name, sr.color AS role_color, sr.gradient_start, sr.gradient_end,
@@ -1002,6 +1010,22 @@ async function getMuteState(serverId, userId) {
   return { id: mute.id, mutedUntil: parseInt(mute.muted_until, 10) };
 }
 
+async function getGlobalMuteState(userId) {
+  const result = await pool.query(
+    `SELECT id, muted_until FROM global_mutes
+     WHERE user_id=$1 AND active=TRUE ORDER BY created_at DESC LIMIT 1`,
+    [userId]
+  );
+  if (!result.rows.length) return null;
+  const mute = result.rows[0];
+  const now = Math.floor(Date.now() / 1000);
+  if (Number(mute.muted_until) <= now) {
+    await pool.query('UPDATE global_mutes SET active=FALSE WHERE id=$1', [mute.id]);
+    return null;
+  }
+  return { id: mute.id, mutedUntil: Number(mute.muted_until) };
+}
+
 async function runChannelCommand({ socket, serverId, channelId, actorUserId, actorDisplayName, input, botConfig }) {
   const raw = String(input || '').trim();
   const prefix = (botConfig?.botPrefix || '/').toString();
@@ -1413,6 +1437,11 @@ io.on('connection', (socket) => {
     if (!toId || !content || typeof content !== 'string') return;
     const trimmed = content.trim().slice(0, 4000);
     if (!trimmed) return;
+    const globalMute = await getGlobalMuteState(userId);
+    if (globalMute) {
+      socket.emit('message_error', { error: `You are globally muted for ${humanDuration(globalMute.mutedUntil - Math.floor(Date.now() / 1000))} more.` });
+      return;
+    }
     const safetyViolation = await enforceGlobalSafety({
       userId,
       content: trimmed,
@@ -1507,6 +1536,14 @@ io.on('connection', (socket) => {
     const trimmed = content.trim().slice(0, 4000);
     const normalizedReplyId = typeof replyToMessageId === 'string' && replyToMessageId.trim() ? replyToMessageId.trim() : null;
     if (!trimmed) return;
+    const globalMute = await getGlobalMuteState(userId);
+    if (globalMute) {
+      socket.emit('channel_error', {
+        channelId,
+        error: `You are globally muted for ${humanDuration(globalMute.mutedUntil - Math.floor(Date.now() / 1000))} more.`
+      });
+      return;
+    }
 
     const safetyViolation = await enforceGlobalSafety({
       userId,
