@@ -2406,17 +2406,26 @@
     }
   };
 
+  const exhaustedChannelHistory = new Set();
   async function loadChannelMessages(channelId, prepend = false) {
+    if (prepend && exhaustedChannelHistory.has(channelId)) return;
     if (prepend && chLoadingOlder) return;
     if (prepend) chLoadingOlder = true;
+    else exhaustedChannelHistory.delete(channelId);
 
+    const requestedServerId = activeServerId;
     const list = $('channel-messages-list');
     const wrap = $('channel-messages-wrap');
     const oldest = list.querySelector('.message');
     const beforeTs = prepend && oldest ? oldest.dataset.ts : undefined;
-    const url = `/api/servers/${activeServerId}/channels/${channelId}/messages${beforeTs?`?before=${beforeTs}`:''}`;
+    const url = `/api/servers/${requestedServerId}/channels/${channelId}/messages?limit=30${beforeTs?`&before=${beforeTs}`:''}`;
     const r = await api('GET', url);
+    if (activeServerId !== requestedServerId || activeChannelId !== channelId) {
+      if (prepend) chLoadingOlder = false;
+      return;
+    }
     const messages = hydrateMessages(r);
+    if (messages.length < 30) exhaustedChannelHistory.add(channelId);
     if (!messages.length) {
       if (prepend) chLoadingOlder = false;
       return;
@@ -4000,10 +4009,13 @@
 
   let dmLoadingOlder = false; // lock to prevent multiple simultaneous loads
   let dmInitialScrollPending = false;
+  const exhaustedDmHistory = new Set();
 
   async function loadMessages(userId, prepend = false) {
+    if (prepend && exhaustedDmHistory.has(userId)) return;
     if (prepend && dmLoadingOlder) return; // prevent double-fire
     if (prepend) dmLoadingOlder = true;
+    else exhaustedDmHistory.delete(userId);
 
     const list = $('messages-list');
     const wrap = $('messages-wrap');
@@ -4011,9 +4023,14 @@
     const beforeTs = prepend && oldest ? oldest.dataset.ts : undefined;
 
     // Don't re-fetch if we got nothing last time for this conversation
-    const url = `/api/messages/${userId}${beforeTs ? `?before=${beforeTs}` : ''}`;
+    const url = `/api/messages/${userId}?limit=30${beforeTs ? `&before=${beforeTs}` : ''}`;
     const r = await api('GET', url);
+    if (activeDmUserId !== userId) {
+      if (prepend) dmLoadingOlder = false;
+      return;
+    }
     const messages = hydrateMessages(r);
+    if (messages.length < 30) exhaustedDmHistory.add(userId);
 
     if (!messages.length) {
       if (prepend) dmLoadingOlder = false;

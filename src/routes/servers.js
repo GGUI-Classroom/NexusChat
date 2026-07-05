@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const { syncAll } = require('./achievements');
 const { avatarUrl } = require('../utils/avatar');
 const { enforceGlobalSafety } = require('../utils/globalSafety');
+const { deleteCachedMedia, getCachedMedia, setCachedMedia } = require('../utils/mediaCache');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -52,7 +53,7 @@ function fmtServer(s) {
     inviteBannerMode: s.invite_banner_mode || 'solid',
     inviteBannerStart: s.invite_banner_start || '#5865f2',
     inviteBannerEnd: s.invite_banner_end || '#a855f7',
-    inviteBannerImage: (s.has_invite_banner || s.invite_banner_image) ? `/api/servers/${encodeURIComponent(s.id)}/banner` : null,
+    inviteBannerImage: s.invite_banner_image || null,
     discoveryEnabled: !!s.discovery_enabled,
     discoveryExpiresAt: s.discovery_expires_at ? Number(s.discovery_expires_at) : null
   };
@@ -176,10 +177,9 @@ router.get('/', async (req, res) => {
   const r = await pool.query(
     `SELECT s.id, s.name, s.owner_id, s.invite_code, s.created_at,
        s.server_tag, s.tag_private, s.invite_description, s.invite_tags,
-       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end,
+       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end, s.invite_banner_image,
        s.discovery_enabled, s.discovery_expires_at,
-       (s.icon_data IS NOT NULL) AS has_icon,
-       (s.invite_banner_image IS NOT NULL) AS has_invite_banner
+       (s.icon_data IS NOT NULL) AS has_icon
      FROM servers s JOIN server_members sm ON sm.server_id=s.id
      WHERE sm.user_id=$1 ORDER BY sm.joined_at ASC`,
     [req.session.userId]
@@ -193,10 +193,9 @@ router.get('/discover', async (req, res) => {
   const result = await pool.query(
     `SELECT s.id, s.name, s.owner_id, s.invite_code, s.created_at,
        s.server_tag, s.tag_private, s.invite_description, s.invite_tags,
-       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end,
+       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end, s.invite_banner_image,
        s.discovery_enabled, s.discovery_expires_at,
        (s.icon_data IS NOT NULL) AS has_icon,
-       (s.invite_banner_image IS NOT NULL) AS has_invite_banner,
        COUNT(sm.user_id)::int AS member_count,
        EXISTS(
          SELECT 1 FROM server_members mine
@@ -279,8 +278,7 @@ router.get('/invites/pending', async (req, res) => {
   const r = await pool.query(
     `SELECT si.id, si.server_id, si.from_id, si.created_at,
        s.name as server_name, (s.icon_data IS NOT NULL) AS has_icon, s.invite_description, s.invite_tags,
-       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end,
-       (s.invite_banner_image IS NOT NULL) AS has_invite_banner,
+       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end, s.invite_banner_image,
        u.username as from_username, u.display_name as from_display_name,
        (u.avatar_data IS NOT NULL) as from_has_avatar
      FROM server_invites si
@@ -296,7 +294,7 @@ router.get('/invites/pending', async (req, res) => {
     inviteDescription: i.invite_description || '', inviteTags: i.invite_tags || '',
     inviteBannerMode: i.invite_banner_mode || 'solid', inviteBannerStart: i.invite_banner_start || '#5865f2',
     inviteBannerEnd: i.invite_banner_end || '#a855f7',
-    inviteBannerImage: i.has_invite_banner ? `/api/servers/${encodeURIComponent(i.server_id)}/banner` : null,
+    inviteBannerImage: i.invite_banner_image || null,
     from: {
       username: i.from_username, displayName: i.from_display_name,
       avatarDataUrl: avatarUrl(i.from_id, !!i.from_has_avatar)
@@ -375,21 +373,19 @@ router.post('/', upload.single('icon'), async (req, res) => {
 // Serve server artwork separately so routine server-list responses never carry
 // large base64 payloads. Browser caching absorbs repeated sidebar/profile loads.
 router.get('/:id/icon', async (req, res) => {
+  const cacheKey = `server-icon:${req.params.id}`;
+  const cached = getCachedMedia(cacheKey);
+  if (cached) {
+    res.set('Cache-Control', 'private, max-age=3600');
+    return res.type(cached.mime).send(cached.data);
+  }
   const result = await pool.query('SELECT icon_data, icon_mime FROM servers WHERE id=$1', [req.params.id]);
   const icon = result.rows[0];
   if (!icon?.icon_data) return res.status(404).end();
+  const data = Buffer.from(icon.icon_data, 'base64');
+  setCachedMedia(cacheKey, data, icon.icon_mime || 'image/png');
   res.set('Cache-Control', 'private, max-age=3600');
-  res.type(icon.icon_mime || 'image/png').send(Buffer.from(icon.icon_data, 'base64'));
-});
-
-router.get('/:id/banner', async (req, res) => {
-  const result = await pool.query('SELECT invite_banner_image FROM servers WHERE id=$1', [req.params.id]);
-  const source = result.rows[0]?.invite_banner_image;
-  if (!source) return res.status(404).end();
-  const match = /^data:([^;,]+);base64,(.+)$/s.exec(source);
-  if (!match) return res.status(404).end();
-  res.set('Cache-Control', 'private, max-age=3600');
-  res.type(match[1]).send(Buffer.from(match[2], 'base64'));
+  res.type(icon.icon_mime || 'image/png').send(data);
 });
 
 // Get server details + channels + members + roles
@@ -403,9 +399,8 @@ router.get('/:id', async (req, res) => {
         bot_name, bot_prefix, bot_enabled, bot_auto_mod, bot_block_links,
         bot_caps_threshold, bot_spam_window, server_tag, tag_background, tag_private,
         invite_description, invite_tags, invite_banner_mode, invite_banner_start,
-        invite_banner_end, discovery_enabled, discovery_expires_at,
-        (icon_data IS NOT NULL) AS has_icon,
-        (invite_banner_image IS NOT NULL) AS has_invite_banner
+        invite_banner_end, invite_banner_image, discovery_enabled, discovery_expires_at,
+        (icon_data IS NOT NULL) AS has_icon
        FROM servers WHERE id=$1`,
       [id]
     ),
@@ -574,6 +569,7 @@ router.patch('/:id', upload.single('icon'), async (req, res) => {
   const iconData = req.file ? req.file.buffer.toString('base64') : s.rows[0].icon_data;
   const iconMime = req.file ? req.file.mimetype : s.rows[0].icon_mime;
   await pool.query('UPDATE servers SET name=$1, icon_data=$2, icon_mime=$3 WHERE id=$4', [name, iconData, iconMime, id]);
+  deleteCachedMedia(`server-icon:${id}`);
   const updated = await pool.query('SELECT * FROM servers WHERE id=$1', [id]);
   res.json({ server: fmtServer(updated.rows[0]) });
 });
@@ -754,10 +750,18 @@ router.get('/:id/emojis/:emojiId/image', async (req, res) => {
   const { id, emojiId } = req.params;
   const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   if (!member.rows.length) return res.status(403).end();
+  const cacheKey = `server-emoji:${emojiId}`;
+  const cached = getCachedMedia(cacheKey);
+  if (cached) {
+    res.set('Cache-Control', 'private, max-age=604800, immutable');
+    return res.type(cached.mime).send(cached.data);
+  }
   const result = await pool.query('SELECT image_data,image_mime FROM server_emojis WHERE id=$1 AND server_id=$2', [emojiId, id]);
   if (!result.rows.length) return res.status(404).end();
+  const data = Buffer.from(result.rows[0].image_data, 'base64');
+  setCachedMedia(cacheKey, data, result.rows[0].image_mime);
   res.set('Cache-Control', 'private, max-age=604800, immutable');
-  res.type(result.rows[0].image_mime).send(Buffer.from(result.rows[0].image_data, 'base64'));
+  res.type(result.rows[0].image_mime).send(data);
 });
 
 router.post('/:id/emojis', upload.single('image'), async (req, res) => {
@@ -787,6 +791,7 @@ router.delete('/:id/emojis/:emojiId', async (req, res) => {
   if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Server admins only' });
   const deleted = await pool.query('DELETE FROM server_emojis WHERE id=$1 AND server_id=$2 RETURNING name', [emojiId, id]);
   if (!deleted.rows.length) return res.status(404).json({ error: 'Emoji not found' });
+  deleteCachedMedia(`server-emoji:${emojiId}`);
   await addModerationLog(id, 'emoji_deleted', req.session.userId, null, `:${deleted.rows[0].name}:`);
   res.json({ success: true });
 });
@@ -1096,9 +1101,8 @@ router.post('/:id/invite', async (req, res) => {
     const io = req.io;
     const server = await pool.query(
       `SELECT name, invite_description, invite_tags, invite_banner_mode,
-        invite_banner_start, invite_banner_end,
-        (icon_data IS NOT NULL) AS has_icon,
-        (invite_banner_image IS NOT NULL) AS has_invite_banner
+        invite_banner_start, invite_banner_end, invite_banner_image,
+        (icon_data IS NOT NULL) AS has_icon
        FROM servers WHERE id=$1`,
       [id]
     );
@@ -1111,7 +1115,7 @@ router.post('/:id/invite', async (req, res) => {
         inviteDescription: s.invite_description || '', inviteTags: s.invite_tags || '',
         inviteBannerMode: s.invite_banner_mode || 'solid', inviteBannerStart: s.invite_banner_start || '#5865f2',
         inviteBannerEnd: s.invite_banner_end || '#a855f7',
-        inviteBannerImage: s.has_invite_banner ? `/api/servers/${encodeURIComponent(id)}/banner` : null,
+        inviteBannerImage: s.invite_banner_image || null,
         from: {
           username: u.username, displayName: u.display_name,
           avatarDataUrl: avatarUrl(req.session.userId, !!u.has_avatar)
@@ -1408,7 +1412,7 @@ router.patch('/:id/channels/:chId/forum/posts/:postId/lock', async (req, res) =>
 router.get('/:id/channels/:chId/messages', async (req, res) => {
   const { id, chId } = req.params;
   const { before } = req.query;
-  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 30));
   const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
   const channelMeta = await pool.query('SELECT channel_type FROM channels WHERE id=$1 AND server_id=$2', [chId, id]);

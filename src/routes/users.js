@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../middleware/auth');
 const { pool } = require('../models/db');
 const { avatarUrl, clearCachedAvatar, getAvatar } = require('../utils/avatar');
+const { deleteCachedMedia, getCachedMedia, setCachedMedia } = require('../utils/mediaCache');
 
 const router = express.Router();
 
@@ -32,7 +33,7 @@ router.post('/avatar', requireAuth, upload.single('avatar'), async (req, res) =>
 
 const bannerUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 },
+  limits: { fileSize: 3 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.mimetype)) cb(null, true);
     else cb(new Error('Banner must be a JPEG, PNG, GIF, or WebP image'));
@@ -51,6 +52,13 @@ router.get('/avatar/:userId', requireAuth, async (req, res) => {
 });
 
 router.get('/banner/:userId', requireAuth, async (req, res) => {
+  const cacheKey = `profile-banner:${req.params.userId}`;
+  const cached = getCachedMedia(cacheKey);
+  if (cached) {
+    res.setHeader('Content-Type', cached.mime);
+    res.setHeader('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800');
+    return res.send(cached.data);
+  }
   const result = await pool.query(
     'SELECT profile_banner_data, profile_banner_mime FROM users WHERE id=$1',
     [req.params.userId]
@@ -58,6 +66,7 @@ router.get('/banner/:userId', requireAuth, async (req, res) => {
   const row = result.rows[0];
   if (!row?.profile_banner_data) return res.sendStatus(404);
   const data = Buffer.from(row.profile_banner_data, 'base64');
+  setCachedMedia(cacheKey, data, row.profile_banner_mime || 'image/png');
   const etag = `"banner-${req.params.userId}-${data.length}"`;
   res.setHeader('Content-Type', row.profile_banner_mime || 'image/png');
   res.setHeader('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800');
@@ -69,7 +78,7 @@ router.get('/banner/:userId', requireAuth, async (req, res) => {
 router.post('/profile-banner', requireAuth, (req, res, next) => {
   bannerUpload.single('banner')(req, res, error => {
     if (!error) return next();
-    if (error.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Banner must be smaller than 8 MB' });
+    if (error.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Banner must be smaller than 3 MB' });
     return res.status(400).json({ error: error.message || 'Could not upload banner' });
   });
 }, async (req, res) => {
@@ -82,6 +91,7 @@ router.post('/profile-banner', requireAuth, (req, res, next) => {
     'UPDATE users SET profile_banner_data=$1, profile_banner_mime=$2 WHERE id=$3',
     [req.file.buffer.toString('base64'), req.file.mimetype, req.session.userId]
   );
+  deleteCachedMedia(`profile-banner:${req.session.userId}`);
   res.json({ success: true, profileBannerUrl: `/api/users/banner/${req.session.userId}?v=${Date.now()}` });
 });
 
@@ -90,6 +100,7 @@ router.delete('/profile-banner', requireAuth, async (req, res) => {
     'UPDATE users SET profile_banner_data=NULL, profile_banner_mime=NULL WHERE id=$1',
     [req.session.userId]
   );
+  deleteCachedMedia(`profile-banner:${req.session.userId}`);
   res.json({ success: true });
 });
 

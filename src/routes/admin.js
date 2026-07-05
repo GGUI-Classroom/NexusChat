@@ -367,7 +367,7 @@ router.delete('/ip-bans/:banId', async (req, res) => {
 // Get all servers
 router.get('/servers', async (req, res) => {
   const r = await pool.query(`
-    SELECT s.id, s.name, s.icon_data, s.icon_mime, s.invite_code,
+    SELECT s.id, s.name, (s.icon_data IS NOT NULL) AS has_icon, s.invite_code,
       u.username as owner_username, u.display_name as owner_display_name,
       (SELECT COUNT(*) FROM server_members sm WHERE sm.server_id=s.id) as member_count
     FROM servers s JOIN users u ON u.id=s.owner_id
@@ -375,7 +375,7 @@ router.get('/servers', async (req, res) => {
   `);
   res.json({ servers: r.rows.map(s => ({
     id: s.id, name: s.name, inviteCode: s.invite_code,
-    iconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
+    iconDataUrl: s.has_icon ? `/api/servers/${encodeURIComponent(s.id)}/icon` : null,
     ownerUsername: s.owner_username, ownerDisplayName: s.owner_display_name,
     memberCount: parseInt(s.member_count),
   }))});
@@ -642,7 +642,7 @@ router.get('/users/:userId', async (req, res) => {
   const u = userRes.rows[0];
 
   const serversRes = await pool.query(`
-    SELECT s.id, s.name, s.icon_data, s.icon_mime, sm.role,
+    SELECT s.id, s.name, (s.icon_data IS NOT NULL) AS has_icon, sm.role,
       (SELECT COUNT(*) FROM server_members sm2 WHERE sm2.server_id=s.id) as member_count
     FROM server_members sm
     JOIN servers s ON s.id=sm.server_id
@@ -674,7 +674,7 @@ router.get('/users/:userId', async (req, res) => {
     suspendReason: suspRes.rows[0]?.reason || null,
     servers: serversRes.rows.map(s => ({
       id: s.id, name: s.name, role: s.role, memberCount: parseInt(s.member_count),
-      iconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
+      iconDataUrl: s.has_icon ? `/api/servers/${encodeURIComponent(s.id)}/icon` : null,
     })),
     decorations: DECORATIONS.map(d => ({ id: d.id, name: d.name, rarity: d.rarity, owned: ownedSet.has(d.id) })),
     nameplates: NAMEPLATES.map(nameplate => ({

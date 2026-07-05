@@ -32,7 +32,7 @@ async function resolveMessageMentions(messages, allowedUserIds) {
 router.get('/:userId', async (req, res) => {
   const { userId } = req.params;
   const { before } = req.query;
-  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 30));
   const isFriend = await pool.query(
     `SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1)`,
     [req.session.userId, userId]
