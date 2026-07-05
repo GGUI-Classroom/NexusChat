@@ -43,7 +43,7 @@ function genInviteCode() { return Math.random().toString(36).substring(2,10).toU
 function fmtServer(s) {
   return {
     id: s.id, name: s.name, ownerId: s.owner_id,
-    iconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
+    iconDataUrl: (s.has_icon || s.icon_data) ? `/api/servers/${encodeURIComponent(s.id)}/icon` : null,
     inviteCode: s.invite_code, createdAt: s.created_at,
     tag: s.server_tag || null,
     tagPrivate: !!s.tag_private,
@@ -52,7 +52,7 @@ function fmtServer(s) {
     inviteBannerMode: s.invite_banner_mode || 'solid',
     inviteBannerStart: s.invite_banner_start || '#5865f2',
     inviteBannerEnd: s.invite_banner_end || '#a855f7',
-    inviteBannerImage: s.invite_banner_image || null,
+    inviteBannerImage: (s.has_invite_banner || s.invite_banner_image) ? `/api/servers/${encodeURIComponent(s.id)}/banner` : null,
     discoveryEnabled: !!s.discovery_enabled,
     discoveryExpiresAt: s.discovery_expires_at ? Number(s.discovery_expires_at) : null
   };
@@ -174,7 +174,13 @@ async function activeTextMute(serverId, userId) {
 // List my servers
 router.get('/', async (req, res) => {
   const r = await pool.query(
-    `SELECT s.* FROM servers s JOIN server_members sm ON sm.server_id=s.id
+    `SELECT s.id, s.name, s.owner_id, s.invite_code, s.created_at,
+       s.server_tag, s.tag_private, s.invite_description, s.invite_tags,
+       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end,
+       s.discovery_enabled, s.discovery_expires_at,
+       (s.icon_data IS NOT NULL) AS has_icon,
+       (s.invite_banner_image IS NOT NULL) AS has_invite_banner
+     FROM servers s JOIN server_members sm ON sm.server_id=s.id
      WHERE sm.user_id=$1 ORDER BY sm.joined_at ASC`,
     [req.session.userId]
   );
@@ -185,7 +191,13 @@ router.get('/', async (req, res) => {
 router.get('/discover', async (req, res) => {
   const now = Math.floor(Date.now() / 1000);
   const result = await pool.query(
-    `SELECT s.*, COUNT(sm.user_id)::int AS member_count,
+    `SELECT s.id, s.name, s.owner_id, s.invite_code, s.created_at,
+       s.server_tag, s.tag_private, s.invite_description, s.invite_tags,
+       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end,
+       s.discovery_enabled, s.discovery_expires_at,
+       (s.icon_data IS NOT NULL) AS has_icon,
+       (s.invite_banner_image IS NOT NULL) AS has_invite_banner,
+       COUNT(sm.user_id)::int AS member_count,
        EXISTS(
          SELECT 1 FROM server_members mine
          WHERE mine.server_id=s.id AND mine.user_id=$2
@@ -266,8 +278,9 @@ router.post('/:id/discovery', async (req, res) => {
 router.get('/invites/pending', async (req, res) => {
   const r = await pool.query(
     `SELECT si.id, si.server_id, si.from_id, si.created_at,
-       s.name as server_name, s.icon_data, s.icon_mime, s.invite_description, s.invite_tags,
-       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end, s.invite_banner_image,
+       s.name as server_name, (s.icon_data IS NOT NULL) AS has_icon, s.invite_description, s.invite_tags,
+       s.invite_banner_mode, s.invite_banner_start, s.invite_banner_end,
+       (s.invite_banner_image IS NOT NULL) AS has_invite_banner,
        u.username as from_username, u.display_name as from_display_name,
        (u.avatar_data IS NOT NULL) as from_has_avatar
      FROM server_invites si
@@ -279,10 +292,11 @@ router.get('/invites/pending', async (req, res) => {
   res.json({ invites: r.rows.map(i => ({
     id: i.id, serverId: i.server_id, fromId: i.from_id,
     serverName: i.server_name,
-    serverIconDataUrl: i.icon_data ? `data:${i.icon_mime};base64,${i.icon_data}` : null,
+    serverIconDataUrl: i.has_icon ? `/api/servers/${encodeURIComponent(i.server_id)}/icon` : null,
     inviteDescription: i.invite_description || '', inviteTags: i.invite_tags || '',
     inviteBannerMode: i.invite_banner_mode || 'solid', inviteBannerStart: i.invite_banner_start || '#5865f2',
-    inviteBannerEnd: i.invite_banner_end || '#a855f7', inviteBannerImage: i.invite_banner_image || null,
+    inviteBannerEnd: i.invite_banner_end || '#a855f7',
+    inviteBannerImage: i.has_invite_banner ? `/api/servers/${encodeURIComponent(i.server_id)}/banner` : null,
     from: {
       username: i.from_username, displayName: i.from_display_name,
       avatarDataUrl: avatarUrl(i.from_id, !!i.from_has_avatar)
@@ -358,13 +372,43 @@ router.post('/', upload.single('icon'), async (req, res) => {
   }
 });
 
+// Serve server artwork separately so routine server-list responses never carry
+// large base64 payloads. Browser caching absorbs repeated sidebar/profile loads.
+router.get('/:id/icon', async (req, res) => {
+  const result = await pool.query('SELECT icon_data, icon_mime FROM servers WHERE id=$1', [req.params.id]);
+  const icon = result.rows[0];
+  if (!icon?.icon_data) return res.status(404).end();
+  res.set('Cache-Control', 'private, max-age=3600');
+  res.type(icon.icon_mime || 'image/png').send(Buffer.from(icon.icon_data, 'base64'));
+});
+
+router.get('/:id/banner', async (req, res) => {
+  const result = await pool.query('SELECT invite_banner_image FROM servers WHERE id=$1', [req.params.id]);
+  const source = result.rows[0]?.invite_banner_image;
+  if (!source) return res.status(404).end();
+  const match = /^data:([^;,]+);base64,(.+)$/s.exec(source);
+  if (!match) return res.status(404).end();
+  res.set('Cache-Control', 'private, max-age=3600');
+  res.type(match[1]).send(Buffer.from(match[2], 'base64'));
+});
+
 // Get server details + channels + members + roles
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
   const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
   if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
   const [sRes, chRes, memRes, roleRes, boostRes] = await Promise.all([
-    pool.query('SELECT * FROM servers WHERE id=$1', [id]),
+    pool.query(
+      `SELECT id, name, owner_id, invite_code, created_at, mod_log_channel_id,
+        bot_name, bot_prefix, bot_enabled, bot_auto_mod, bot_block_links,
+        bot_caps_threshold, bot_spam_window, server_tag, tag_background, tag_private,
+        invite_description, invite_tags, invite_banner_mode, invite_banner_start,
+        invite_banner_end, discovery_enabled, discovery_expires_at,
+        (icon_data IS NOT NULL) AS has_icon,
+        (invite_banner_image IS NOT NULL) AS has_invite_banner
+       FROM servers WHERE id=$1`,
+      [id]
+    ),
     pool.query(`
       SELECT c.*,
         CASE WHEN c.private = FALSE THEN TRUE
@@ -1050,19 +1094,27 @@ router.post('/:id/invite', async (req, res) => {
   // Socket notification to the invited user
   try {
     const io = req.io;
-    const server = await pool.query('SELECT * FROM servers WHERE id=$1', [id]);
-    const inviter = await pool.query('SELECT username, display_name, avatar_data, avatar_mime FROM users WHERE id=$1', [req.session.userId]);
+    const server = await pool.query(
+      `SELECT name, invite_description, invite_tags, invite_banner_mode,
+        invite_banner_start, invite_banner_end,
+        (icon_data IS NOT NULL) AS has_icon,
+        (invite_banner_image IS NOT NULL) AS has_invite_banner
+       FROM servers WHERE id=$1`,
+      [id]
+    );
+    const inviter = await pool.query('SELECT username, display_name, (avatar_data IS NOT NULL) AS has_avatar FROM users WHERE id=$1', [req.session.userId]);
     const s = server.rows[0]; const u = inviter.rows[0];
     if (io) {
       const inviteData = {
         serverId: id, serverName: s.name,
-        serverIconDataUrl: s.icon_data ? `data:${s.icon_mime};base64,${s.icon_data}` : null,
+        serverIconDataUrl: s.has_icon ? `/api/servers/${encodeURIComponent(id)}/icon` : null,
         inviteDescription: s.invite_description || '', inviteTags: s.invite_tags || '',
         inviteBannerMode: s.invite_banner_mode || 'solid', inviteBannerStart: s.invite_banner_start || '#5865f2',
-        inviteBannerEnd: s.invite_banner_end || '#a855f7', inviteBannerImage: s.invite_banner_image || null,
+        inviteBannerEnd: s.invite_banner_end || '#a855f7',
+        inviteBannerImage: s.has_invite_banner ? `/api/servers/${encodeURIComponent(id)}/banner` : null,
         from: {
           username: u.username, displayName: u.display_name,
-          avatarDataUrl: avatarUrl(req.session.userId, !!u.avatar_data)
+          avatarDataUrl: avatarUrl(req.session.userId, !!u.has_avatar)
         }
       };
       io.to(`user:${userId}`).emit('server_invite', inviteData);

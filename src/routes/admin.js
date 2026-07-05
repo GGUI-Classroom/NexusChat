@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 const { buildReportPayload, clearReportCache, getActiveReport } = require('../utils/systemReport');
 const { clearSafetyTermCache, normalizeTerm } = require('../utils/globalSafety');
 const { getCurrentTos, setCachedTos } = require('../utils/tosPolicy');
+const { avatarUrl } = require('../utils/avatar');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -208,7 +209,7 @@ router.delete('/system-report', requireCoreAdmin, async (req, res) => {
 // Get all users
 router.get('/users', async (req, res) => {
   const { search } = req.query;
-  let q = `SELECT u.id, u.username, u.display_name, u.avatar_data, u.avatar_mime, u.last_ip,
+  let q = `SELECT u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.last_ip,
     (SELECT s.suspended_until FROM suspensions s
      WHERE s.user_id=u.id AND s.active=TRUE AND s.suspended_until > EXTRACT(EPOCH FROM NOW())::BIGINT
      ORDER BY s.created_at DESC LIMIT 1) as suspended_until
@@ -222,7 +223,7 @@ router.get('/users', async (req, res) => {
   const r = await pool.query(q, params);
   res.json({ users: r.rows.map(u => ({
     id: u.id, username: u.username, displayName: u.display_name,
-    avatarDataUrl: u.avatar_data ? `data:${u.avatar_mime};base64,${u.avatar_data}` : null,
+    avatarDataUrl: avatarUrl(u.id, !!u.has_avatar),
     lastIp: u.last_ip || null,
     suspendedUntil: u.suspended_until ? parseInt(u.suspended_until) : null,
   }))});

@@ -101,7 +101,7 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
   );
   if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
   const u = r.rows[0];
-  const tag = await pool.query(`SELECT s.name, s.invite_code, s.server_tag, s.tag_background, s.icon_data, s.icon_mime, s.tag_private FROM servers s JOIN server_boost_allocations a ON a.server_id=s.id AND a.feature='tag' WHERE s.id=$1`, [u.active_server_tag_id]);
+  const tag = await pool.query(`SELECT s.id, s.name, s.invite_code, s.server_tag, s.tag_background, (s.icon_data IS NOT NULL) AS has_icon, s.tag_private FROM servers s JOIN server_boost_allocations a ON a.server_id=s.id AND a.feature='tag' WHERE s.id=$1`, [u.active_server_tag_id]);
   const tagRow = tag.rows[0];
   let serverRoles = [];
   let availableRoles = [];
@@ -162,7 +162,7 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
       inviteCode: tagRow.tag_private ? null : tagRow.invite_code,
       tag: tagRow.server_tag,
       background: tagRow.tag_background,
-      iconDataUrl: !tagRow.tag_private && tagRow.icon_data ? `data:${tagRow.icon_mime};base64,${tagRow.icon_data}` : null,
+      iconDataUrl: !tagRow.tag_private && tagRow.has_icon ? `/api/servers/${encodeURIComponent(tagRow.id)}/icon` : null,
       private: !!tagRow.tag_private
     } : null
   });

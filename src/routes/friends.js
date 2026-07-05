@@ -60,7 +60,7 @@ router.post('/request', async (req, res) => {
       [uuidv4(), req.session.userId, toId]
     );
     const sender = await pool.query(
-      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, ats.server_tag
+      `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, ats.server_tag
        FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
       [req.session.userId]
     );
@@ -72,7 +72,7 @@ router.post('/request', async (req, res) => {
         sender: {
           username: user.username,
           displayName: user.display_name,
-          avatarDataUrl: avatarUrl(req.session.userId, !!user.avatar_data),
+          avatarDataUrl: avatarUrl(req.session.userId, !!user.has_avatar),
           activeServerTag: user.server_tag || null
         }
       }).catch(error => console.error('Nexus LINK friend request relay error:', error));

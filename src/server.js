@@ -234,7 +234,7 @@ app.post('/api/nexus-link/outbound-dm', async (req, res) => {
   if (recipient.id === fromId) return res.status(400).json({ error: 'You cannot send a Nexus DM to yourself' });
 
   const senderResult = await pool.query(
-    `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font,
+    `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font,
       u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect,
       ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
       EXISTS(SELECT 1 FROM friendships f WHERE (f.user1_id=u.id AND f.user2_id=$2) OR (f.user1_id=$2 AND f.user2_id=u.id)) AS friends
@@ -250,7 +250,7 @@ app.post('/api/nexus-link/outbound-dm', async (req, res) => {
     id: uuidv4(), fromId, toId: recipient.id, content, createdAt: now,
     author: {
       username: sender.username, displayName: sender.display_name,
-      avatarDataUrl: sender.avatar_data ? `data:${sender.avatar_mime};base64,${sender.avatar_data}` : null,
+      avatarDataUrl: avatarUrl(fromId, !!sender.has_avatar),
       activeDecoration: sender.active_decoration || null, activeNameplate: sender.active_nameplate || null, activeColor: sender.active_color || null, activeFont: sender.active_font || null,
       proActive: (sender.pro_expires_at || 0) > now, proGradientStart: sender.profile_gradient_start, proGradientEnd: sender.profile_gradient_end, proNameEffect: sender.profile_name_effect,
       activeServerTag: sender.server_tag || null, activeServerTagBackground: sender.tag_background || '#5865f2', activeServerTagServerId: sender.tag_server_id || null, activeServerTagServerName: sender.tag_private ? null : (sender.tag_server_name || null), activeServerTagInviteCode: sender.tag_private ? null : (sender.tag_invite_code || null), activeServerTagPrivate: !!sender.tag_private
@@ -725,7 +725,7 @@ function mapUserForClient(row) {
     id: row.id,
     username: row.username,
     displayName: row.display_name,
-    avatarDataUrl: avatarUrl(row.from_id || row.user_id || row.id, !!row.avatar_data)
+    avatarDataUrl: avatarUrl(row.from_id || row.user_id || row.id, !!(row.has_avatar || row.avatar_data))
   };
 }
 
@@ -1453,7 +1453,7 @@ io.on('connection', (socket) => {
     }
     // Single query: check friendship AND get sender info at once
     const check = await pool.query(
-      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
+      `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
         (SELECT id FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1) as friend_id
        FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`,
       [userId, toId]
@@ -1469,7 +1469,7 @@ io.on('connection', (socket) => {
       mentions,
       author: {
         username: s.username, displayName: s.display_name,
-        avatarDataUrl: avatarUrl(userId, !!s.avatar_data),
+        avatarDataUrl: avatarUrl(userId, !!s.has_avatar),
         activeDecoration: s.active_decoration || null,
         activeNameplate: s.active_nameplate || null,
         activeColor: s.active_color || null,
@@ -1500,7 +1500,7 @@ io.on('connection', (socket) => {
         id: userId,
         username: s.username,
         displayName: s.display_name,
-        avatarDataUrl: s.avatar_data ? `data:${s.avatar_mime};base64,${s.avatar_data}` : null,
+        avatarDataUrl: avatarUrl(userId, !!s.has_avatar),
         activeServerTag: s.server_tag || null
       },
       content: trimmed
@@ -1583,7 +1583,7 @@ io.on('connection', (socket) => {
           SELECT 1 FROM server_member_roles smr2 JOIN server_roles sr2 ON sr2.id=smr2.role_id
           WHERE smr2.server_id=sm.server_id AND smr2.user_id=sm.user_id AND sr2.can_mention_everyone=TRUE
         ) AS can_mention_everyone,
-        u.username, u.display_name, u.avatar_data, u.avatar_mime, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
+        u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
         ch.id as ch_id, ch.locked, ch.private as ch_private, ch.slowmode_seconds, ch.channel_type,
         (SELECT allow_send FROM channel_permissions cp
          WHERE cp.channel_id=$2 AND (cp.role_id=sm.role_id OR cp.role_id IS NULL)
@@ -1727,7 +1727,7 @@ io.on('connection', (socket) => {
       mentions,
       author: {
         username: row.username, displayName: row.display_name,
-        avatarDataUrl: avatarUrl(userId, !!row.avatar_data),
+        avatarDataUrl: avatarUrl(userId, !!row.has_avatar),
         roleColor: row.role_color || null, roleName: row.role_name || null, roleGradientStart: row.role_gradient_start || null, roleGradientEnd: row.role_gradient_end || null,
         activeDecoration: row.active_decoration || null,
         activeNameplate: row.active_nameplate || null,
@@ -1793,7 +1793,7 @@ io.on('connection', (socket) => {
       serverId,
       channelId,
       nexusMessageId: msgId,
-      sender: { id: userId, username: row.username, displayName: row.display_name, avatarDataUrl: row.avatar_data ? `data:${row.avatar_mime};base64,${row.avatar_data}` : null },
+      sender: { id: userId, username: row.username, displayName: row.display_name, avatarDataUrl: avatarUrl(userId, !!row.has_avatar) },
       content: trimmed,
       replyTo
     }).catch(error => console.error('Nexus LINK channel relay error:', error));
@@ -1908,7 +1908,7 @@ io.on('connection', (socket) => {
     callTypes.set(roomId, normalizedCallType);
     directCallInvites.set(roomId, { fromId: userId, toId, callType: normalizedCallType });
     const caller = await pool.query(
-      `SELECT u.username, u.display_name, u.avatar_data, u.avatar_mime, ats.server_tag
+      `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, ats.server_tag
        FROM users u LEFT JOIN servers ats ON ats.id=u.active_server_tag_id WHERE u.id=$1`, [userId]
     );
     const c = caller.rows[0];
@@ -1917,7 +1917,7 @@ io.on('connection', (socket) => {
       callType: normalizedCallType,
       caller: {
         username: c.username, displayName: c.display_name,
-        avatarDataUrl: avatarUrl(userId, !!c.avatar_data)
+        avatarDataUrl: avatarUrl(userId, !!c.has_avatar)
       }
     });
     relayNexusCallInvite({
@@ -1928,7 +1928,7 @@ io.on('connection', (socket) => {
         id: userId,
         username: c.username,
         displayName: c.display_name,
-        avatarDataUrl: avatarUrl(userId, !!c.avatar_data),
+        avatarDataUrl: avatarUrl(userId, !!c.has_avatar),
         activeServerTag: c.server_tag || null
       }
     }).catch(error => console.error('Nexus LINK call relay error:', error));
@@ -2029,7 +2029,7 @@ io.on('connection', (socket) => {
 
     const participantIds = [...roomSet];
     const users = await pool.query(
-      `SELECT id, username, display_name, avatar_data, avatar_mime
+      `SELECT id, username, display_name, (avatar_data IS NOT NULL) AS has_avatar
        FROM users WHERE id = ANY($1)`,
       [participantIds]
     );

@@ -4140,7 +4140,6 @@
     window.toggleChannelReaction(msgId, channelId, encodeURIComponent(emoji.trim().slice(0, 16)));
   };
 
-  const reactionEmojiSet = ['👍', '👎', '❤️', '🔥', '😂', '😮', '😢', '😡', '🎉', '✨', '👀', '✅', '❌', '💯', '🫡', '🤝', '🚀', '💜'];
   let activeEmojiPicker = null;
   function closeChannelEmojiPicker() {
     if (activeEmojiPicker) activeEmojiPicker.remove();
@@ -4153,14 +4152,14 @@
     picker.className = 'channel-emoji-picker';
     picker.setAttribute('role', 'dialog');
     picker.setAttribute('aria-label', 'Choose a reaction');
-    picker.innerHTML = `<div class="emoji-picker-title">Quick reactions</div><div class="emoji-picker-grid">${reactionEmojiSet.map(emoji => `<button type="button" title="${emoji}">${emoji}</button>`).join('')}</div>`;
-    picker.querySelectorAll('button').forEach((button, index) => button.addEventListener('click', () => {
-      window.toggleChannelReaction(msgId, channelId, encodeURIComponent(reactionEmojiSet[index]));
+    picker.innerHTML = `<div class="emoji-picker-title">Choose a reaction</div><div class="emoji-picker-grid">${unicodeEmojiCatalog.map(emoji => `<button type="button" title="${emoji}" data-emoji="${emoji}">${emoji}</button>`).join('')}</div>`;
+    picker.querySelectorAll('[data-emoji]').forEach(button => button.addEventListener('click', () => {
+      window.toggleChannelReaction(msgId, channelId, encodeURIComponent(button.dataset.emoji));
       closeChannelEmojiPicker();
     }));
     document.body.appendChild(picker);
     const rect = event?.currentTarget?.getBoundingClientRect();
-    const width = 270;
+    const width = 336;
     picker.style.left = `${Math.max(10, Math.min((rect?.left || 20), window.innerWidth - width - 10))}px`;
     picker.style.top = `${Math.max(10, (rect?.bottom || 40) + 8)}px`;
     activeEmojiPicker = picker;

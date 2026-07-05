@@ -1440,7 +1440,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .channel-emoji-picker {
   position: fixed;
   z-index: 1300;
-  width: 270px;
+  width: 336px;
   padding: 10px;
   border: 1px solid var(--border-bright);
   border-radius: 8px;
@@ -1455,7 +1455,15 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
   text-transform: uppercase;
   letter-spacing: 1px;
 }
-.emoji-picker-grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:4px; }
+.channel-emoji-picker .emoji-picker-grid {
+  display:grid;
+  grid-template-columns:repeat(8, 1fr);
+  gap:4px;
+  max-height:320px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-right:4px;
+}
 .emoji-picker-grid button {
   display:grid;
   place-items:center;
