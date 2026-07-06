@@ -5,7 +5,8 @@ const { requireAuth } = require('../middleware/auth');
 const { buildReportPayload, clearReportCache, getActiveReport } = require('../utils/systemReport');
 const { clearSafetyTermCache, normalizeTerm } = require('../utils/globalSafety');
 const { getCurrentTos, setCachedTos } = require('../utils/tosPolicy');
-const { avatarUrl } = require('../utils/avatar');
+const { avatarUrl, clearCachedAvatar } = require('../utils/avatar');
+const { deleteCachedMedia } = require('../utils/mediaCache');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -779,6 +780,8 @@ router.post('/users/:userId/pro', requireCoreAdmin, async (req, res) => {
   if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
   const expiresAt = Math.max(now, parseInt(target.rows[0].pro_expires_at || 0)) + days * 86400;
   await pool.query('UPDATE users SET pro_expires_at=$1 WHERE id=$2', [expiresAt, userId]);
+  clearCachedAvatar(userId);
+  deleteCachedMedia(`profile-banner:${userId}`);
   await sendNexusGuardDM(
     req,
     userId,
@@ -795,6 +798,8 @@ router.delete('/users/:userId/pro', requireCoreAdmin, async (req, res) => {
     [userId]
   );
   if (!updated.rows.length) return res.status(404).json({ error: 'User not found' });
+  clearCachedAvatar(userId);
+  deleteCachedMedia(`profile-banner:${userId}`);
   if (req.io) req.io.to(`user:${userId}`).emit('pro_updated', { active: false, expiresAt: 0 });
   res.json({ success: true, expiresAt: 0 });
 });

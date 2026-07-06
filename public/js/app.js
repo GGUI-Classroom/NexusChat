@@ -1545,6 +1545,7 @@
 
   function enterApp() {
     try {
+      applyUserAppTheme();
       updateSelfCard();
       syncSecretAmbient();
       showScreen('main-screen');
@@ -4688,6 +4689,7 @@
       if (!currentUser) return;
       currentUser.proActive = !!active;
       currentUser.proExpiresAt = expiresAt || 0;
+      applyUserAppTheme();
       updateSelfCard();
       toast(active ? 'Nexus Pro was activated on your account' : 'Nexus Pro was removed from your account', active ? 'success' : 'info');
     });
@@ -5705,13 +5707,14 @@
   }
 
   async function loadAppearanceSettings() {
-    const [shop, ringtones] = await Promise.all([api('GET', '/api/shop'), api('GET', '/api/ringtones')]);
+    const [shop, ringtones, perks] = await Promise.all([api('GET', '/api/shop'), api('GET', '/api/ringtones'), api('GET', '/api/perks')]);
     const deco = $('appearance-decoration-select');
     const nameplate = $('appearance-nameplate-select');
     const ring = $('appearance-ringtone-select');
     if (!shop.error) deco.innerHTML = `<option value="">No decoration</option>${(shop.decorations || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
     if (!shop.error && nameplate) nameplate.innerHTML = `<option value="">No nameplate</option>${(shop.nameplates || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.activeNameplate ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
     if (!ringtones.error) ring.innerHTML = `<option value="">Default ringtone</option>${(ringtones.ringtones || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === ringtones.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+    if (!perks.error) renderAppThemeSettings(perks.pro);
   }
 
   async function saveNexusLinkSettings() {
@@ -5734,19 +5737,91 @@
     loadProfileTagChoices();
     loadNexusLinkSettings();
     loadAppearanceSettings();
+    $('avatar-upload-hint').textContent = currentUser.proActive
+      ? 'Pro: animated GIF/WebP, JPEG or PNG - max 5 MB'
+      : 'JPEG, PNG or WebP - max 2 MB';
     $('developer-mode-toggle').checked = !!currentUser.developerMode;
     $('profile-modal').classList.add('active');
   });
-  $('profile-modal-close').addEventListener('click', () => $('profile-modal').classList.remove('active'));
-  $('profile-modal').addEventListener('click', e => { if (e.target === $('profile-modal')) $('profile-modal').classList.remove('active'); });
+  $('profile-modal-close').addEventListener('click', () => {
+    $('profile-modal').classList.remove('active');
+    applyUserAppTheme();
+  });
+  $('profile-modal').addEventListener('click', e => {
+    if (e.target === $('profile-modal')) {
+      $('profile-modal').classList.remove('active');
+      applyUserAppTheme();
+    }
+  });
   document.querySelectorAll('.profile-settings-tab').forEach(button => button.addEventListener('click', () => {
     document.querySelectorAll('.profile-settings-tab').forEach(item => item.classList.toggle('active', item === button));
     document.querySelectorAll('.profile-settings-panel').forEach(panel => panel.classList.toggle('active', panel.dataset.ppanel === button.dataset.ptab));
   }));
-  function applyTheme(theme) { document.body.classList.toggle('light-theme', theme === 'light'); localStorage.setItem('nexus-theme', theme); }
+  function applyTheme(theme) {
+    document.body.classList.toggle('light-theme', theme === 'light');
+    localStorage.setItem('nexus-theme', theme);
+  }
+  function applyUserAppTheme(theme = currentUser?.appTheme) {
+    const body = document.body;
+    body.classList.remove('pro-app-theme', 'theme-style-solid', 'theme-style-gradient', 'theme-style-glass', 'theme-motion');
+    body.style.removeProperty('--theme-primary');
+    body.style.removeProperty('--theme-secondary');
+    if (!currentUser?.proActive || !theme) {
+      applyTheme(localStorage.getItem('nexus-theme') || 'dark');
+      return;
+    }
+    applyTheme(theme.base || 'dark');
+    body.style.setProperty('--theme-primary', theme.primary || '#5b6ef5');
+    body.style.setProperty('--theme-secondary', theme.secondary || '#a855f7');
+    body.classList.add('pro-app-theme', `theme-style-${theme.style || 'gradient'}`);
+    body.classList.toggle('theme-motion', !!theme.motion);
+  }
+  function appThemeFromControls() {
+    return {
+      base: $('app-theme-base')?.value || 'dark',
+      primary: $('app-theme-primary')?.value || '#5b6ef5',
+      secondary: $('app-theme-secondary')?.value || '#a855f7',
+      style: $('app-theme-style')?.value || 'gradient',
+      motion: !!$('app-theme-motion')?.checked
+    };
+  }
+  function previewAppTheme() {
+    const theme = appThemeFromControls();
+    const preview = $('app-theme-preview');
+    if (preview) {
+      preview.style.setProperty('--preview-a', theme.primary);
+      preview.style.setProperty('--preview-b', theme.secondary);
+    }
+    if (currentUser?.proActive) applyUserAppTheme(theme);
+  }
+  function renderAppThemeSettings(pro) {
+    const active = !!pro?.active;
+    $('app-theme-status').textContent = active ? 'Active' : 'Pro only';
+    $('app-theme-locked').style.display = active ? 'none' : 'block';
+    $('app-theme-controls').style.display = active ? 'grid' : 'none';
+    const theme = pro?.appTheme || currentUser?.appTheme || { base:'dark', primary:'#5b6ef5', secondary:'#a855f7', style:'gradient', motion:false };
+    $('app-theme-primary').value = theme.primary;
+    $('app-theme-secondary').value = theme.secondary;
+    $('app-theme-style').value = theme.style;
+    $('app-theme-base').value = theme.base;
+    $('app-theme-motion').checked = !!theme.motion;
+    previewAppTheme();
+  }
   applyTheme(localStorage.getItem('nexus-theme') || 'dark');
   $('theme-dark-btn').addEventListener('click', () => applyTheme('dark'));
   $('theme-light-btn').addEventListener('click', () => applyTheme('light'));
+  ['app-theme-primary', 'app-theme-secondary', 'app-theme-style', 'app-theme-base', 'app-theme-motion'].forEach(id => {
+    $(id).addEventListener('input', previewAppTheme);
+    $(id).addEventListener('change', previewAppTheme);
+  });
+  $('save-app-theme').addEventListener('click', async () => {
+    const theme = appThemeFromControls();
+    const result = await api('PATCH', '/api/perks/app-theme', theme);
+    if (result.error) return toast(result.error, 'error');
+    currentUser.appTheme = result.appTheme;
+    applyUserAppTheme(result.appTheme);
+    toast('Personal theme saved', 'success');
+  });
   $('developer-mode-toggle').addEventListener('change', async e => {
     const enabled = e.target.checked;
     const r = await api('PATCH', '/api/users/preferences', { developerMode: enabled });
@@ -5768,6 +5843,15 @@
   $('avatar-file-input').addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
+    const maxBytes = currentUser.proActive ? 5 * 1024 * 1024 : 2 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      e.target.value = '';
+      return toast(currentUser.proActive ? 'Pro avatars must be smaller than 5 MB' : 'Avatars must be smaller than 2 MB', 'error');
+    }
+    if (!currentUser.proActive && file.type === 'image/gif') {
+      e.target.value = '';
+      return toast('Animated avatars require Nexus Pro', 'error');
+    }
     const fd = new FormData();
     fd.append('avatar', file);
     const res = await fetch('/api/users/avatar', { method: 'POST', body: fd, credentials: 'same-origin', headers: deviceHeaders() });
@@ -7626,7 +7710,8 @@
       </div>
       <div class="pro-benefits">
         <div><b>Profile theme</b><span>Set primary and accent colors across your complete profile card.</span></div>
-        <div><b>Custom banner</b><span>Upload a PNG, JPG, GIF, or WebP banner up to 2 MB.</span></div>
+        <div><b>Personal app themes</b><span>Build private gradient or glass themes with animated color motion.</span></div>
+        <div><b>Premium uploads</b><span>Use animated avatars up to 5 MB and profile banners up to 6 MB.</span></div>
         <div><b>Profile effects</b><span>Choose a full-card animation that plays when your profile is viewed.</span></div>
         <div><b>Display name style</b><span>Apply shimmer or prism motion to your name in profiles and DMs.</span></div>
       </div>
@@ -7729,9 +7814,9 @@
       input.value = '';
       return toast('Choose a JPEG, PNG, GIF, or WebP banner', 'error');
     }
-    if (file.size > 8 * 1024 * 1024) {
+    if (file.size > 6 * 1024 * 1024) {
       input.value = '';
-      return toast('Banner must be smaller than 8 MB', 'error');
+      return toast('Pro banners must be smaller than 6 MB', 'error');
     }
     const form = new FormData();
     form.append('banner', file);

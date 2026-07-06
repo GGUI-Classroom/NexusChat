@@ -27,7 +27,7 @@ async function isServerAdmin(serverId, userId) {
 router.get('/', async (req, res) => {
   const now = nowSeconds();
   const [userRes, serversRes] = await Promise.all([
-    pool.query('SELECT id, nexals, pro_expires_at, profile_card_style, profile_gradient_start, profile_gradient_end, profile_name_effect, profile_effect, (profile_banner_data IS NOT NULL) AS has_profile_banner FROM users WHERE id=$1', [req.session.userId]),
+    pool.query('SELECT id, nexals, pro_expires_at, profile_card_style, profile_gradient_start, profile_gradient_end, profile_name_effect, profile_effect, (profile_banner_data IS NOT NULL) AS has_profile_banner, app_theme_base, app_theme_primary, app_theme_secondary, app_theme_style, app_theme_motion FROM users WHERE id=$1', [req.session.userId]),
     pool.query(`
       SELECT s.id, s.name, s.server_tag, s.tag_background, COUNT(sb.id)::int AS boost_count
       FROM servers s
@@ -51,7 +51,14 @@ router.get('/', async (req, res) => {
       gradientEnd: user.profile_gradient_end || '#a855f7',
       nameEffect: user.profile_name_effect || 'none',
       profileEffect: user.profile_effect || 'none',
-      bannerUrl: user.has_profile_banner ? `/api/users/banner/${user.id}` : null
+      bannerUrl: user.has_profile_banner ? `/api/users/banner/${user.id}` : null,
+      appTheme: {
+        base: user.app_theme_base || 'dark',
+        primary: user.app_theme_primary || '#5b6ef5',
+        secondary: user.app_theme_secondary || '#a855f7',
+        style: user.app_theme_style || 'gradient',
+        motion: !!user.app_theme_motion
+      }
     },
     servers: serversRes.rows.map(s => ({ id: s.id, name: s.name, boostCount: s.boost_count, tag: s.boost_count >= 2 ? s.server_tag : null, tagBackground: s.tag_background || '#5865f2', tagUnlocked: s.boost_count >= 2 })),
     boostPrice: BOOST_PRICE,
@@ -178,6 +185,30 @@ router.patch('/profile-customize', async (req, res) => {
   if ((user.rows[0]?.pro_expires_at || 0) <= now) return res.status(403).json({ error: 'Active Pro is required' });
   await pool.query('UPDATE users SET profile_gradient_start=$1, profile_gradient_end=$2, profile_name_effect=$3, profile_card_style=$4, profile_effect=$5 WHERE id=$6', [start, end, effect, style, profileEffect, req.session.userId]);
   res.json({ success: true, gradientStart: start, gradientEnd: end, nameEffect: effect, cardStyle: style, profileEffect });
+});
+
+router.patch('/app-theme', async (req, res) => {
+  const base = String(req.body.base || 'dark').toLowerCase();
+  const primary = String(req.body.primary || '');
+  const secondary = String(req.body.secondary || '');
+  const style = String(req.body.style || 'gradient').toLowerCase();
+  const motion = req.body.motion === true;
+  if (!['dark', 'light'].includes(base)
+    || !/^#[0-9a-f]{6}$/i.test(primary)
+    || !/^#[0-9a-f]{6}$/i.test(secondary)
+    || !['solid', 'gradient', 'glass'].includes(style)) {
+    return res.status(400).json({ error: 'Invalid app theme' });
+  }
+  const user = await pool.query('SELECT pro_expires_at FROM users WHERE id=$1', [req.session.userId]);
+  if ((user.rows[0]?.pro_expires_at || 0) <= nowSeconds()) {
+    return res.status(403).json({ error: 'Active Pro is required for custom themes' });
+  }
+  await pool.query(
+    `UPDATE users SET app_theme_base=$1, app_theme_primary=$2, app_theme_secondary=$3,
+      app_theme_style=$4, app_theme_motion=$5 WHERE id=$6`,
+    [base, primary, secondary, style, motion, req.session.userId]
+  );
+  res.json({ success: true, appTheme: { base, primary, secondary, style, motion } });
 });
 
 module.exports = router;

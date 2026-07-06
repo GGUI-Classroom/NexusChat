@@ -11,7 +11,7 @@ const router = express.Router();
 // Store in memory, save as base64 in DB
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit for free tier
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.mimetype)) {
       cb(null, true);
@@ -21,19 +21,35 @@ const upload = multer({
   }
 });
 
-router.post('/avatar', requireAuth, upload.single('avatar'), async (req, res) => {
+router.post('/avatar', requireAuth, (req, res, next) => {
+  upload.single('avatar')(req, res, error => {
+    if (!error) return next();
+    if (error.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Pro avatars must be smaller than 5 MB' });
+    return res.status(400).json({ error: error.message || 'Could not upload avatar' });
+  });
+}, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const user = await pool.query('SELECT pro_expires_at FROM users WHERE id=$1', [req.session.userId]);
+  const proActive = (user.rows[0]?.pro_expires_at || 0) > Math.floor(Date.now() / 1000);
+  if (!proActive && req.file.size > 2 * 1024 * 1024) {
+    return res.status(403).json({ error: 'Nexus Pro is required for avatars larger than 2 MB' });
+  }
+  const animatedWebp = req.file.mimetype === 'image/webp' && req.file.buffer.includes(Buffer.from('ANIM'));
+  if (!proActive && (req.file.mimetype === 'image/gif' || animatedWebp)) {
+    return res.status(403).json({ error: 'Animated avatars require Nexus Pro' });
+  }
   const base64 = req.file.buffer.toString('base64');
   const mime = req.file.mimetype;
-  await pool.query('UPDATE users SET avatar_data=$1, avatar_mime=$2 WHERE id=$3',
-    [base64, mime, req.session.userId]);
+  const proOnly = req.file.size > 2 * 1024 * 1024 || req.file.mimetype === 'image/gif' || animatedWebp;
+  await pool.query('UPDATE users SET avatar_data=$1, avatar_mime=$2, avatar_pro_only=$3 WHERE id=$4',
+    [base64, mime, proOnly, req.session.userId]);
   clearCachedAvatar(req.session.userId);
-  res.json({ success: true, avatarDataUrl: avatarUrl(req.session.userId, true) });
+  res.json({ success: true, avatarDataUrl: `${avatarUrl(req.session.userId, true)}?v=${Date.now()}` });
 });
 
 const bannerUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 3 * 1024 * 1024 },
+  limits: { fileSize: 6 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.mimetype)) cb(null, true);
     else cb(new Error('Banner must be a JPEG, PNG, GIF, or WebP image'));
@@ -54,19 +70,20 @@ router.get('/avatar/:userId', requireAuth, async (req, res) => {
 router.get('/banner/:userId', requireAuth, async (req, res) => {
   const cacheKey = `profile-banner:${req.params.userId}`;
   const cached = getCachedMedia(cacheKey);
-  if (cached) {
+  if (cached && cached.proExpiresAt > Math.floor(Date.now() / 1000)) {
     res.setHeader('Content-Type', cached.mime);
     res.setHeader('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800');
     return res.send(cached.data);
   }
+  if (cached) deleteCachedMedia(cacheKey);
   const result = await pool.query(
-    'SELECT profile_banner_data, profile_banner_mime FROM users WHERE id=$1',
+    'SELECT profile_banner_data, profile_banner_mime, pro_expires_at FROM users WHERE id=$1',
     [req.params.userId]
   );
   const row = result.rows[0];
-  if (!row?.profile_banner_data) return res.sendStatus(404);
+  if (!row?.profile_banner_data || (row.pro_expires_at || 0) <= Math.floor(Date.now() / 1000)) return res.sendStatus(404);
   const data = Buffer.from(row.profile_banner_data, 'base64');
-  setCachedMedia(cacheKey, data, row.profile_banner_mime || 'image/png');
+  setCachedMedia(cacheKey, data, row.profile_banner_mime || 'image/png', { proExpiresAt: Number(row.pro_expires_at) || 0 });
   const etag = `"banner-${req.params.userId}-${data.length}"`;
   res.setHeader('Content-Type', row.profile_banner_mime || 'image/png');
   res.setHeader('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800');
@@ -78,7 +95,7 @@ router.get('/banner/:userId', requireAuth, async (req, res) => {
 router.post('/profile-banner', requireAuth, (req, res, next) => {
   bannerUpload.single('banner')(req, res, error => {
     if (!error) return next();
-    if (error.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Banner must be smaller than 3 MB' });
+    if (error.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Pro banners must be smaller than 6 MB' });
     return res.status(400).json({ error: error.message || 'Could not upload banner' });
   });
 }, async (req, res) => {
@@ -164,7 +181,7 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
     profileGradientEnd: u.profile_gradient_end,
     profileNameEffect: u.profile_name_effect,
     profileEffect: u.profile_effect || 'none',
-    profileBannerUrl: u.has_profile_banner ? `/api/users/banner/${u.id}` : null,
+    profileBannerUrl: u.has_profile_banner && (u.pro_expires_at || 0) > Math.floor(Date.now() / 1000) ? `/api/users/banner/${u.id}` : null,
     serverRoles: serverRoles.map(role => ({ id: role.id, name: role.name, color: role.color })),
     availableServerRoles: availableRoles.map(role => ({ id: role.id, name: role.name, color: role.color })),
     canManageServerRoles: canManageRoles,

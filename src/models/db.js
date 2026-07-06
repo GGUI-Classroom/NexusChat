@@ -353,6 +353,17 @@ async function initDb() {
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_effect TEXT DEFAULT 'none'`, 'alter_users_profile_effect');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_banner_data TEXT DEFAULT NULL`, 'alter_users_profile_banner_data');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_banner_mime TEXT DEFAULT NULL`, 'alter_users_profile_banner_mime');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS app_theme_base TEXT DEFAULT 'dark'`, 'alter_users_app_theme_base');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS app_theme_primary TEXT DEFAULT '#5b6ef5'`, 'alter_users_app_theme_primary');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS app_theme_secondary TEXT DEFAULT '#a855f7'`, 'alter_users_app_theme_secondary');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS app_theme_style TEXT DEFAULT 'gradient'`, 'alter_users_app_theme_style');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS app_theme_motion BOOLEAN DEFAULT FALSE`, 'alter_users_app_theme_motion');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_pro_only BOOLEAN DEFAULT FALSE`, 'alter_users_avatar_pro_only');
+  await runOnceMigration('mark_existing_premium_avatars_v1', `
+    UPDATE users SET avatar_pro_only=TRUE
+    WHERE avatar_data IS NOT NULL
+      AND (avatar_mime='image/gif' OR LENGTH(avatar_data)>2796204)
+  `, 'mark_existing_premium_avatars');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_server_tag_id TEXT DEFAULT NULL`, 'alter_users_active_server_tag');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_ringtone TEXT DEFAULT NULL`, 'alter_users_ringtone');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_status TEXT DEFAULT 'offline'`, 'alter_users_discord_status');

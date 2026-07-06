@@ -17,14 +17,14 @@ function deleteCachedMedia(key) {
   entries.delete(key);
 }
 
-function setCachedMedia(key, data, mime = 'application/octet-stream') {
+function setCachedMedia(key, data, mime = 'application/octet-stream', metadata = {}) {
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
   deleteCachedMedia(key);
   if (!buffer.length || buffer.length > MAX_BYTES) return null;
   while (entries.size && totalBytes + buffer.length > MAX_BYTES) {
     deleteCachedMedia(entries.keys().next().value);
   }
-  const entry = { data: buffer, mime };
+  const entry = { data: buffer, mime, ...metadata };
   entries.set(key, entry);
   totalBytes += buffer.length;
   return entry;

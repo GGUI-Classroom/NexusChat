@@ -69,7 +69,8 @@ router.post('/login', async (req, res) => {
       `SELECT id, username, display_name, password_hash, bio, (avatar_data IS NOT NULL) AS has_avatar,
         active_decoration, active_nameplate, active_color, active_font, active_ringtone, pro_expires_at,
         profile_card_style, profile_gradient_start, profile_gradient_end, profile_name_effect, profile_effect,
-        (profile_banner_data IS NOT NULL) AS has_profile_banner, tutorial_completed, accepted_tos_version, developer_mode
+        (profile_banner_data IS NOT NULL) AS has_profile_banner, tutorial_completed, accepted_tos_version, developer_mode,
+        app_theme_base, app_theme_primary, app_theme_secondary, app_theme_style, app_theme_motion
        FROM users WHERE LOWER(username)=LOWER($1)`,
       [username]
     );
@@ -106,7 +107,7 @@ router.post('/login', async (req, res) => {
       activeColor: user.active_color || null,
         activeFont: user.active_font || null,
       activeRingtone: user.active_ringtone || null,
-      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileCardStyle: user.profile_card_style || 'soft', proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', profileEffect: user.profile_effect || 'none', profileBannerUrl: user.has_profile_banner ? `/api/users/banner/${user.id}` : null, developerMode: !!user.developer_mode, tutorialCompleted: user.tutorial_completed !== false, acceptedTosVersion: tosState.acceptedVersion
+      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileCardStyle: user.profile_card_style || 'soft', proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', profileEffect: user.profile_effect || 'none', profileBannerUrl: user.has_profile_banner && (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000) ? `/api/users/banner/${user.id}` : null, appTheme: { base: user.app_theme_base || 'dark', primary: user.app_theme_primary || '#5b6ef5', secondary: user.app_theme_secondary || '#a855f7', style: user.app_theme_style || 'gradient', motion: !!user.app_theme_motion }, developerMode: !!user.developer_mode, tutorialCompleted: user.tutorial_completed !== false, acceptedTosVersion: tosState.acceptedVersion
     }});
   } catch (e) {
     console.error(e);
@@ -137,7 +138,7 @@ router.get('/me', async (req, res) => {
     }
 
     const r = await pool.query(
-      'SELECT u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.bio, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.active_ringtone, u.pro_expires_at, u.profile_card_style, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, u.profile_effect, (u.profile_banner_data IS NOT NULL) AS has_profile_banner, u.tutorial_completed, u.accepted_tos_version, u.developer_mode, s.id AS tag_server_id, s.name AS tag_server_name, s.invite_code AS tag_invite_code, s.server_tag, s.tag_background, s.tag_private FROM users u LEFT JOIN servers s ON s.id=u.active_server_tag_id WHERE u.id=$1',
+      'SELECT u.id, u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.bio, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.active_ringtone, u.pro_expires_at, u.profile_card_style, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, u.profile_effect, (u.profile_banner_data IS NOT NULL) AS has_profile_banner, u.tutorial_completed, u.accepted_tos_version, u.developer_mode, u.app_theme_base, u.app_theme_primary, u.app_theme_secondary, u.app_theme_style, u.app_theme_motion, s.id AS tag_server_id, s.name AS tag_server_name, s.invite_code AS tag_invite_code, s.server_tag, s.tag_background, s.tag_private FROM users u LEFT JOIN servers s ON s.id=u.active_server_tag_id WHERE u.id=$1',
       [req.session.userId]
     );
     const user = r.rows[0];
@@ -155,7 +156,7 @@ router.get('/me', async (req, res) => {
       activeColor: user.active_color || null,
         activeFont: user.active_font || null,
       activeRingtone: user.active_ringtone || null,
-      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileCardStyle: user.profile_card_style || 'soft', proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', profileEffect: user.profile_effect || 'none', profileBannerUrl: user.has_profile_banner ? `/api/users/banner/${user.id}` : null, activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_private ? null : (user.tag_server_name || null), activeServerTagInviteCode: user.tag_private ? null : (user.tag_invite_code || null), activeServerTagPrivate: !!user.tag_private, developerMode: !!user.developer_mode, tutorialCompleted: user.tutorial_completed !== false, acceptedTosVersion: tosState.acceptedVersion
+      proActive: (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000), profileCardStyle: user.profile_card_style || 'soft', proGradientStart: user.profile_gradient_start || '#5865f2', proGradientEnd: user.profile_gradient_end || '#a855f7', proNameEffect: user.profile_name_effect || 'none', profileEffect: user.profile_effect || 'none', profileBannerUrl: user.has_profile_banner && (user.pro_expires_at || 0) > Math.floor(Date.now() / 1000) ? `/api/users/banner/${user.id}` : null, appTheme: { base: user.app_theme_base || 'dark', primary: user.app_theme_primary || '#5b6ef5', secondary: user.app_theme_secondary || '#a855f7', style: user.app_theme_style || 'gradient', motion: !!user.app_theme_motion }, activeServerTag: user.server_tag || null, activeServerTagBackground: user.tag_background || '#5865f2', activeServerTagServerId: user.tag_server_id || null, activeServerTagServerName: user.tag_private ? null : (user.tag_server_name || null), activeServerTagInviteCode: user.tag_private ? null : (user.tag_invite_code || null), activeServerTagPrivate: !!user.tag_private, developerMode: !!user.developer_mode, tutorialCompleted: user.tutorial_completed !== false, acceptedTosVersion: tosState.acceptedVersion
     }});
   } catch (e) {
     return res.status(500).json({ error: 'Server error' });
