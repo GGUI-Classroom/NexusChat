@@ -3673,6 +3673,7 @@
       $('server-members-panel').classList.remove('active');
       $('server-members-panel').classList.remove('mobile-open');
       if ($('mobile-members-btn')) $('mobile-members-btn').style.display = 'none';
+      $('sidebar-server').closest('.sidebar')?.classList.remove('server-context');
       activeServerId = null;
       activeChannelId = null;
       switchView('friends');
@@ -3682,6 +3683,7 @@
       if (btn) btn.classList.add('active');
       $('sidebar-dms').style.display = 'none';
       $('sidebar-server').style.display = 'flex';
+      $('sidebar-server').closest('.sidebar')?.classList.add('server-context');
       $('server-members-panel').classList.add('active');
       if ($('mobile-members-btn')) $('mobile-members-btn').style.display = isMobile() ? 'flex' : 'none';
       loadServerSidebar(id);
