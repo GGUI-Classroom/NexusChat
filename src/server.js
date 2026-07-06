@@ -34,6 +34,8 @@ const STATIC_CLIENT_ORIGINS = new Set(
     .map(origin => origin.trim())
     .filter(Boolean)
 );
+const NEXUS_LINK_SHARED_SECRET = process.env.NEXUS_LINK_SHARED_SECRET || '';
+const ACTIVITY_ONLY_EVENTS = new Set(['call_accept', 'join_call', 'webrtc_offer', 'webrtc_answer', 'webrtc_ice', 'call_end']);
 
 function isAllowedClientOrigin(origin) {
   if (!origin) return true;
@@ -41,6 +43,28 @@ function isAllowedClientOrigin(origin) {
   if (!STATIC_CLIENT_ORIGINS.size) return true;
   if (origin === 'null') return ALLOW_FILE_CLIENTS;
   return STATIC_CLIENT_ORIGINS.has(origin);
+}
+
+function verifyActivityCallToken(rawToken) {
+  if (!rawToken || typeof rawToken !== 'string' || !NEXUS_LINK_SHARED_SECRET) return null;
+  const [payloadPart, signature] = rawToken.split('.');
+  if (!payloadPart || !signature) return null;
+  const expected = crypto.createHmac('sha256', NEXUS_LINK_SHARED_SECRET).update(payloadPart).digest('base64url');
+  if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8'));
+    if (!payload?.nexusUserId || !payload?.roomId || !payload?.callerId || !payload?.exp) return null;
+    if (Number(payload.exp) < Math.floor(Date.now() / 1000)) return null;
+    return {
+      nexusUserId: String(payload.nexusUserId),
+      roomId: String(payload.roomId),
+      callerId: String(payload.callerId),
+      callType: payload.callType === 'video' ? 'video' : 'voice',
+      exp: Number(payload.exp)
+    };
+  } catch (_error) {
+    return null;
+  }
 }
 
 async function resolveDirectMentions(content, allowedUserIds) {
@@ -779,21 +803,30 @@ async function clearRoomParticipants(roomId) {
 
 io.use(async (socket, next) => {
   const sess = socket.request.session;
-  if (!sess || !sess.userId) return next(new Error('Unauthorized'));
+  const activityToken = verifyActivityCallToken(socket.handshake.auth?.nexusLinkCallToken);
+  const userId = String(sess?.userId || activityToken?.nexusUserId || '');
+  if (!userId) return next(new Error('Unauthorized'));
   try {
-    const ip = requestIp(socket.request);
-    const deviceId = socketDeviceId(socket);
-    if (deviceId) {
-      const banned = await pool.query('SELECT reason FROM ip_bans WHERE device_id=$1 AND active=TRUE LIMIT 1', [deviceId]);
-      if (banned.rows.length) return next(new Error('This device is banned from Nexus'));
+    if (activityToken) {
+      socket.data.activityOnly = true;
+      socket.data.activityCall = activityToken;
+      socket.request.session = socket.request.session || {};
+      socket.request.session.userId = userId;
+    } else {
+      const ip = requestIp(socket.request);
+      const deviceId = socketDeviceId(socket);
+      if (deviceId) {
+        const banned = await pool.query('SELECT reason FROM ip_bans WHERE device_id=$1 AND active=TRUE LIMIT 1', [deviceId]);
+        if (banned.rows.length) return next(new Error('This device is banned from Nexus'));
+      }
+      await pool.query('UPDATE users SET last_ip=$1, last_device_id=$2 WHERE id=$3', [ip || null, deviceId || null, userId]);
+      const tosState = await getUserTosState(userId);
+      socket.data.tosAcceptedVersion = tosState.acceptedVersion;
     }
-    await pool.query('UPDATE users SET last_ip=$1, last_device_id=$2 WHERE id=$3', [ip || null, deviceId || null, sess.userId]);
-    const tosState = await getUserTosState(sess.userId);
-    socket.data.tosAcceptedVersion = tosState.acceptedVersion;
   } catch (error) {
     console.error('Socket device ban check failed:', error.message);
   }
-  socket.userId = sess.userId;
+  socket.userId = userId;
   next();
 });
 
@@ -1407,6 +1440,10 @@ async function runChannelCommand({ socket, serverId, channelId, actorUserId, act
 io.on('connection', (socket) => {
   const userId = socket.userId;
   socket.use(async ([event], next) => {
+    if (socket.data.activityOnly) {
+      if (!ACTIVITY_ONLY_EVENTS.has(event)) return next(new Error('FORBIDDEN_EVENT'));
+      return next();
+    }
     if (event === 'tos_accepted') return next();
     try {
       const policy = await getCurrentTos();
@@ -1935,9 +1972,10 @@ io.on('connection', (socket) => {
     socket.emit('call_ringing', { roomId, toId, callType: normalizedCallType });
   });
 
-  socket.on('call_accept', async ({ roomId, toId }) => {
+  socket.on('call_accept', async ({ roomId, toId }, ack = () => {}) => {
+    if (socket.data.activityOnly && socket.data.activityCall && (socket.data.activityCall.roomId !== roomId || socket.data.activityCall.callerId !== String(toId || ''))) return;
     const invite = directCallInvites.get(roomId);
-    if (!invite || invite.fromId !== toId || invite.toId !== userId) return;
+    if (!invite || invite.fromId !== toId || invite.toId !== userId) return ack({ error: 'That call is no longer available.' });
     directCallInvites.delete(roomId);
     const callType = callTypes.get(roomId) || 'voice';
     await setRoomParticipants(roomId, [userId, toId]);
@@ -1946,6 +1984,7 @@ io.on('connection', (socket) => {
     socket.join(`call:${roomId}`);
     io.to(`user:${toId}`).emit('call_accepted', { roomId, byId: userId, callType });
     socket.emit('call_joined', { roomId, callType });
+    ack({ success: true, callType });
   });
 
   socket.on('call_decline', ({ roomId, toId }) => {
@@ -1957,22 +1996,27 @@ io.on('connection', (socket) => {
   });
 
   socket.on('join_call', ({ roomId }) => {
+    if (socket.data.activityOnly && socket.data.activityCall && socket.data.activityCall.roomId !== roomId) return;
     socket.data.callRoomId = roomId;
     socket.join(`call:${roomId}`);
     socket.to(`call:${roomId}`).emit('peer_joined', { userId });
   });
 
   socket.on('webrtc_offer', ({ roomId, toId, offer }) => {
+    if (socket.data.activityOnly && socket.data.activityCall && (socket.data.activityCall.roomId !== roomId || socket.data.activityCall.callerId !== String(toId || ''))) return;
     io.to(`user:${toId}`).emit('webrtc_offer', { roomId, fromId: userId, offer });
   });
   socket.on('webrtc_answer', ({ roomId, toId, answer }) => {
+    if (socket.data.activityOnly && socket.data.activityCall && (socket.data.activityCall.roomId !== roomId || socket.data.activityCall.callerId !== String(toId || ''))) return;
     io.to(`user:${toId}`).emit('webrtc_answer', { roomId, fromId: userId, answer });
   });
   socket.on('webrtc_ice', ({ roomId, toId, candidate }) => {
+    if (socket.data.activityOnly && socket.data.activityCall && (socket.data.activityCall.roomId !== roomId || socket.data.activityCall.callerId !== String(toId || ''))) return;
     io.to(`user:${toId}`).emit('webrtc_ice', { roomId, fromId: userId, candidate });
   });
 
   socket.on('call_end', async ({ roomId }) => {
+    if (socket.data.activityOnly && socket.data.activityCall && socket.data.activityCall.roomId !== roomId) return;
     await closeDirectCallRoom(roomId);
     socket.data.callRoomId = null;
     socket.leave(`call:${roomId}`);
