@@ -7589,9 +7589,25 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 
 /* Discord-style server members rail and server icon menu */
 #server-sidebar-name {
-  font-size:12px;
-  line-height:1.25;
-  font-weight:700;
+  display:block;
+  min-height:18px;
+  font-size:14px;
+  line-height:18px;
+  font-weight:800;
+  letter-spacing:0;
+}
+body.pro-app-theme .sidebar {
+  width:var(--sidebar-w);
+  min-width:var(--sidebar-w);
+  font-size:inherit;
+}
+body.pro-app-theme .server-sidebar-header {
+  min-height:92px;
+  font-size:14px;
+}
+body.pro-app-theme #server-sidebar-name {
+  font-size:14px;
+  line-height:18px;
 }
 .server-members-panel {
   display:none;
