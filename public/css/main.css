@@ -1,5 +1,5 @@
 /* ===== NEXUS — Dark Theme ===== */
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
   --bg-void: #080a0f;
@@ -47,7 +47,7 @@
 html, body {
   height: 100%;
   height: 100dvh;
-  font-family: 'Syne', sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg-void);
   color: var(--text-primary);
   overflow: hidden;
@@ -8593,4 +8593,418 @@ body.pro-app-theme #server-sidebar-name {
   .server-event-card { grid-template-columns: 55px minmax(0,1fr); }
   .server-event-actions { grid-column: 1 / -1; }
   .global-emoji-picker { width: calc(100vw - 16px); left: 8px !important; }
+}
+
+/* ===== Visual Polish Pass =====
+   The app had drifted into glow-heavy, generated-looking styling. These
+   overrides keep the Nexus identity while making the interface calmer,
+   denser, and more hand-finished. */
+:root {
+  --bg-void: #080b10;
+  --bg-base: #0c1017;
+  --bg-surface: #111722;
+  --bg-elevated: #151c29;
+  --bg-hover: #1b2432;
+  --bg-active: #222c3d;
+  --border: rgba(183, 197, 224, 0.09);
+  --border-bright: rgba(202, 214, 238, 0.16);
+  --accent: #5d6bf2;
+  --accent-hover: #717df6;
+  --accent-muted: rgba(93, 107, 242, 0.14);
+  --accent-glow: rgba(93, 107, 242, 0.16);
+  --text-primary: #f0f3f8;
+  --text-secondary: #a3adbf;
+  --text-muted: #697489;
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.22);
+  --shadow-md: 0 6px 18px rgba(0,0,0,0.28);
+  --shadow-lg: 0 18px 46px rgba(0,0,0,0.38);
+}
+
+body.light-theme {
+  --bg-void: #e9eef5;
+  --bg-base: #f4f6fa;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f8fafc;
+  --bg-hover: #edf1f7;
+  --bg-active: #e5ebf4;
+  --border: rgba(30, 41, 59, 0.12);
+  --border-bright: rgba(30, 41, 59, 0.2);
+  --text-primary: #111827;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+.app-logo,
+.auth-logo,
+.logo-word,
+.shop-rarity,
+.shop-card-name,
+.shop-pack-card .shop-card-name,
+.profile-popup-name,
+.dm-profile-name,
+.msg-author,
+.user-info .display-name,
+.person-info .display-name {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  letter-spacing: 0;
+}
+
+.app-logo,
+.auth-logo,
+.logo-word {
+  font-family: 'Syne', 'Inter', sans-serif;
+  letter-spacing: 2px;
+}
+
+.auth-orb,
+.grid-overlay {
+  display: none;
+}
+
+#auth-screen {
+  background:
+    linear-gradient(180deg, rgba(93,107,242,0.08), transparent 32%),
+    var(--bg-void);
+}
+
+.auth-card,
+.modal,
+.profile-popup,
+.friend-card,
+.request-card,
+.search-results,
+.shop-card,
+.shop-pack-card,
+.shop-catalog-section,
+.shop-exclusive-drawer,
+.auction-card,
+.auction-panel,
+.server-invite-item,
+.rich-server-invite,
+.server-event-card,
+.onboarding-card,
+.discovery-card,
+.dm-context-review-modal section,
+.tutorial-card,
+.pending-gift-card {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: none !important;
+}
+
+.auth-card,
+.modal {
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.sidebar,
+.dm-sidebar,
+.chat-header,
+.message-input-wrap,
+.server-rail,
+.server-settings-full,
+.settings-modal,
+.admin-modal-full {
+  border-color: var(--border) !important;
+}
+
+.sidebar,
+.dm-sidebar {
+  background: var(--bg-surface) !important;
+}
+
+.server-rail {
+  background: #070a0f !important;
+}
+
+body.light-theme .server-rail {
+  background: #dfe6f0 !important;
+}
+
+.nav-btn,
+.dm-item,
+.channel-item,
+.server-member-item,
+.settings-tab,
+.profile-settings-tab,
+.shop-tab,
+.ftab,
+.stab {
+  border-radius: var(--radius-md) !important;
+}
+
+.nav-btn.active,
+.dm-item.active,
+.channel-item.active,
+.server-member-item:hover {
+  background: var(--bg-active) !important;
+  color: var(--text-primary) !important;
+}
+
+.nav-btn.active {
+  color: #dfe4ff !important;
+}
+
+.nav-btn:hover,
+.dm-item:hover,
+.channel-item:hover,
+.friend-card:hover,
+.shop-card:hover,
+.auction-card:hover {
+  background: var(--bg-hover) !important;
+  border-color: var(--border-bright) !important;
+  transform: none !important;
+}
+
+.rail-btn {
+  border: 1px solid transparent;
+  box-shadow: none !important;
+}
+
+.rail-btn:hover,
+.rail-btn.active {
+  background: var(--accent) !important;
+  border-radius: 15px !important;
+}
+
+.rail-btn.add-server:hover {
+  background: #2fbf7b !important;
+}
+
+.chat-header::after {
+  display: none;
+}
+
+.view-header h1,
+.modal-header h2,
+.server-sidebar-header,
+.dm-sidebar-header h2,
+.shop-subsection h2,
+.shop-section-heading h2,
+.games-content h1,
+.auction-content h1 {
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
+.section-label,
+.sidebar-label,
+.server-channels-label,
+.server-members-label,
+.member-role-heading,
+.emoji-section-title,
+.shop-section-heading b,
+.shop-exclusive-drawer > summary small {
+  letter-spacing: 0.08em !important;
+  color: var(--text-muted) !important;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.action-btn,
+.shop-card-btn,
+.member-action-btn,
+.inv-accept,
+.inv-decline,
+.send-btn {
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.btn-primary,
+.action-btn.primary,
+.shop-card-btn.equip,
+.shop-card-btn.buy,
+.send-btn {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border: 1px solid transparent !important;
+}
+
+.btn-primary:hover,
+.action-btn.primary:hover,
+.shop-card-btn.equip:hover,
+.shop-card-btn.buy:hover,
+.send-btn:hover {
+  background: var(--accent-hover) !important;
+}
+
+.btn-secondary,
+.action-btn.ghost,
+.role-edit-btn,
+.icon-btn:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+.btn-danger,
+.action-btn.danger,
+.shop-card-btn.danger,
+.shop-sell-btn,
+.role-del-btn {
+  background: rgba(240,84,84,0.11) !important;
+  border: 1px solid rgba(240,84,84,0.24) !important;
+  color: #ff6b6b !important;
+}
+
+input,
+textarea,
+select,
+.search-bar,
+.dm-search-wrap input,
+.auction-sell-row select,
+.auction-sell-row input,
+.invite-code-row input {
+  background: var(--bg-base) !important;
+  border: 1px solid var(--border-bright) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+.message-input-wrap textarea:focus {
+  border-color: rgba(125, 140, 255, 0.75) !important;
+  box-shadow: 0 0 0 3px rgba(93,107,242,0.16) !important;
+}
+
+.message {
+  border-radius: 4px !important;
+}
+
+.message:hover {
+  background: rgba(255,255,255,0.035) !important;
+}
+
+body.light-theme .message:hover {
+  background: rgba(30,41,59,0.055) !important;
+}
+
+.message-input-wrap textarea {
+  min-height: 42px;
+}
+
+.status-dot.online,
+.status-dot.dnd,
+.status-dot.discord-status,
+.shop-card.equipped,
+.color-card.equipped,
+.font-card.equipped {
+  box-shadow: none !important;
+}
+
+.shop-grid,
+.shop-grid-inner,
+.auction-grid,
+.friends-grid {
+  gap: 14px !important;
+}
+
+.shop-card,
+.auction-card,
+.friend-card {
+  padding: 14px !important;
+}
+
+.shop-rarity,
+.role-badge,
+.profile-role-chip,
+.server-tag-badge,
+.inv-tags span,
+.member-role-heading {
+  border-radius: 5px !important;
+}
+
+.shop-card-desc,
+.shop-subsection p,
+.shop-drawer-copy,
+.auction-card p,
+.inv-description {
+  color: var(--text-secondary) !important;
+}
+
+.profile-popup-banner,
+.dm-profile-banner {
+  background: linear-gradient(135deg, #25314a, #303a58) !important;
+}
+
+.profile-popup.pro-profile .profile-popup-banner,
+.pro-profile-card .dm-profile-banner,
+.dm-profile-panel.pro-profile-card .dm-profile-copy,
+.dm-profile-panel.pro-profile-card .dm-profile-section {
+  box-shadow: none !important;
+}
+
+.modal-overlay {
+  background: rgba(3, 6, 12, 0.72) !important;
+  backdrop-filter: blur(3px) !important;
+}
+
+.settings-modal .profile-settings-tabs,
+.server-settings-full > .settings-tabs,
+.admin-modal-full .admin-tabs {
+  background: var(--bg-base) !important;
+}
+
+.settings-modal .profile-settings-tab.active,
+.server-settings-full .settings-tab.active,
+.admin-modal-full .admin-tab.active {
+  background: var(--bg-active) !important;
+  color: var(--text-primary) !important;
+}
+
+.toast {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+body.pro-app-theme.theme-style-gradient #main-screen,
+body.pro-app-theme.theme-style-glass #main-screen {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 22%, transparent), color-mix(in srgb, var(--theme-secondary) 18%, transparent)),
+    var(--bg-void) !important;
+}
+
+body.pro-app-theme.theme-style-gradient .server-rail,
+body.pro-app-theme.theme-style-gradient .sidebar,
+body.pro-app-theme.theme-style-gradient .view,
+body.pro-app-theme.theme-style-glass .server-rail,
+body.pro-app-theme.theme-style-glass .sidebar,
+body.pro-app-theme.theme-style-glass .view,
+body.pro-app-theme.theme-style-glass .chat-header,
+body.pro-app-theme.theme-style-glass .message-input-wrap {
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent) !important;
+  backdrop-filter: none !important;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nav-btn,
+  .dm-item,
+  .channel-item,
+  .server-member-item,
+  .btn-primary,
+  .btn-secondary,
+  .action-btn,
+  .shop-card,
+  .auction-card,
+  .friend-card {
+    transition: background-color .14s ease, border-color .14s ease, color .14s ease !important;
+  }
 }
