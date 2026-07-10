@@ -91,6 +91,10 @@
     .danger { background: rgba(255,102,115,.08); color: var(--danger); border-color: rgba(255,102,115,.28); }
     button:disabled { opacity: .48; cursor: not-allowed; }
     .actions { display: flex; gap: 9px; justify-content: center; flex-wrap: wrap; margin-top: 21px; }
+    .manual-unlock { width: min(380px, 100%); margin: 18px auto 0; padding-top: 18px; border-top: 1px solid var(--line); text-align: left; }
+    .manual-unlock label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+    .manual-code-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .manual-code-row input { min-width: 0; min-height: 42px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 3px; background: #090a0d; color: var(--text); font: 750 13px/1 ui-monospace, monospace; }
     .error { min-height: 22px; margin-top: 12px; color: var(--danger); }
     .workspace { display: grid; grid-template-columns: minmax(350px, .78fr) minmax(560px, 1.35fr); gap: 16px; align-items: start; }
     .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
@@ -142,6 +146,7 @@
       .workspace { display: block; }
       .workspace > .panel + .panel { margin-top: 14px; }
       .segment.three { grid-template-columns: 1fr; }
+      .manual-code-row { grid-template-columns: 1fr; }
       .code-row { grid-template-columns: 1fr auto; }
       .reward-detail, .usage-detail { grid-column: 1; }
       .row-actions { grid-column: 2; grid-row: 1 / span 3; }
@@ -168,7 +173,7 @@
       <aside class="gate-side">
         <span class="side-title">Access policy</span>
         <div class="side-row"><span>Role</span><strong>CORE ADMIN</strong></div>
-        <div class="side-row"><span>Factor</span><strong>PHYSICAL NFC</strong></div>
+        <div class="side-row"><span>Factor</span><strong>NFC / ADMIN CODE</strong></div>
         <div class="side-row"><span>Session</span><strong>20 MINUTES</strong></div>
       </aside>
       <div class="gate-main">
@@ -178,6 +183,13 @@
           <h2>Scan the limited-admin keycard</h2>
           <p class="muted" id="scan-help">Use Chrome on an NFC-capable Android device.</p>
           <div class="actions"><button class="primary" id="scan-btn">Scan Admin NFC</button></div>
+          <div class="manual-unlock">
+            <label for="manual-code-input">Or enter admin access code</label>
+            <div class="manual-code-row">
+              <input id="manual-code-input" type="password" autocomplete="off" placeholder="NEXUS-LIMITED-ADMIN-2026">
+              <button class="secondary" id="manual-code-btn">Unlock</button>
+            </div>
+          </div>
           <div class="error" id="scan-error"></div>
         </div>
       </div>
@@ -285,7 +297,7 @@
       function setUnlocked(unlocked) {
         $('gate').hidden = unlocked;
         $('workspace').hidden = !unlocked;
-        $('access-state').textContent = unlocked ? 'Admin NFC verified' : 'Portal locked';
+        $('access-state').textContent = unlocked ? 'Admin access verified' : 'Portal locked';
         $('access-state').classList.toggle('unlocked', unlocked);
       }
 
@@ -378,6 +390,17 @@
         }
       }
 
+      async function unlockWithPayload(payload) {
+        const result = await api('POST', '/api/limited/admin/unlock', { payload });
+        if (result.error) {
+          $('scan-error').textContent = result.error;
+          return false;
+        }
+        setUnlocked(true);
+        await loadPortal();
+        return true;
+      }
+
       $('scan-btn').addEventListener('click', async () => {
         $('scan-error').textContent = '';
         $('scan-btn').disabled = true;
@@ -386,17 +409,11 @@
           const reader = new NDEFReader();
           await reader.scan();
           reader.addEventListener('reading', async event => {
-            const result = await api('POST', '/api/limited/admin/unlock', {
-              payload: readNdefText(event.message)
-            });
-            if (result.error) {
-              $('scan-error').textContent = result.error;
+            const unlocked = await unlockWithPayload(readNdefText(event.message));
+            if (!unlocked) {
               $('scan-btn').disabled = false;
               $('scan-btn').textContent = 'Scan Admin NFC';
-              return;
             }
-            setUnlocked(true);
-            await loadPortal();
           }, { once: true });
         } catch (error) {
           $('scan-error').textContent = error.name === 'NotAllowedError'
@@ -405,6 +422,26 @@
           $('scan-btn').disabled = false;
           $('scan-btn').textContent = 'Scan Admin NFC';
         }
+      });
+
+      $('manual-code-btn').addEventListener('click', async () => {
+        const code = $('manual-code-input').value.trim();
+        $('scan-error').textContent = '';
+        if (!code) {
+          $('scan-error').textContent = 'Enter the limited-admin access code.';
+          return;
+        }
+        $('manual-code-btn').disabled = true;
+        $('manual-code-btn').textContent = 'Unlocking...';
+        const unlocked = await unlockWithPayload(code);
+        if (!unlocked) {
+          $('manual-code-btn').disabled = false;
+          $('manual-code-btn').textContent = 'Unlock';
+        }
+      });
+
+      $('manual-code-input').addEventListener('keydown', event => {
+        if (event.key === 'Enter') $('manual-code-btn').click();
       });
 
       $('usage-segment').addEventListener('click', event => {

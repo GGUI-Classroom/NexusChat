@@ -10,6 +10,7 @@ router.use(requireAuth);
 
 const CORE_ADMIN_IDS = new Set(['537b58c9-b9cd-4239-b0e6-2f862c30ac01']);
 const ADMIN_NFC_CODE = process.env.LIMITED_ADMIN_NFC_CODE || 'GHQI23OADMSH2362&-3DW';
+const ADMIN_ACCESS_CODE = process.env.LIMITED_ADMIN_ACCESS_CODE || 'NEXUS-LIMITED-ADMIN-2026';
 const ADMIN_ACCESS_SECONDS = 20 * 60;
 const FAR_FUTURE = 253402300799;
 const MAX_NEXALS = 100000000;
@@ -52,7 +53,7 @@ function requireCoreAdmin(req, res, next) {
 
 function requireLimitedAccess(req, res, next) {
   if ((req.session.limitedAdminUntil || 0) <= nowSeconds()) {
-    return res.status(403).json({ error: 'Scan the limited-admin NFC tag to unlock this portal' });
+    return res.status(403).json({ error: 'Unlock the limited-admin portal first' });
   }
   next();
 }
@@ -68,8 +69,8 @@ router.get('/status', requireCoreAdmin, (req, res) => {
 
 router.post('/admin/unlock', requireCoreAdmin, (req, res) => {
   const payload = String(req.body.payload || '').trim();
-  if (!secureEquals(payload, ADMIN_NFC_CODE)) {
-    return res.status(403).json({ error: 'This is not the limited-admin NFC tag' });
+  if (!secureEquals(payload, ADMIN_NFC_CODE) && !secureEquals(payload, ADMIN_ACCESS_CODE)) {
+    return res.status(403).json({ error: 'Invalid limited-admin access code' });
   }
   const unlockedUntil = nowSeconds() + ADMIN_ACCESS_SECONDS;
   req.session.limitedAdminUntil = unlockedUntil;
