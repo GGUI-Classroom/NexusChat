@@ -9244,6 +9244,86 @@ body.pro-app-theme.theme-style-glass .message-input-wrap {
 @keyframes unity-stars { 0%,100% { opacity:.45; } 50% { opacity:1; } }
 .avatar-deco.deco-unity_matchball_26::after { display: none; }
 
+/* Matchball refinement: compact geometry, a real ball asset, and no text.
+   These overrides intentionally keep every visible layer inside a 4px edge. */
+.avatar-deco.deco-unity_matchball_26 {
+  inset: -4px;
+  background: conic-gradient(from 18deg, #e63950 0 20deg, transparent 21deg 81deg, #00a878 82deg 102deg, transparent 103deg 161deg, #2275ca 162deg 184deg, transparent 185deg 246deg, #f6c945 247deg 266deg, transparent 267deg 330deg, #e63950 331deg 360deg);
+  -webkit-mask: radial-gradient(circle, transparent 64%, #000 68%, #000 72%, transparent 76%);
+          mask: radial-gradient(circle, transparent 64%, #000 68%, #000 72%, transparent 76%);
+  box-shadow: 0 0 7px rgba(65,159,255,.42), 0 0 12px rgba(229,57,80,.2);
+  animation: unity-matchball-ring 8s linear infinite;
+}
+.avatar-deco.deco-unity_matchball_26::before {
+  width: 27%;
+  height: 27%;
+  left: 72%;
+  top: 4%;
+  border: 0;
+  border-radius: 50%;
+  background: url('/assets/unity-matchball-26.png') center / cover no-repeat;
+  box-shadow: 0 2px 5px rgba(0,0,0,.38), 0 0 7px rgba(255,255,255,.38);
+  transform-origin: center;
+  animation: unity-matchball-compact-orbit 7.2s ease-in-out infinite;
+}
+.unity-matchball-layer,
+.unity-matchball-layer > span { inset: -4px; }
+.unity-matchball-lights {
+  inset: 0 !important;
+  opacity: .68;
+  background: repeating-conic-gradient(from 4deg, rgba(255,255,255,.82) 0 1deg, transparent 1.6deg 13deg);
+  -webkit-mask: radial-gradient(circle, transparent 70%, #000 72%, #000 74%, transparent 77%);
+          mask: radial-gradient(circle, transparent 70%, #000 72%, #000 74%, transparent 77%);
+  filter: drop-shadow(0 0 3px rgba(145,219,255,.5));
+}
+.unity-matchball-takeover {
+  inset: 3px !important;
+  overflow: hidden;
+  border: 0;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(10,34,68,.28) 0 42%, transparent 70%),
+    linear-gradient(135deg, rgba(14,73,142,.23), rgba(0,139,100,.16) 52%, rgba(212,47,70,.2));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), inset 0 0 12px rgba(9,32,70,.26);
+  opacity: 0;
+  animation: unity-final-minute-refined 12s ease-in-out infinite;
+}
+.unity-matchball-takeover::before {
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,.14), transparent 48%);
+  mix-blend-mode: screen;
+  animation: none;
+}
+.unity-matchball-takeover::after { opacity: .7; }
+.unity-matchball-final-ball {
+  width: 48%;
+  height: 48%;
+  left: 26%;
+  top: 26%;
+  border: 0;
+  border-radius: 50%;
+  background: url('/assets/unity-matchball-26.png') center / cover no-repeat;
+  box-shadow: 0 4px 11px rgba(0,0,0,.42), 0 0 10px rgba(255,255,255,.38);
+  animation: unity-final-ball-refined 2.4s ease-in-out infinite;
+}
+.unity-matchball-takeover b,
+.unity-matchball-takeover i { display: none; }
+@keyframes unity-matchball-compact-orbit {
+  0%,100% { transform: translate(0,0) scale(.9) rotate(-7deg); }
+  25% { transform: translate(-42%,34%) scale(1.02) rotate(9deg); }
+  50% { transform: translate(-70%,116%) scale(.92) rotate(20deg); }
+  75% { transform: translate(-24%,136%) scale(1.02) rotate(5deg); }
+}
+@keyframes unity-final-minute-refined {
+  0%,72%,100% { opacity: 0; transform: scale(.9); }
+  75% { opacity: .12; transform: scale(.95); }
+  78% { opacity: .58; transform: scale(1); }
+  96% { opacity: .58; transform: scale(1); }
+  99% { opacity: .06; transform: scale(1.02); }
+}
+@keyframes unity-final-ball-refined {
+  0%,100% { transform: rotate(-5deg) scale(.92); filter: brightness(1); }
+  50% { transform: rotate(7deg) scale(1.04); filter: brightness(1.13); }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .nav-btn,
   .dm-item,

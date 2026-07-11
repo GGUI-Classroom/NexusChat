@@ -313,8 +313,6 @@
       <span class="unity-matchball-lights"></span>
       <span class="unity-matchball-takeover">
         <span class="unity-matchball-final-ball"></span>
-        <b>WORLD<br>26</b>
-        <i>FINAL MINUTE</i>
       </span>`;
     wrap.appendChild(layer);
   }
