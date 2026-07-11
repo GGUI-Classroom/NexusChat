@@ -9052,34 +9052,56 @@ body.pro-app-theme.theme-style-glass .message-input-wrap {
 .avatar-deco.deco-unity_matchball_26::before {
   content: '';
   position: absolute;
-  width: 24%;
-  height: 24%;
-  left: 74%;
-  top: 5%;
-  border: 1px solid rgba(255,255,255,0.9);
+  width: 27%;
+  height: 27%;
+  left: 72%;
+  top: 3%;
+  border: 1px solid rgba(255,255,255,.94);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 50% 48%, #112440 0 18%, transparent 19%),
+    radial-gradient(circle at 50% 48%, #15243b 0 15%, transparent 16%),
+    radial-gradient(circle at 22% 32%, #15243b 0 10%, transparent 11%),
+    radial-gradient(circle at 78% 34%, #15243b 0 10%, transparent 11%),
+    radial-gradient(circle at 68% 75%, #15243b 0 10%, transparent 11%),
+    radial-gradient(circle at 30% 76%, #15243b 0 10%, transparent 11%),
     conic-gradient(from 15deg, #fcfcfa 0 12%, #183359 13% 24%, #fbfbf7 25% 39%, #d82b41 40% 52%, #fcfcfa 53% 68%, #008d66 69% 80%, #fbfbf7 81% 100%);
-  box-shadow: 0 2px 6px rgba(0,0,0,.4), 0 0 8px rgba(255,255,255,.54);
-  transform-origin: -245% 218%;
+  box-shadow: 0 3px 7px rgba(0,0,0,.48), 0 0 10px rgba(255,255,255,.64);
+  transform-origin: -218% 205%;
   animation: unity-matchball-orbit 3.8s cubic-bezier(.45,.04,.55,.96) infinite;
 }
 .avatar-deco.deco-unity_matchball_26::after {
-  content: '';
+  content: 'MATCH\A 26';
+  white-space: pre;
+  display: grid;
+  place-items: end center;
+  padding-bottom: 12%;
+  color: rgba(255,255,255,.94);
+  font-family: 'Syne', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: .86;
+  letter-spacing: .08em;
+  text-align: center;
+  text-shadow: 0 1px 3px #071120, 0 0 8px rgba(255,255,255,.55);
   position: absolute;
-  inset: -5px;
+  inset: -2px;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 19% 24%, rgba(255,255,255,.98) 0 1px, transparent 2px),
+    radial-gradient(circle at 50% 47%, #12223a 0 11%, transparent 12%),
+    radial-gradient(circle at 35% 34%, #142640 0 7%, transparent 8%),
+    radial-gradient(circle at 66% 35%, #142640 0 7%, transparent 8%),
+    radial-gradient(circle at 70% 64%, #142640 0 7%, transparent 8%),
+    radial-gradient(circle at 31% 65%, #142640 0 7%, transparent 8%),
+    radial-gradient(circle at 50% 48%, rgba(255,255,255,.98) 0 30%, rgba(255,255,255,.75) 31%, transparent 32%),
+    radial-gradient(circle at 19% 24%, rgba(255,255,255,.96) 0 1px, transparent 2px),
     radial-gradient(circle at 78% 17%, rgba(255,229,114,.9) 0 1px, transparent 2px),
     radial-gradient(circle at 91% 62%, rgba(99,201,255,.95) 0 1px, transparent 2px),
     radial-gradient(circle at 28% 88%, rgba(255,102,118,.9) 0 1px, transparent 2px),
-    conic-gradient(from 210deg, transparent 0 48deg, rgba(255,255,255,.85) 56deg, transparent 66deg, transparent 188deg, rgba(117,227,255,.8) 205deg, transparent 222deg);
-  -webkit-mask: radial-gradient(circle, transparent 67%, #000 71%, #000 74%, transparent 80%);
-          mask: radial-gradient(circle, transparent 67%, #000 71%, #000 74%, transparent 80%);
-  filter: drop-shadow(0 0 4px rgba(255,255,255,.55));
-  animation: unity-matchball-flash 4.6s ease-in-out infinite;
+    linear-gradient(135deg, rgba(13,39,97,.7), rgba(3,112,83,.4) 46%, rgba(191,36,55,.5));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.48), inset 0 0 18px rgba(15,36,91,.72), 0 0 12px rgba(97,201,255,.46);
+  filter: saturate(1.18) drop-shadow(0 0 5px rgba(255,255,255,.54));
+  opacity: 0;
+  animation: unity-matchball-takeover 12s ease-in-out infinite;
 }
 @keyframes unity-matchball-ring { to { transform: rotate(360deg); } }
 @keyframes unity-matchball-orbit {
@@ -9087,10 +9109,12 @@ body.pro-app-theme.theme-style-glass .message-input-wrap {
   42% { transform: rotate(180deg) scale(1.13); filter: brightness(1.24); }
   50% { transform: rotate(205deg) scale(1.16); filter: brightness(1.48); }
 }
-@keyframes unity-matchball-flash {
-  0%,76%,100% { opacity:.44; transform:rotate(0deg); }
-  82% { opacity:1; transform:rotate(23deg) scale(1.04); }
-  88% { opacity:.74; transform:rotate(46deg); }
+@keyframes unity-matchball-takeover {
+  0%,72%,100% { opacity:0; transform:scale(.82) rotate(-16deg); }
+  75% { opacity:.22; transform:scale(.92) rotate(-7deg); }
+  78% { opacity:.88; transform:scale(1) rotate(0deg); }
+  96% { opacity:.88; transform:scale(1.015) rotate(2deg); }
+  99% { opacity:.16; transform:scale(1.06) rotate(7deg); }
 }
 .seasonal-shop-chip {
   display: inline-flex;
@@ -9106,6 +9130,119 @@ body.pro-app-theme.theme-style-glass .message-input-wrap {
   line-height: 1;
   letter-spacing: .05em;
 }
+
+/* Dedicated layers for Unity Matchball '26. The outer stadium stays clean;
+   the inner scene only appears briefly as the final-minute moment. */
+.unity-matchball-layer,
+.unity-matchball-layer > span {
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.unity-matchball-layer {
+  z-index: 5;
+  overflow: visible;
+}
+.unity-matchball-lights {
+  background:
+    repeating-conic-gradient(from 4deg, rgba(255,255,255,.9) 0 1deg, transparent 1.8deg 11deg),
+    conic-gradient(from 205deg, transparent 0 45deg, rgba(87,203,255,.8) 56deg, transparent 70deg, transparent 136deg, rgba(244,209,85,.76) 158deg, transparent 175deg, transparent 238deg, rgba(238,57,77,.75) 257deg, transparent 274deg, transparent 360deg);
+  -webkit-mask: radial-gradient(circle, transparent 65%, #000 69%, #000 73%, transparent 79%);
+          mask: radial-gradient(circle, transparent 65%, #000 69%, #000 73%, transparent 79%);
+  filter: drop-shadow(0 0 6px rgba(124,211,255,.62));
+  animation: unity-stadium-lights 5.2s linear infinite;
+}
+.unity-matchball-takeover {
+  inset: -3px !important;
+  display: block;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.58);
+  background:
+    radial-gradient(ellipse at 50% 112%, rgba(0,157,105,.82), transparent 56%),
+    linear-gradient(145deg, rgba(9,40,97,.86), rgba(0,109,92,.58) 50%, rgba(190,28,58,.72));
+  box-shadow: inset 0 0 0 1px rgba(7,13,30,.45), inset 0 0 20px rgba(4,15,45,.78), 0 0 13px rgba(115,210,255,.44);
+  opacity: 0;
+  transform: scale(.75) rotate(-14deg);
+  animation: unity-final-minute 12s cubic-bezier(.2,.8,.2,1) infinite;
+}
+.unity-matchball-takeover::before,
+.unity-matchball-takeover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.unity-matchball-takeover::before {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 12%, rgba(255,255,255,.13) 12.4% 13%, transparent 13.6% 25%),
+    linear-gradient(180deg, rgba(255,255,255,.2), transparent 28%, transparent 72%, rgba(0,0,0,.25));
+  mix-blend-mode: screen;
+  animation: unity-scanline 2.4s linear infinite;
+}
+.unity-matchball-takeover::after {
+  background:
+    radial-gradient(circle at 18% 20%, rgba(255,255,255,.92) 0 1px, transparent 2px),
+    radial-gradient(circle at 84% 20%, rgba(255,228,106,.88) 0 1px, transparent 2px),
+    radial-gradient(circle at 17% 76%, rgba(103,211,255,.92) 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 78%, rgba(255,99,119,.88) 0 1px, transparent 2px);
+  animation: unity-stars 1.9s ease-in-out infinite;
+}
+.unity-matchball-final-ball {
+  position: absolute;
+  width: 56%;
+  height: 56%;
+  left: 22%;
+  top: 13%;
+  border: 1px solid rgba(255,255,255,.96);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 48%, #12243c 0 12%, transparent 13%),
+    radial-gradient(circle at 23% 31%, #12243c 0 8%, transparent 9%),
+    radial-gradient(circle at 78% 31%, #12243c 0 8%, transparent 9%),
+    radial-gradient(circle at 69% 75%, #12243c 0 8%, transparent 9%),
+    radial-gradient(circle at 31% 75%, #12243c 0 8%, transparent 9%),
+    conic-gradient(from 8deg, #fbfbf5 0 13%, #1e3c6d 14% 25%, #fafaf4 26% 39%, #e5364e 40% 52%, #fafaf5 53% 68%, #00a778 69% 81%, #fafaf5 82% 100%);
+  box-shadow: 0 5px 12px rgba(0,0,0,.45), 0 0 14px rgba(255,255,255,.52);
+  animation: unity-final-ball 2.2s ease-in-out infinite;
+}
+.unity-matchball-takeover b {
+  position: absolute;
+  z-index: 1;
+  right: 12%;
+  bottom: 13%;
+  color: #fff;
+  font: 800 14px/.78 'Syne', sans-serif;
+  letter-spacing: .06em;
+  text-align: right;
+  text-shadow: 0 2px 4px rgba(0,0,0,.7), 0 0 10px rgba(125,214,255,.7);
+}
+.unity-matchball-takeover i {
+  position: absolute;
+  z-index: 1;
+  left: 12%;
+  bottom: 12%;
+  color: rgba(255,242,182,.96);
+  font: 800 7px/1 'Syne', sans-serif;
+  font-style: normal;
+  letter-spacing: .1em;
+  text-shadow: 0 1px 3px rgba(0,0,0,.8);
+}
+@keyframes unity-stadium-lights { to { transform: rotate(360deg); } }
+@keyframes unity-final-minute {
+  0%,72%,100% { opacity:0; transform:scale(.75) rotate(-14deg); }
+  75% { opacity:.18; transform:scale(.86) rotate(-7deg); }
+  78% { opacity:.98; transform:scale(1) rotate(0); }
+  96% { opacity:.98; transform:scale(1.02) rotate(1deg); }
+  99% { opacity:.08; transform:scale(1.1) rotate(8deg); }
+}
+@keyframes unity-final-ball {
+  0%,100% { transform:rotate(-8deg) scale(.94); filter:brightness(.98); }
+  48% { transform:rotate(12deg) scale(1.08); filter:brightness(1.2); }
+}
+@keyframes unity-scanline { to { transform:translateX(12%); } }
+@keyframes unity-stars { 0%,100% { opacity:.45; } 50% { opacity:1; } }
+.avatar-deco.deco-unity_matchball_26::after { display: none; }
 
 @media (prefers-reduced-motion: no-preference) {
   .nav-btn,

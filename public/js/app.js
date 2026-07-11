@@ -302,7 +302,21 @@
 
   function clearDecorationDom(wrap) {
     if (!wrap) return;
-    wrap.querySelectorAll('.avatar-deco,.premium-deco,.admin-crown,.deco-shine-overlay,.stormveil-layer,.heheshuis-layer').forEach(e => e.remove());
+    wrap.querySelectorAll('.avatar-deco,.premium-deco,.admin-crown,.deco-shine-overlay,.stormveil-layer,.heheshuis-layer,.unity-matchball-layer').forEach(e => e.remove());
+  }
+
+  function addUnityMatchballLayers(wrap) {
+    if (!wrap || wrap.querySelector('.unity-matchball-layer')) return;
+    const layer = document.createElement('div');
+    layer.className = 'unity-matchball-layer';
+    layer.innerHTML = `
+      <span class="unity-matchball-lights"></span>
+      <span class="unity-matchball-takeover">
+        <span class="unity-matchball-final-ball"></span>
+        <b>WORLD<br>26</b>
+        <i>FINAL MINUTE</i>
+      </span>`;
+    wrap.appendChild(layer);
   }
 
   function renderPremiumDecoration(wrap, deco) {
@@ -346,6 +360,7 @@
       wrap.appendChild(decoEl);
       if (deco === 'stormveil') addStormveilLayers(wrap);
       if (deco === 'heheshuis_aura') addHeheshuisLayers(wrap);
+      if (deco === 'unity_matchball_26') addUnityMatchballLayers(wrap);
     }
 
     wrap.dataset.deco = deco;
@@ -404,7 +419,7 @@
     }
 
     // Remove stale deco elements and canvases
-    wrap.querySelectorAll('.avatar-deco, .premium-deco, .storm-canvas, .stormveil-layer, .heheshuis-layer').forEach(e => e.remove());
+    wrap.querySelectorAll('.avatar-deco, .premium-deco, .storm-canvas, .stormveil-layer, .heheshuis-layer, .unity-matchball-layer').forEach(e => e.remove());
     // Stop any running canvas engines first
     stopStormCanvas(wrap); stopInfernoCanvas(wrap); stopYinYangCanvas(wrap);
     stopHydroCanvas(wrap);
@@ -425,6 +440,7 @@
         } else if (deco === 'heheshuis_aura') {
           addHeheshuisLayers(wrap);
         }
+        if (deco === 'unity_matchball_26') addUnityMatchballLayers(wrap);
       }
     }
     wrap.dataset.deco = deco;
