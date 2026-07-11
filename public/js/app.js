@@ -7102,6 +7102,9 @@
       const myNexals = (shopData && shopData.nexals) || 0;
       const canBuy = !isOwned && d.nexalPrice && myNexals >= d.nexalPrice;
       const priceLabel = d.nexalPrice ? d.nexalPrice.toLocaleString() + ' Nexals' : null;
+      const limitedLabel = d.limited && d.availableUntil
+        ? `LIMITED \u00b7 ENDS ${new Date(d.availableUntil * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' }).toUpperCase()}`
+        : '';
       let btnClass = 'locked', btnText = 'Pack Only';
       if (isEquipped) { btnClass = 'unequip'; btnText = '✓ Equipped'; }
       else if (isOwned) { btnClass = 'equip'; btnText = 'Equip'; }
@@ -7117,6 +7120,7 @@
           </div>
           <span class="shop-rarity ${rarityClass}">${d.rarity}</span>
           ${d.packOnly ? '<span class="pack-only-chip">PACK-ONLY</span>' : ''}
+          ${limitedLabel ? `<span class="seasonal-shop-chip">${limitedLabel}</span>` : ''}
           <div class="shop-card-name">${esc(d.name)}</div>
           ${isOwned && d.packOnly ? `<div class="shop-card-desc">Owned: ${d.quantity || 1} | Sell: ${(d.sellPrice || 0).toLocaleString()} Nexals</div>` : ''}
           ${(!isOwned && priceLabel) ? `<div class="shop-card-price">${priceLabel}</div>` : ''}

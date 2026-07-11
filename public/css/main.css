@@ -9031,6 +9031,82 @@ body.pro-app-theme.theme-style-glass .message-input-wrap {
   backdrop-filter: none !important;
 }
 
+/* World Cup season: a contained matchball orbit. It stays outside the avatar,
+   so profile photos remain readable at every avatar size. */
+.avatar-deco.deco-unity_matchball_26 {
+  inset: -8px;
+  border: 0;
+  overflow: visible;
+  background:
+    conic-gradient(from 18deg,
+      #ef3340 0 22deg, transparent 23deg 76deg,
+      #00a859 77deg 102deg, transparent 103deg 159deg,
+      #1963b8 160deg 188deg, transparent 189deg 248deg,
+      #f7c843 249deg 272deg, transparent 273deg 328deg,
+      #ef3340 329deg 360deg);
+  -webkit-mask: radial-gradient(circle, transparent 59%, #000 64%, #000 72%, transparent 78%);
+          mask: radial-gradient(circle, transparent 59%, #000 64%, #000 72%, transparent 78%);
+  box-shadow: 0 0 10px rgba(44, 137, 244, 0.46), 0 0 18px rgba(239, 51, 64, 0.22);
+  animation: unity-matchball-ring 6.4s linear infinite;
+}
+.avatar-deco.deco-unity_matchball_26::before {
+  content: '';
+  position: absolute;
+  width: 24%;
+  height: 24%;
+  left: 74%;
+  top: 5%;
+  border: 1px solid rgba(255,255,255,0.9);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 48%, #112440 0 18%, transparent 19%),
+    conic-gradient(from 15deg, #fcfcfa 0 12%, #183359 13% 24%, #fbfbf7 25% 39%, #d82b41 40% 52%, #fcfcfa 53% 68%, #008d66 69% 80%, #fbfbf7 81% 100%);
+  box-shadow: 0 2px 6px rgba(0,0,0,.4), 0 0 8px rgba(255,255,255,.54);
+  transform-origin: -245% 218%;
+  animation: unity-matchball-orbit 3.8s cubic-bezier(.45,.04,.55,.96) infinite;
+}
+.avatar-deco.deco-unity_matchball_26::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 19% 24%, rgba(255,255,255,.98) 0 1px, transparent 2px),
+    radial-gradient(circle at 78% 17%, rgba(255,229,114,.9) 0 1px, transparent 2px),
+    radial-gradient(circle at 91% 62%, rgba(99,201,255,.95) 0 1px, transparent 2px),
+    radial-gradient(circle at 28% 88%, rgba(255,102,118,.9) 0 1px, transparent 2px),
+    conic-gradient(from 210deg, transparent 0 48deg, rgba(255,255,255,.85) 56deg, transparent 66deg, transparent 188deg, rgba(117,227,255,.8) 205deg, transparent 222deg);
+  -webkit-mask: radial-gradient(circle, transparent 67%, #000 71%, #000 74%, transparent 80%);
+          mask: radial-gradient(circle, transparent 67%, #000 71%, #000 74%, transparent 80%);
+  filter: drop-shadow(0 0 4px rgba(255,255,255,.55));
+  animation: unity-matchball-flash 4.6s ease-in-out infinite;
+}
+@keyframes unity-matchball-ring { to { transform: rotate(360deg); } }
+@keyframes unity-matchball-orbit {
+  0%,100% { transform: rotate(0deg) scale(.9); filter: brightness(1); }
+  42% { transform: rotate(180deg) scale(1.13); filter: brightness(1.24); }
+  50% { transform: rotate(205deg) scale(1.16); filter: brightness(1.48); }
+}
+@keyframes unity-matchball-flash {
+  0%,76%,100% { opacity:.44; transform:rotate(0deg); }
+  82% { opacity:1; transform:rotate(23deg) scale(1.04); }
+  88% { opacity:.74; transform:rotate(46deg); }
+}
+.seasonal-shop-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 3px 6px;
+  border: 1px solid rgba(247, 200, 67, .56);
+  border-radius: 5px;
+  color: #ffdb63;
+  background: rgba(247, 200, 67, .1);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .05em;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .nav-btn,
   .dm-item,

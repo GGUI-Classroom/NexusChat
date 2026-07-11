@@ -8,6 +8,8 @@ router.use(requireAuth);
 
 const SECRET_CATEGORY = '???SECRET???';
 const HEHESHUIS_SECRET_ID = 'heheshuis_aura';
+// July 10-17, 2026 Pacific: a seven-day World Cup-season shop window.
+const UNITY_MATCHBALL_ENDS_AT = Math.floor(Date.parse('2026-07-18T06:59:59.000Z') / 1000);
 const DECORATION_SELL_PRICES = {
   common: 300,
   rare: 650,
@@ -173,6 +175,16 @@ const DECORATIONS = [
   { id: 'yinyang',      nexalPrice: 10000, name: 'Yin & Yang',     description: 'Balance of light and dark. Every 5s, the symbol manifests.', rarity: 'mythical', preview: 'yinyang' },
   { id: 'aether_mist',  nexalPrice: 10000, name: 'Aether Mist',   description: 'Iridescent mist swirls with astral sparks in a premium aura.', rarity: 'mythical', preview: 'aether_mist' },
   { id: 'magma',        nexalPrice: 10000, name: 'Magma',         description: 'Molten lava drips from above your profile in a fiery flow.', rarity: 'mythical', preview: 'magma' },
+  {
+    id: 'unity_matchball_26',
+    nexalPrice: 15000,
+    name: "Unity Matchball '26",
+    description: 'A three-nation matchball with stadium lights, a rolling orbit, and a final-minute flash.',
+    rarity: 'mythical',
+    preview: 'unity_matchball_26',
+    limited: true,
+    availableUntil: UNITY_MATCHBALL_ENDS_AT
+  },
   // Pack-exclusive decorations
   { id: 'ember_trace', nexalPrice: null, name: 'Ember Trace', description: 'Warm sparks trace the edge of your avatar.', rarity: 'common', preview: 'ember_trace', packOnly: true },
   { id: 'mint_signal', nexalPrice: null, name: 'Mint Signal', description: 'A clean mint ping pulses from the border.', rarity: 'common', preview: 'mint_signal', packOnly: true },
@@ -375,6 +387,9 @@ function toClientDecoration(d, quantityOrOwned = 0) {
     preview: d.preview,
     category: d.category || null,
     packOnly: !!d.packOnly,
+    limited: !!d.limited,
+    availableUntil: d.availableUntil || null,
+    available: !d.availableUntil || d.availableUntil > Math.floor(Date.now() / 1000),
     owned: quantity > 0,
     quantity,
     sellPrice: d.packOnly ? (DECORATION_SELL_PRICES[d.rarity] || 0) : null
@@ -506,7 +521,7 @@ router.get('/', async (req, res) => {
   const nexalsRes = await pool.query('SELECT nexals FROM users WHERE id=$1', [req.session.userId]);
   res.json({
     decorations: DECORATIONS
-      .filter(d => !d.hidden || (d.hidden && ownedQuantities.has(d.id)))
+      .filter(d => (!d.hidden || (d.hidden && ownedQuantities.has(d.id))) && (!d.availableUntil || d.availableUntil > Math.floor(Date.now() / 1000) || ownedQuantities.has(d.id)))
       .map(d => toClientDecoration(d, ownedQuantities.get(d.id) || 0)),
     nameplates: NAMEPLATES.map(nameplate => toClientNameplate(nameplate, ownedNameplates.get(nameplate.id) || 0)),
     packs: DECORATION_PACKS.map(pack => toClientPack(pack, ownedQuantities, ownedNameplates)),
@@ -731,6 +746,7 @@ router.post('/buy', async (req, res) => {
   const deco = DECORATIONS.find(d => d.id === decorationId);
   if (!deco) return res.status(404).json({ error: 'Decoration not found' });
   if (deco.hidden) return res.status(403).json({ error: 'This decoration cannot be purchased' });
+  if (deco.availableUntil && deco.availableUntil <= Math.floor(Date.now() / 1000)) return res.status(410).json({ error: 'This limited decoration is no longer in the shop' });
   if (!deco.nexalPrice) return res.status(403).json({ error: 'This decoration is not available for direct purchase' });
 
   // Check not already owned
