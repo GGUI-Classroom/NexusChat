@@ -11,6 +11,8 @@
   let friends = [];
   const authorCache = {};
   let pendingSystemReport = null;
+  let pendingTos = null;
+  let appInitialized = false;
   let isCoreAdmin = false;
   let reportAlarmCtx = null;
   let reportAlarmTimer = null;
@@ -82,6 +84,8 @@
   let activeServerId = null;
   let activeChannelId = null;
   let activeServerData = null; // { server, channels, members }
+  let activeServerEmojis = [];
+  let serverModerationData = { logs: [], mutes: [] };
   let isCurrentServerAdmin = false;
   let pendingChannelReply = null;
   let activeChannelTopic = null;
@@ -1427,7 +1431,12 @@
       const res = await fetch(path, opts);
       const text = await res.text();
       try {
-        return JSON.parse(text);
+        const parsed = JSON.parse(text);
+        if (parsed.tosRequired && parsed.tos) {
+          pendingTos = parsed.tos;
+          if (currentUser) showTosAgreement(parsed.tos);
+        }
+        return parsed;
       } catch (e) {
         console.error('Non-JSON response:', text);
         return { error: 'Server returned invalid response: ' + text.slice(0, 100) };
@@ -1451,6 +1460,7 @@
     if (auth && auth.user) {
       currentUser = auth.user;
       pendingSystemReport = auth.systemReport || null;
+      pendingTos = auth.tosRequired ? auth.tos : null;
       enterApp();
     } else {
       showScreen('auth-screen');
@@ -1508,6 +1518,7 @@
     if (!r.user) return showError('login-error', 'Unexpected response — check browser console');
     currentUser = r.user;
     pendingSystemReport = r.systemReport || null;
+    pendingTos = r.tosRequired ? r.tos : null;
     enterApp();
   });
 
@@ -1526,6 +1537,7 @@
     if (!r.user) return showError('register-error', 'Unexpected response — check browser console');
     currentUser = r.user;
     pendingSystemReport = r.systemReport || null;
+    pendingTos = r.tosRequired ? r.tos : null;
     enterApp();
   });
 
@@ -1533,9 +1545,17 @@
 
   function enterApp() {
     try {
+      applyUserAppTheme();
       updateSelfCard();
       syncSecretAmbient();
       showScreen('main-screen');
+      if (pendingTos) {
+        showTosAgreement(pendingTos);
+        return;
+      }
+      $('tos-overlay').style.display = 'none';
+      if (appInitialized) return;
+      appInitialized = true;
       loadPersistedClientState();
       connectSocket();
       loadFriends();
@@ -1559,6 +1579,56 @@
       alert('Login succeeded but app failed to load: ' + e.message);
     }
   }
+
+  function showTosAgreement(tos) {
+    if (!tos) return;
+    pendingTos = tos;
+    $('tos-title').textContent = tos.title || 'Nexus Terms of Service';
+    $('tos-version').textContent = `Version ${tos.version}`;
+    $('tos-content').textContent = tos.content || '';
+    $('tos-checkbox').checked = false;
+    $('tos-accept-btn').disabled = true;
+    showError('tos-error', '');
+    $('tos-overlay').style.display = 'grid';
+  }
+
+  $('tos-checkbox').addEventListener('change', event => {
+    $('tos-accept-btn').disabled = !event.target.checked;
+  });
+
+  $('tos-accept-btn').addEventListener('click', async () => {
+    if (!pendingTos || !$('tos-checkbox').checked) return;
+    const button = $('tos-accept-btn');
+    button.disabled = true;
+    button.textContent = 'Saving Agreement...';
+    const result = await api('POST', '/api/auth/tos/accept', {
+      version: pendingTos.version,
+      accepted: true
+    });
+    button.textContent = 'Agree and Continue';
+    if (result.error) {
+      button.disabled = !$('tos-checkbox').checked;
+      if (result.tos) showTosAgreement(result.tos);
+      return showError('tos-error', result.error);
+    }
+    const acceptedVersion = result.acceptedVersion;
+    pendingTos = null;
+    if (currentUser) currentUser.acceptedTosVersion = acceptedVersion;
+    $('tos-overlay').style.display = 'none';
+    if (socket) socket.emit('tos_accepted', { version: acceptedVersion });
+    enterApp();
+  });
+
+  $('tos-signout-btn').addEventListener('click', async () => {
+    await api('POST', '/api/auth/logout');
+    pendingTos = null;
+    appInitialized = false;
+    if (socket) socket.disconnect();
+    socket = null;
+    currentUser = null;
+    $('tos-overlay').style.display = 'none';
+    showScreen('auth-screen');
+  });
 
   if ($('nexus-report-ack-btn')) {
     $('nexus-report-ack-btn').addEventListener('click', async () => {
@@ -1658,6 +1728,13 @@
     if (backdrop) backdrop.classList.remove('active');
   }
 
+  function closeMobileMembers() {
+    const panel = $('server-members-panel');
+    if (panel) panel.classList.remove('mobile-open');
+    const backdrop = $('sidebar-backdrop');
+    if (backdrop) backdrop.classList.remove('active');
+  }
+
   $('mobile-menu-btn').addEventListener('click', () => {
     const sidebar = document.querySelector('.sidebar');
     if (sidebar && sidebar.classList.contains('open')) {
@@ -1667,7 +1744,18 @@
     }
   });
 
-  $('sidebar-backdrop').addEventListener('click', closeMobileSidebar);
+  $('sidebar-backdrop').addEventListener('click', () => {
+    closeMobileSidebar();
+    closeMobileMembers();
+  });
+
+  $('mobile-members-btn').addEventListener('click', () => {
+    const panel = $('server-members-panel');
+    if (!panel) return;
+    closeMobileSidebar();
+    panel.classList.toggle('mobile-open');
+    $('sidebar-backdrop').classList.toggle('active', panel.classList.contains('mobile-open'));
+  });
 
   function setMobileTitle(title) {
     const el = $('mobile-topbar-title');
@@ -1750,7 +1838,97 @@
           : `<span class="rail-initial">${abbr}</span>`}
       </button>`;
     }).join('');
+    container.querySelectorAll('.rail-btn[data-server-id]').forEach(button => {
+      button.addEventListener('contextmenu', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openServerContextMenu(event, button.dataset.serverId);
+      });
+    });
   }
+
+  let discoverableServers = [];
+
+  function discoveryBannerStyle(server) {
+    if (server.inviteBannerMode === 'image' && /^https:\/\//i.test(server.inviteBannerImage || '')) {
+      return `background-image:linear-gradient(90deg,rgba(8,12,22,.12),rgba(8,12,22,.55)),url('${esc(server.inviteBannerImage)}')`;
+    }
+    if (server.inviteBannerMode === 'gradient') {
+      return `background:linear-gradient(135deg,${esc(server.inviteBannerStart || '#5865f2')},${esc(server.inviteBannerEnd || '#a855f7')})`;
+    }
+    return `background:${esc(server.inviteBannerStart || '#5865f2')}`;
+  }
+
+  function renderServerDiscovery() {
+    const host = $('server-discovery-list');
+    if (!host) return;
+    const query = ($('server-discovery-search')?.value || '').trim().toLowerCase();
+    const results = discoverableServers.filter(server => {
+      const haystack = `${server.name} ${server.inviteDescription || ''} ${server.inviteTags || ''}`.toLowerCase();
+      return !query || haystack.includes(query);
+    });
+    if (!results.length) {
+      host.innerHTML = `<div class="empty-state">${query ? 'No servers match that search.' : 'No servers are listed in Discovery yet.'}</div>`;
+      return;
+    }
+    host.innerHTML = results.map(server => {
+      const initials = server.name.split(/\s+/).map(word => word[0]).join('').slice(0, 2).toUpperCase();
+      const tags = String(server.inviteTags || '').split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 5);
+      const customized = !!(server.inviteDescription || tags.length || server.inviteBannerMode === 'gradient' || server.inviteBannerMode === 'image');
+      return `<article class="discovery-card ${customized ? 'customized' : ''}">
+        <div class="discovery-card-banner" style="${discoveryBannerStyle(server)}">
+          ${customized ? '<span class="discovery-invite-label">CUSTOM SERVER INVITE</span>' : ''}
+        </div>
+        <div class="discovery-card-body">
+          <div class="discovery-card-icon">${server.iconDataUrl ? `<img src="${server.iconDataUrl}" alt="">` : esc(initials)}</div>
+          <h3>${esc(server.name)}</h3>
+          <p>${esc(server.inviteDescription || 'Join this community on Nexus.')}</p>
+          <div class="discovery-card-meta"><span>${Number(server.memberCount || 0).toLocaleString()} members</span></div>
+          ${tags.length ? `<div class="discovery-card-tags">${tags.map(tag => `<span>${esc(tag)}</span>`).join('')}</div>` : ''}
+          <button class="${server.joined ? 'btn-secondary' : 'btn-primary'}" onclick="joinDiscoveredServer('${server.id}')">${server.joined ? 'Open Server' : 'Join Server'}</button>
+        </div>
+      </article>`;
+    }).join('');
+  }
+
+  async function loadServerDiscovery() {
+    const host = $('server-discovery-list');
+    if (host) host.innerHTML = '<div class="loading">Loading servers...</div>';
+    const result = await api('GET', '/api/servers/discover');
+    if (result.error) {
+      if (host) host.innerHTML = `<div class="form-error">${esc(result.error)}</div>`;
+      return;
+    }
+    discoverableServers = result.servers || [];
+    renderServerDiscovery();
+  }
+
+  window.joinDiscoveredServer = async function(serverId) {
+    const server = discoverableServers.find(item => item.id === serverId);
+    if (!server) return;
+    if (server.joined) {
+      $('server-discovery-modal').classList.remove('active');
+      return railSelect(serverId);
+    }
+    const result = await api('POST', `/api/servers/join/${server.inviteCode}`);
+    if (result.error) return toast(result.error, 'error');
+    if (result.server && !servers.some(item => item.id === result.server.id)) servers.push(result.server);
+    server.joined = true;
+    renderServerRail();
+    renderServerDiscovery();
+    toast(`Joined ${server.name}`, 'success');
+  };
+
+  $('discover-servers-btn').addEventListener('click', () => {
+    $('server-discovery-modal').classList.add('active');
+    loadServerDiscovery();
+  });
+  $('server-discovery-close').addEventListener('click', () => $('server-discovery-modal').classList.remove('active'));
+  $('server-discovery-modal').addEventListener('click', event => {
+    if (event.target === $('server-discovery-modal')) $('server-discovery-modal').classList.remove('active');
+  });
+  $('server-discovery-refresh').addEventListener('click', loadServerDiscovery);
+  $('server-discovery-search').addEventListener('input', renderServerDiscovery);
 
   async function loadServerSidebar(serverId) {
     const r = await api('GET', `/api/servers/${serverId}`);
@@ -1764,19 +1942,25 @@
     // Show settings + add-channel only for admin/owner
     const me = r.members.find(m => m.id === currentUser.id);
     const isAdmin = me && (me.role === 'admin' || me.isAdmin);
-    isCurrentServerAdmin = !!isAdmin;
-    $('server-settings-btn').style.display = isAdmin ? 'flex' : 'none';
-    $('add-channel-btn').style.display = isAdmin ? 'flex' : 'none';
-    if ($('channel-edit-btn')) $('channel-edit-btn').style.display = isAdmin ? 'flex' : 'none';
+    const memberRoleIds = new Set((me && me.roleIds) || []);
+    const hasRolePermission = permission => (r.roles || []).some(role => memberRoleIds.has(role.id) && role.permissions && role.permissions[permission]);
+    const canManageChannels = !!isAdmin || hasRolePermission('manageChannels');
+    const canManageServer = !!isAdmin || canManageChannels || hasRolePermission('manageRoles') || hasRolePermission('manageMessages') || hasRolePermission('kickMembers') || hasRolePermission('banMembers');
+    isCurrentServerAdmin = canManageServer;
+    $('server-settings-btn').style.display = canManageServer ? 'flex' : 'none';
+    $('add-channel-btn').style.display = canManageChannels ? 'flex' : 'none';
+    if ($('channel-edit-btn')) $('channel-edit-btn').style.display = canManageChannels ? 'flex' : 'none';
 
-    renderChannelList(r.channels, isAdmin);
+    renderChannelList(r.channels, canManageChannels);
     renderMemberList(r.members);
+    loadActiveServerEmojis(serverId);
 
     // Join socket room
     if (socket) socket.emit('join_server_room', { serverId });
 
     // Open first channel
     if (r.channels.length) openChannel(r.channels[0]);
+    checkServerOnboarding(serverId);
   }
 
   function renderChannelList(channels, isAdmin) {
@@ -1788,7 +1972,7 @@
          data-channel-locked="${c.locked ? '1' : '0'}"
          data-channel-topic="${esc(c.topic || '')}"
          data-channel-slowmode="${parseInt(c.slowmodeSeconds || 0, 10)}">
-        <span class="ch-hash">${(c.type === 'voice') ? '🔊' : (c.locked ? '🔒' : c.private ? '👁' : '#')}</span>
+        <span class="ch-hash">${(c.type === 'voice') ? '🔊' : (c.type === 'forum') ? '▤' : (c.locked ? '🔒' : c.private ? '👁' : '#')}</span>
         <span class="ch-name">${esc(c.name)}</span>
         ${isAdmin ? `
           <button class="ch-perms" data-ch-id="${c.id}" data-ch-name="${esc(c.name)}" title="Permissions">
@@ -1849,12 +2033,13 @@
   }
 
   function renderMemberList(members) {
+    $('server-member-count').textContent = members.length.toLocaleString();
     const me = members.find(m => m.id === currentUser.id);
     const iAmAdmin = me && (me.role === 'admin' || me.isAdmin);
     const server = activeServerData && activeServerData.server;
     const ownerId = server && server.ownerId;
 
-    $('server-member-list').innerHTML = members.map(m => {
+    const memberHtml = m => {
       const isOwner = m.id === ownerId;
       const roleStyle = m.roleGradientStart ? `--role-gradient-start:${m.roleGradientStart};--role-gradient-end:${m.roleGradientEnd}` : (m.roleColor ? `color:${m.roleColor}` : '');
       const canManage = iAmAdmin && m.id !== currentUser.id && !isOwner;
@@ -1871,14 +2056,105 @@
           </div>
           <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
           ${canManage ? `<div class="member-actions">
-            <button class="member-action-btn role" onclick="openAssignRole('${m.id}','${esc(m.displayName)}')">Role</button>
             <button class="member-action-btn kick" onclick="kickMember('${m.id}','${esc(m.displayName)}')">Kick</button>
             <button class="member-action-btn ban" onclick="banMember('${m.id}','${esc(m.displayName)}')">Ban</button>
           </div>` : ''}
         </div>`;
-    }).join('');
+    };
+    const roles = [...((activeServerData && activeServerData.roles) || [])]
+      .filter(role => role.displaySeparately)
+      .sort((a, b) => a.position - b.position);
+    const groupedIds = new Set();
+    const sections = [];
+    roles.forEach(role => {
+      const roleMembers = members.filter(member =>
+        !groupedIds.has(member.id) &&
+        ((member.roleIds || [member.roleId]).includes(role.id)) &&
+        normalizedStatus(visibleStatus(member)) !== 'offline'
+      );
+      if (!roleMembers.length) return;
+      roleMembers.forEach(member => groupedIds.add(member.id));
+      sections.push(`<div class="member-role-heading"><span style="color:${role.color}">${esc(role.name)}</span><b>-</b><small>${roleMembers.length}</small></div>${roleMembers.map(memberHtml).join('')}`);
+    });
+    const remaining = members.filter(member => !groupedIds.has(member.id));
+    const online = remaining.filter(member => normalizedStatus(visibleStatus(member)) !== 'offline');
+    const offline = remaining.filter(member => normalizedStatus(visibleStatus(member)) === 'offline');
+    if (online.length) sections.push(`<div class="member-role-heading"><span>Online</span><b>-</b><small>${online.length}</small></div>${online.map(memberHtml).join('')}`);
+    if (offline.length) sections.push(`<div class="member-role-heading"><span>Offline</span><b>-</b><small>${offline.length}</small></div><div class="member-offline-group">${offline.map(memberHtml).join('')}</div>`);
+    $('server-member-list').innerHTML = sections.join('');
     members.forEach(m => { const el = $(`smav-${m.id}`); if (el) renderAvatar(el, m); });
   }
+
+  let contextServerId = null;
+
+  function closeServerContextMenu() {
+    const menu = $('server-context-menu');
+    menu.classList.remove('active');
+    menu.setAttribute('aria-hidden', 'true');
+    contextServerId = null;
+  }
+
+  function openServerContextMenu(event, serverId) {
+    const menu = $('server-context-menu');
+    contextServerId = serverId;
+    if ($('server-context-copy-id')) $('server-context-copy-id').style.display = currentUser && currentUser.developerMode ? 'block' : 'none';
+    menu.classList.add('active');
+    menu.setAttribute('aria-hidden', 'false');
+    const bounds = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(event.clientX, window.innerWidth - bounds.width - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(event.clientY, window.innerHeight - bounds.height - 8))}px`;
+  }
+
+  async function prepareContextServer() {
+    const serverId = contextServerId;
+    if (!serverId) return false;
+    if (activeServerId !== serverId || !activeServerData) {
+      await loadServerSidebar(serverId);
+      switchView('channel');
+      document.querySelectorAll('.rail-btn').forEach(button => button.classList.toggle('active', button.dataset.serverId === serverId));
+      $('sidebar-dms').style.display = 'none';
+      $('sidebar-server').style.display = 'flex';
+      $('server-members-panel').classList.add('active');
+    }
+    return true;
+  }
+
+  $('server-context-menu').addEventListener('click', async event => {
+    const actionButton = event.target.closest('[data-server-action]');
+    if (!actionButton) return;
+    const action = actionButton.dataset.serverAction;
+    if (action === 'copy-id') {
+      const serverId = contextServerId;
+      closeServerContextMenu();
+      if (!serverId) return;
+      try {
+        await navigator.clipboard.writeText(serverId);
+        toast('Server ID copied', 'success');
+      } catch (_) {
+        toast(`Server ID: ${serverId}`, 'info');
+      }
+      return;
+    }
+    const ready = await prepareContextServer();
+    closeServerContextMenu();
+    if (!ready) return;
+    if (action === 'invite') $('invite-btn').click();
+    if (action === 'boost') $('server-boost-btn').click();
+    if (action === 'settings') {
+      if (!isCurrentServerAdmin) return toast('Only server owners and admins can open Server Settings.', 'error');
+      $('server-settings-btn').click();
+    }
+    if (action === 'leave') $('leave-server-btn').click();
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('#server-context-menu')) closeServerContextMenu();
+  });
+  document.addEventListener('contextmenu', event => {
+    if (!event.target.closest('.rail-btn[data-server-id]')) closeServerContextMenu();
+  });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeServerContextMenu(); });
+  window.addEventListener('blur', closeServerContextMenu);
+  window.addEventListener('resize', closeServerContextMenu);
 
   // ---- Kick / Ban ----
   window.kickMember = async function(userId, name) {
@@ -1936,6 +2212,10 @@
     activeChannelTopic = channel.topic || null;
     activeChannelSlowmode = Math.max(0, parseInt(channel.slowmodeSeconds, 10) || 0);
     setChannelReply(null);
+    $('channel-container').classList.toggle('forum-channel-mode', activeChannelType === 'forum');
+    $('forum-view').style.display = activeChannelType === 'forum' ? 'block' : 'none';
+    $('channel-messages-wrap').style.display = activeChannelType === 'forum' ? 'none' : 'flex';
+    $('channel-message-input').closest('.message-input-wrap').style.display = activeChannelType === 'forum' ? 'none' : 'flex';
 
     document.querySelectorAll('.channel-item').forEach(el => {
       el.classList.toggle('active', el.dataset.channelId === channel.id);
@@ -1959,7 +2239,7 @@
       if ($('group-camera-btn')) $('group-camera-btn').style.display = 'inline-flex';
       if ($('group-screen-btn')) $('group-screen-btn').style.display = 'inline-flex';
     } else {
-      $('channel-message-input').placeholder = 'Message #' + channel.name + slowmodeHint + '…';
+      $('channel-message-input').placeholder = activeChannelType === 'forum' ? 'Post title on the first line, details below...' : 'Message #' + channel.name + slowmodeHint + '…';
       $('channel-message-input').disabled = false;
       $('channel-send-btn').style.display = 'inline-flex';
       if ($('group-call-btn')) $('group-call-btn').style.display = 'none';
@@ -1970,8 +2250,143 @@
     if (isMobile()) closeMobileSidebar();
     $('channel-placeholder').style.display = 'none';
     $('channel-container').style.display = 'flex';
-    loadChannelMessages(channel.id);
-    $('channel-message-input').focus();
+    if (activeChannelType === 'forum') loadForumPosts(channel.id);
+    else loadChannelMessages(channel.id);
+    if (activeChannelType === 'voice') {
+      setTimeout(() => {
+        if (!groupCallState || groupCallState.channelId !== channel.id) $('group-call-btn').click();
+      }, 0);
+    }
+    if (activeChannelType !== 'forum') $('channel-message-input').focus();
+  };
+
+  let activeForumPostId = null;
+  let forumPostsCache = [];
+  let canCreateForumPosts = false;
+
+  function forumDate(timestamp) {
+    return new Date((parseInt(timestamp, 10) || 0) * 1000).toLocaleDateString(undefined, {
+      month: 'short', day: 'numeric', year: 'numeric'
+    });
+  }
+
+  async function loadForumPosts(channelId) {
+    activeForumPostId = null;
+    const host = $('forum-view');
+    host.innerHTML = '<div class="forum-loading">Loading posts...</div>';
+    const result = await api('GET', `/api/servers/${activeServerId}/channels/${channelId}/forum/posts`);
+    if (result.error) {
+      host.innerHTML = `<div class="forum-empty">${esc(result.error)}</div>`;
+      return;
+    }
+    forumPostsCache = result.posts || [];
+    canCreateForumPosts = !!result.canCreatePosts;
+    renderForumBrowser('');
+  }
+
+  function renderForumBrowser(query = '') {
+    const host = $('forum-view');
+    const normalized = query.trim().toLowerCase();
+    const posts = forumPostsCache.filter(post =>
+      !normalized || post.title.toLowerCase().includes(normalized) || post.content.toLowerCase().includes(normalized)
+    );
+    host.innerHTML = `
+      <div class="forum-toolbar">
+        <div class="forum-search"><span>⌕</span><input id="forum-search-input" type="search" placeholder="Search posts..." value="${esc(query)}"></div>
+        ${canCreateForumPosts ? '<button type="button" class="btn-primary" onclick="toggleForumComposer()">New Post</button>' : ''}
+      </div>
+      <div class="forum-composer" id="forum-composer" style="display:none">
+        <input id="forum-post-title" maxlength="120" placeholder="Post title">
+        <textarea id="forum-post-content" maxlength="4000" rows="5" placeholder="What do you want to discuss?"></textarea>
+        <div><button type="button" class="btn-secondary" onclick="toggleForumComposer()">Cancel</button><button type="button" class="btn-primary" onclick="createForumPost()">Post</button></div>
+      </div>
+      <div class="forum-filter-row"><span>Recent activity</span><small>${posts.length} post${posts.length === 1 ? '' : 's'}</small></div>
+      <div class="forum-post-list">
+        ${posts.length ? posts.map(post => `
+          <button type="button" class="forum-post-card" data-forum-search="${esc((post.title + ' ' + post.content).toLowerCase())}" onclick="openForumPost('${post.id}')">
+            <div class="avatar sm" id="forum-av-${post.id}"></div>
+            <div class="forum-post-copy">
+              <strong>${esc(post.title)}</strong>
+              <p>${esc(post.content.slice(0, 180))}</p>
+              <small>${esc(post.author.displayName)} · ${forumDate(post.updatedAt)}</small>
+            </div>
+            <div class="forum-reply-count"><span>${post.repliesLocked ? '▣' : '●'}</span>${post.replyCount}${post.repliesLocked ? ' · Locked' : ''}</div>
+          </button>`).join('') : '<div class="forum-empty">No posts yet. Start the conversation.</div>'}
+      </div>`;
+    $('forum-search-input').addEventListener('input', event => {
+      const search = event.target.value.trim().toLowerCase();
+      host.querySelectorAll('.forum-post-card').forEach(card => {
+        card.style.display = !search || card.dataset.forumSearch.includes(search) ? 'grid' : 'none';
+      });
+    });
+    posts.forEach(post => renderAvatar($(`forum-av-${post.id}`), post.author));
+  }
+
+  window.toggleForumComposer = function() {
+    const composer = $('forum-composer');
+    if (!composer) return;
+    composer.style.display = composer.style.display === 'none' ? 'grid' : 'none';
+    if (composer.style.display === 'grid') $('forum-post-title').focus();
+  };
+  window.loadForumPosts = loadForumPosts;
+
+  window.createForumPost = async function() {
+    const title = $('forum-post-title').value.trim();
+    const content = $('forum-post-content').value.trim();
+    if (!title || !content) return toast('Add a title and message', 'error');
+    const result = await api('POST', `/api/servers/${activeServerId}/channels/${activeChannelId}/forum/posts`, { title, content });
+    if (result.error) return toast(result.error, 'error');
+    await loadForumPosts(activeChannelId);
+    toast('Post created', 'success');
+  };
+
+  window.openForumPost = async function(postId) {
+    activeForumPostId = postId;
+    const host = $('forum-view');
+    host.innerHTML = '<div class="forum-loading">Opening thread...</div>';
+    const result = await api('GET', `/api/servers/${activeServerId}/channels/${activeChannelId}/forum/posts/${postId}`);
+    if (result.error) return loadForumPosts(activeChannelId);
+    const post = result.post;
+    host.innerHTML = `
+      <div class="forum-thread-head">
+        <button type="button" class="btn-secondary" onclick="loadForumPosts('${activeChannelId}')">← Posts</button>
+        <div><h2>${esc(post.title)}</h2><span>Started by ${esc(post.author.displayName)} · ${forumDate(post.createdAt)}</span></div>
+        ${result.permissions && result.permissions.canLock ? `<button type="button" class="btn-secondary forum-lock-btn" onclick="toggleForumPostLock(${post.repliesLocked ? 'false' : 'true'})">${post.repliesLocked ? 'Unlock Replies' : 'Lock Replies'}</button>` : ''}
+      </div>
+      <article class="forum-thread-original">
+        <div class="avatar" id="forum-thread-author"></div>
+        <div><strong>${esc(post.author.displayName)}</strong><p>${esc(post.content)}</p></div>
+      </article>
+      <div class="forum-replies-label">${result.replies.length} ${result.replies.length === 1 ? 'reply' : 'replies'}</div>
+      <div class="forum-replies">
+        ${result.replies.map(reply => `
+          <div class="forum-reply">
+            <div class="avatar sm" id="forum-reply-av-${reply.id}"></div>
+            <div><strong>${esc(reply.author.displayName)} <small>${forumDate(reply.createdAt)}</small></strong><p>${esc(reply.content)}</p></div>
+          </div>`).join('')}
+      </div>
+      ${(result.permissions && result.permissions.canReply && !post.repliesLocked) ? `<div class="forum-reply-box">
+        <textarea id="forum-reply-input" maxlength="4000" rows="3" placeholder="Reply to this post..."></textarea>
+        <button type="button" class="btn-primary" onclick="submitForumReply()">Reply</button>
+      </div>` : `<div class="forum-replies-locked">${post.repliesLocked ? 'Replies are locked for this post.' : 'You do not have permission to reply in this forum.'}</div>`}`;
+    renderAvatar($('forum-thread-author'), post.author);
+    result.replies.forEach(reply => renderAvatar($(`forum-reply-av-${reply.id}`), reply.author));
+  };
+
+  window.submitForumReply = async function() {
+    const content = $('forum-reply-input').value.trim();
+    if (!content || !activeForumPostId) return;
+    const result = await api('POST', `/api/servers/${activeServerId}/channels/${activeChannelId}/forum/posts/${activeForumPostId}/replies`, { content });
+    if (result.error) return toast(result.error, 'error');
+    await openForumPost(activeForumPostId);
+  };
+
+  window.toggleForumPostLock = async function(locked) {
+    if (!activeForumPostId) return;
+    const result = await api('PATCH', `/api/servers/${activeServerId}/channels/${activeChannelId}/forum/posts/${activeForumPostId}/lock`, { locked });
+    if (result.error) return toast(result.error, 'error');
+    await openForumPost(activeForumPostId);
+    toast(locked ? 'Replies locked' : 'Replies unlocked', 'success');
   };
 
   window.deleteChannel = async function(e, channelId) {
@@ -1992,25 +2407,36 @@
     }
   };
 
+  const exhaustedChannelHistory = new Set();
   async function loadChannelMessages(channelId, prepend = false) {
+    if (prepend && exhaustedChannelHistory.has(channelId)) return;
     if (prepend && chLoadingOlder) return;
     if (prepend) chLoadingOlder = true;
+    else exhaustedChannelHistory.delete(channelId);
 
+    const requestedServerId = activeServerId;
     const list = $('channel-messages-list');
     const wrap = $('channel-messages-wrap');
     const oldest = list.querySelector('.message');
     const beforeTs = prepend && oldest ? oldest.dataset.ts : undefined;
-    const url = `/api/servers/${activeServerId}/channels/${channelId}/messages${beforeTs?`?before=${beforeTs}`:''}`;
+    const url = `/api/servers/${requestedServerId}/channels/${channelId}/messages?limit=30${beforeTs?`&before=${beforeTs}`:''}`;
     const r = await api('GET', url);
+    if (activeServerId !== requestedServerId || activeChannelId !== channelId) {
+      if (prepend) chLoadingOlder = false;
+      return;
+    }
     const messages = hydrateMessages(r);
+    if (messages.length < 30) exhaustedChannelHistory.add(channelId);
     if (!messages.length) {
       if (prepend) chLoadingOlder = false;
       return;
     }
     if (!prepend) {
+      chInitialScrollPending = true;
       list.innerHTML = '';
       messages.forEach(m => appendChannelMessage(m, false));
-      requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
+      settleMessageViewAtLatest(wrap);
+      setTimeout(() => { chInitialScrollPending = false; }, 900);
     } else {
       const distFromBottom = wrap.scrollHeight - wrap.scrollTop;
       messages.forEach(m => prependChannelMessage(m));
@@ -2022,17 +2448,26 @@
   }
 
   let chLoadingOlder = false;
+  let chInitialScrollPending = false;
+
+  function settleMessageViewAtLatest(wrap) {
+    if (!wrap) return;
+    const scrollLatest = () => { wrap.scrollTop = wrap.scrollHeight; };
+    requestAnimationFrame(scrollLatest);
+    [60, 180, 420, 800].forEach(delay => setTimeout(scrollLatest, delay));
+  }
 
   $('channel-messages-wrap').addEventListener('scroll', function() {
-    if (this.scrollTop < 80 && activeChannelId && !chLoadingOlder) {
+    if (this.scrollTop < 80 && activeChannelId && !chLoadingOlder && !chInitialScrollPending) {
       loadChannelMessages(activeChannelId, true);
     }
   });
 
   function appendChannelMessage(msg, scroll=true) {
     const list = $('channel-messages-list');
-    const el = buildMessageEl(msg, list.lastElementChild);
+    const el = buildMessageEl(msg, lastRenderedMessage(list));
     list.appendChild(el);
+    refreshDateSeparators(list);
     if (scroll) {
       const wrap = $('channel-messages-wrap');
       requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
@@ -2043,6 +2478,7 @@
     const list = $('channel-messages-list');
     const el = buildMessageEl(msg, null);
     list.prepend(el);
+    refreshDateSeparators(list);
   }
 
   // Channel message input
@@ -2427,7 +2863,8 @@
     e.preventDefault();
     if (!activeServerId) return;
     const name = $('channel-create-name').value.trim();
-    const type = $('channel-create-type').value === 'voice' ? 'voice' : 'text';
+    const requestedType = $('channel-create-type').value;
+    const type = ['voice', 'forum'].includes(requestedType) ? requestedType : 'text';
     if (!name) {
       showError('channel-create-error', 'Channel name is required');
       return;
@@ -2467,9 +2904,27 @@
     reader.readAsDataURL(file);
   });
 
+  let serverCreationPending = false;
+  function finishServerCreation() {
+    serverCreationPending = false;
+    $('create-server-btn').disabled = false;
+    $('create-server-btn').textContent = 'Create Server';
+    $('create-server-progress').style.display = 'none';
+  }
+  function failServerCreation(message) {
+    showError('create-server-error', message);
+    finishServerCreation();
+  }
+
   $('create-server-btn').addEventListener('click', async () => {
+    if (serverCreationPending) return;
     const name = $('server-name-input').value.trim();
     if (!name) return showError('create-server-error', 'Name required');
+    serverCreationPending = true;
+    $('create-server-btn').disabled = true;
+    $('create-server-btn').textContent = 'Creating...';
+    $('create-server-progress').style.display = 'block';
+    showError('create-server-error', '');
     const fd = new FormData();
     fd.append('name', name);
     const iconFile = $('server-icon-input').files[0];
@@ -2479,13 +2934,13 @@
       const res = await fetch('/api/servers', { method: 'POST', body: fd, credentials: 'include', headers: deviceHeaders() });
       const text = await res.text();
       try { r = JSON.parse(text); } catch(e) {
-        return showError('create-server-error', 'Server error: ' + text.slice(0, 120));
+        return failServerCreation('Server error: ' + text.slice(0, 120));
       }
     } catch(e) {
-      return showError('create-server-error', 'Network error: ' + e.message);
+      return failServerCreation('Network error: ' + e.message);
     }
-    if (r.error) return showError('create-server-error', r.error);
-    servers.push(r.server);
+    if (r.error) return failServerCreation(r.error);
+    if (!servers.find(server => server.id === r.server.id)) servers.push(r.server);
     renderServerRail();
     $('server-modal').classList.remove('active');
     $('server-name-input').value = '';
@@ -2494,6 +2949,7 @@
     showError('create-server-error', '');
     railSelect(r.server.id);
     toast('Server created!', 'success');
+    finishServerCreation();
   });
 
   $('join-server-btn').addEventListener('click', async () => {
@@ -2511,6 +2967,49 @@
   });
 
   // ---- Server Settings ----
+  $('server-events-btn').addEventListener('click', async () => {
+    if (!activeServerId) return;
+    $('server-events-modal').classList.add('active');
+    await loadServerEvents();
+  });
+  $('server-events-close').addEventListener('click', () => $('server-events-modal').classList.remove('active'));
+  $('server-events-modal').addEventListener('click', event => {
+    if (event.target === $('server-events-modal')) $('server-events-modal').classList.remove('active');
+  });
+
+  async function loadServerEvents() {
+    const result = await api('GET', `/api/servers/${activeServerId}/events`);
+    const list = $('server-events-list');
+    if (result.error) { list.innerHTML = `<div class="form-error">${esc(result.error)}</div>`; return; }
+    $('server-events-create').innerHTML = result.canManage ? `<div class="event-create-form"><input id="event-title" maxlength="100" placeholder="Event title"><input id="event-start" type="datetime-local"><input id="event-location" maxlength="100" placeholder="Voice channel or location"><textarea id="event-description" maxlength="1000" placeholder="What is happening?"></textarea><button class="btn-primary" onclick="createServerEvent()">Create Event</button></div>` : '';
+    list.innerHTML = (result.events || []).length
+      ? result.events.map(event => `<article class="server-event-card"><div class="server-event-date"><b>${new Date(event.startsAt * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })}</b><span>${new Date(event.startsAt * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></div><div class="server-event-info"><h3>${esc(event.title)}</h3><p>${esc(event.description || 'No description')}</p><span>${event.location ? esc(event.location) + ' · ' : ''}${event.interestedCount} interested · hosted by @${esc(event.creatorUsername)}</span></div><div class="server-event-actions"><button class="${event.interested ? 'btn-secondary' : 'btn-primary'}" onclick="rsvpServerEvent('${event.id}',${event.interested ? 'false' : 'true'})">${event.interested ? 'Interested ✓' : 'Interested'}</button>${result.canManage ? `<button class="icon-btn" onclick="deleteServerEvent('${event.id}')" title="Delete">×</button>` : ''}</div></article>`).join('')
+      : '<div class="empty-state">No upcoming events.</div>';
+  }
+
+  window.createServerEvent = async function() {
+    const startsAt = Math.floor(new Date($('event-start').value).getTime() / 1000);
+    const result = await api('POST', `/api/servers/${activeServerId}/events`, {
+      title: $('event-title').value,
+      startsAt,
+      location: $('event-location').value,
+      description: $('event-description').value
+    });
+    if (result.error) return toast(result.error, 'error');
+    await loadServerEvents();
+  };
+  window.rsvpServerEvent = async function(eventId, interested) {
+    const result = await api('POST', `/api/servers/${activeServerId}/events/${eventId}/rsvp`, { interested });
+    if (result.error) return toast(result.error, 'error');
+    await loadServerEvents();
+  };
+  window.deleteServerEvent = async function(eventId) {
+    if (!confirm('Delete this event?')) return;
+    const result = await api('DELETE', `/api/servers/${activeServerId}/events/${eventId}`);
+    if (result.error) return toast(result.error, 'error');
+    await loadServerEvents();
+  };
+
   $('server-economy-btn').addEventListener('click', async () => {
     if (!activeServerId) return;
     $('member-server-economy-content').innerHTML = '<div class="loading">Loading server shop...</div>';
@@ -2547,6 +3046,10 @@
     await loadNexusGuardSettings();
     renderRolesList(activeServerData.roles || []);
     renderBoostSettings(s);
+    renderDiscoverySettings(s);
+    await loadOnboardingSettings();
+    await loadServerEmojiSettings();
+    await loadServerModeration();
     await loadServerEconomy();
     loadBansList();
     $('server-settings-modal').classList.add('active');
@@ -2559,7 +3062,136 @@
   function renderBoostSettings(server) {
     const features = new Set(server.boostFeatures || []);
     $('boosts-settings-content').innerHTML = `<div class="shop-card"><div class="shop-card-name">${server.boostCount || 0} active boosts</div><div class="shop-card-desc">Allocate two boosts per server feature. Expired boosts automatically disable the feature they funded.</div></div><div class="shop-grid" style="margin-top:12px"><div class="shop-card"><div class="shop-card-name">Server Tag</div><div class="shop-card-desc">A clickable tag card shown beside members across DMs and servers.</div><button class="shop-card-btn ${features.has('tag') ? 'equip' : 'buy'}" onclick="spendBoosts('tag')">${features.has('tag') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Role Gradients</div><div class="shop-card-desc">Unlock animated gradient colors in the role editor.</div><button class="shop-card-btn ${features.has('gradients') ? 'equip' : 'buy'}" onclick="spendBoosts('gradients')">${features.has('gradients') ? 'Allocated' : 'Spend 2 Boosts'}</button></div><div class="shop-card"><div class="shop-card-name">Invite Banners</div><div class="shop-card-desc">Unlock a gradient or secure image banner for rich server invites.</div><button class="shop-card-btn ${features.has('invite_banner') ? 'equip' : 'buy'}" onclick="spendBoosts('invite_banner')">${features.has('invite_banner') ? 'Allocated' : 'Spend 2 Boosts'}</button></div></div>`;
+    $('boosts-settings-content').querySelector('.shop-card-desc').textContent = 'Allocate boosts to server features. Expired boosts automatically disable the features they funded.';
+    $('boosts-settings-content').querySelector('.shop-grid').insertAdjacentHTML('beforeend', `<div class="shop-card"><div class="shop-card-name">Custom Emojis</div><div class="shop-card-desc">Upload up to 50 custom server emojis.</div><button class="shop-card-btn ${features.has('emojis') ? 'equip' : 'buy'}" onclick="spendBoosts('emojis')">${features.has('emojis') ? 'Allocated' : 'Spend 1 Boost'}</button></div>`);
   }
+
+  async function loadOnboardingSettings() {
+    if (!activeServerId) return;
+    const result = await api('GET', `/api/servers/${activeServerId}/onboarding`);
+    if (result.error) return showError('onboarding-error', result.error);
+    $('onboarding-enabled').checked = !!result.enabled;
+    $('onboarding-title').value = result.welcomeTitle || 'Welcome';
+    $('onboarding-message').value = result.welcomeMessage || '';
+    $('onboarding-rules').value = (result.rules || []).join('\n');
+    $('onboarding-role-selection').checked = !!result.allowRoleSelection;
+  }
+
+  $('save-onboarding-btn').addEventListener('click', async () => {
+    const result = await api('PATCH', `/api/servers/${activeServerId}/onboarding`, {
+      enabled: $('onboarding-enabled').checked,
+      welcomeTitle: $('onboarding-title').value,
+      welcomeMessage: $('onboarding-message').value,
+      rules: $('onboarding-rules').value.split(/\r?\n/).map(rule => rule.trim()).filter(Boolean),
+      allowRoleSelection: $('onboarding-role-selection').checked
+    });
+    if (result.error) return showError('onboarding-error', result.error);
+    showError('onboarding-error', '');
+    toast('Onboarding saved', 'success');
+  });
+
+  async function checkServerOnboarding(serverId) {
+    const result = await api('GET', `/api/servers/${serverId}/onboarding`);
+    if (activeServerId !== serverId) return;
+    if (result.error || !result.enabled || result.completed) return;
+    $('onboarding-view-title').textContent = result.welcomeTitle || 'Welcome';
+    $('onboarding-view-message').textContent = result.welcomeMessage || '';
+    $('onboarding-view-rules').innerHTML = (result.rules || []).map((rule, index) => `<div class="onboarding-rule"><b>${index + 1}</b><span>${esc(rule)}</span></div>`).join('');
+    $('onboarding-view-role-wrap').style.display = result.allowRoleSelection && result.roles.length ? 'block' : 'none';
+    $('onboarding-view-role').innerHTML = `<option value="">No role</option>${(result.roles || []).map(role => `<option value="${role.id}">${esc(role.name)}</option>`).join('')}`;
+    $('onboarding-agree').checked = false;
+    $('server-onboarding-modal').classList.add('active');
+  }
+
+  $('complete-onboarding-btn').addEventListener('click', async () => {
+    if (!$('onboarding-agree').checked) return showError('onboarding-view-error', 'Read and accept the rules first.');
+    const result = await api('POST', `/api/servers/${activeServerId}/onboarding/complete`, { roleId: $('onboarding-view-role').value || null });
+    if (result.error) return showError('onboarding-view-error', result.error);
+    $('server-onboarding-modal').classList.remove('active');
+    toast('Welcome to the server', 'success');
+    await loadServerSidebar(activeServerId);
+  });
+
+  async function loadActiveServerEmojis(serverId) {
+    const result = await api('GET', `/api/servers/${serverId}/emojis`);
+    activeServerEmojis = result.error || !result.enabled ? [] : (result.emojis || []);
+  }
+
+  async function loadServerEmojiSettings() {
+    if (!activeServerId) return;
+    const result = await api('GET', `/api/servers/${activeServerId}/emojis`);
+    if (result.error) return showError('server-emoji-error', result.error);
+    activeServerEmojis = result.emojis || [];
+    $('upload-server-emoji-btn').disabled = !result.enabled;
+    $('server-emoji-settings-grid').innerHTML = activeServerEmojis.length
+      ? activeServerEmojis.map(emoji => `<div class="server-emoji-item"><img src="${emoji.imageDataUrl}" alt=""><span>:${esc(emoji.name)}:</span><button class="icon-btn" onclick="deleteServerEmoji('${emoji.id}')" title="Delete">×</button></div>`).join('')
+      : '<div class="empty-state">No custom emojis yet.</div>';
+  }
+
+  $('upload-server-emoji-btn').addEventListener('click', async () => {
+    const file = $('server-emoji-file').files[0];
+    const name = $('server-emoji-name').value.trim();
+    if (!file || !name) return showError('server-emoji-error', 'Choose an image and enter a name.');
+    const form = new FormData();
+    form.append('name', name);
+    form.append('image', file);
+    const response = await fetch(`/api/servers/${activeServerId}/emojis`, { method: 'POST', body: form, credentials: 'include', headers: deviceHeaders() });
+    const result = await response.json().catch(() => ({ error: 'Invalid server response' }));
+    if (!response.ok || result.error) return showError('server-emoji-error', result.error || 'Upload failed');
+    $('server-emoji-name').value = '';
+    $('server-emoji-file').value = '';
+    showError('server-emoji-error', '');
+    await loadServerEmojiSettings();
+    toast('Emoji uploaded', 'success');
+  });
+
+  window.deleteServerEmoji = async function(emojiId) {
+    const result = await api('DELETE', `/api/servers/${activeServerId}/emojis/${emojiId}`);
+    if (result.error) return toast(result.error, 'error');
+    await loadServerEmojiSettings();
+  };
+
+  async function loadServerModeration() {
+    if (!activeServerId || !isCurrentServerAdmin) return;
+    const result = await api('GET', `/api/servers/${activeServerId}/moderation`);
+    if (result.error) return showError('server-moderation-error', result.error);
+    serverModerationData = result;
+    $('server-mute-user').innerHTML = (activeServerData.members || [])
+      .filter(member => member.id !== activeServerData.server.ownerId)
+      .map(member => `<option value="${member.id}">@${esc(member.username)}</option>`).join('');
+    renderServerModeration();
+  }
+
+  function renderServerModeration() {
+    const query = ($('moderation-timeline-search').value || '').toLowerCase();
+    $('server-active-mutes').innerHTML = (serverModerationData.mutes || []).length
+      ? serverModerationData.mutes.map(mute => `<div class="active-mute-row"><div><b>@${esc(mute.username)}</b><span>Until ${new Date(mute.mutedUntil * 1000).toLocaleString()}${mute.reason ? ` · ${esc(mute.reason)}` : ''}</span></div><button class="btn-secondary" onclick="unmuteServerMember('${mute.userId}')">Unmute</button></div>`).join('')
+      : '<p class="field-hint">No active server mutes.</p>';
+    const logs = (serverModerationData.logs || []).filter(log => `${log.action} ${log.actorUsername} ${log.targetUsername || ''} ${log.details || ''}`.toLowerCase().includes(query));
+    $('moderation-timeline').innerHTML = logs.length
+      ? logs.map(log => `<div class="moderation-entry"><i></i><div><b>${esc(log.action.replace(/_/g, ' '))}</b><span>${new Date(log.createdAt * 1000).toLocaleString()} · by @${esc(log.actorUsername)}</span>${log.targetUsername ? `<p>Target: @${esc(log.targetUsername)}</p>` : ''}${log.details ? `<p>${esc(log.details)}</p>` : ''}</div></div>`).join('')
+      : '<div class="empty-state">No matching moderation activity.</div>';
+  }
+
+  $('moderation-timeline-search').addEventListener('input', renderServerModeration);
+  $('server-mute-btn').addEventListener('click', async () => {
+    const durationSeconds = Number($('server-mute-duration').value) * Number($('server-mute-unit').value);
+    const result = await api('POST', `/api/servers/${activeServerId}/mutes`, {
+      userId: $('server-mute-user').value,
+      durationSeconds,
+      reason: $('server-mute-reason').value
+    });
+    if (result.error) return showError('server-moderation-error', result.error);
+    $('server-mute-reason').value = '';
+    await loadServerModeration();
+    toast('Member muted', 'success');
+  });
+
+  window.unmuteServerMember = async function(userId) {
+    const result = await api('DELETE', `/api/servers/${activeServerId}/mutes/${userId}`);
+    if (result.error) return toast(result.error, 'error');
+    await loadServerModeration();
+  };
 
   let serverEconomyData = null;
   async function loadServerEconomy(targetId = 'server-economy-content') {
@@ -2665,7 +3297,15 @@
   function nameplatePreviewHtml(nameplate, label = 'Nexus User') {
     return `<div class="nameplate-preview nameplate-${esc(nameplate.id)}"><b class="nameplate-preview-avatar">N</b><span>${esc(label)}</span><i></i></div>`;
   }
-  window.spendBoosts = async function(feature) { const r = await api('POST', '/api/perks/servers/' + activeServerId + '/spend', { feature }); if (r.error) return toast(r.error, 'error'); toast('Boosts allocated', 'success'); await loadServerSidebar(activeServerId); $('server-settings-btn').click(); };
+  window.spendBoosts = async function(feature) {
+    const r = await api('POST', '/api/perks/servers/' + activeServerId + '/spend', { feature });
+    if (r.error) return toast(r.error, 'error');
+    const features = new Set(activeServerData.server.boostFeatures || []);
+    features.add(feature);
+    activeServerData.server.boostFeatures = [...features];
+    renderBoostSettings(activeServerData.server);
+    toast('Boosts allocated', 'success');
+  };
 
   $('server-boost-btn').addEventListener('click', async () => {
     if (!activeServerId || !activeServerData) return;
@@ -2694,9 +3334,8 @@
     $('settings-invite-banner-image-wrap').style.display = mode === 'image' ? 'block' : 'none';
   }
   $('settings-invite-banner-mode').addEventListener('change', updateInviteBannerControls);
-  $('save-invite-style-btn').addEventListener('click', async () => {
-    if (!activeServerId) return;
-    const r = await api('PATCH', `/api/servers/${activeServerId}/invite-style`, {
+  function inviteStylePayload() {
+    return {
       description: $('settings-invite-description').value,
       tags: $('settings-invite-tags').value,
       bannerMode: $('settings-invite-banner-mode').value,
@@ -2704,11 +3343,22 @@
       bannerEnd: $('settings-invite-banner-end').value,
       bannerImage: $('settings-invite-banner-image').value,
       tagPrivate: $('settings-tag-private').checked
-    });
-    if (r.error) return toast(r.error, 'error');
+    };
+  }
+
+  async function saveInviteStyle() {
+    if (!activeServerId) return;
+    const r = await api('PATCH', `/api/servers/${activeServerId}/invite-style`, inviteStylePayload());
+    if (r.error) return r;
     activeServerData.server = { ...activeServerData.server, ...r.server };
     const index = servers.findIndex(server => server.id === activeServerId);
     if (index >= 0) servers[index] = { ...servers[index], ...r.server };
+    return r;
+  }
+
+  $('save-invite-style-btn').addEventListener('click', async () => {
+    const r = await saveInviteStyle();
+    if (!r || r.error) return toast(r?.error || 'Could not save invite card', 'error');
     toast('Invite card saved', 'success');
   });
 
@@ -2716,7 +3366,7 @@
   window.switchSettingsTab = function(tab) {
     document.querySelectorAll('.settings-tab').forEach(b => b.classList.toggle('active', b.dataset.stab === tab));
     document.querySelectorAll('.settings-tab-panel').forEach(p => {
-      p.style.display = p.id === 'settings-tab-' + tab ? 'block' : 'none';
+      p.style.display = p.id === 'settings-tab-' + tab ? (tab === 'roles' ? 'grid' : 'block') : 'none';
       p.classList.toggle('active', p.id === 'settings-tab-' + tab);
     });
     if (tab === 'economy') loadServerEconomy();
@@ -2776,25 +3426,71 @@
 
   function renderRolesList(roles) {
     $('roles-list').innerHTML = roles.length
-      ? roles.map(r => `
+      ? roles.map(r => {
+          const memberCount = ((activeServerData && activeServerData.members) || []).filter(member => (member.roleIds || [member.roleId]).includes(r.id)).length;
+          return `
           <div class="role-row" id="role-row-${r.id}">
             <div class="role-dot" style="background:${r.color}"></div>
             <span class="role-name${r.gradientStart ? ' role-gradient-text' : ''}" style="${r.gradientStart ? `--role-gradient-start:${r.gradientStart};--role-gradient-end:${r.gradientEnd}` : `color:${r.color}`}">${esc(r.name)}</span>
-            <span class="role-badge">${r.isAdmin ? 'Admin' : 'Member'}</span>
-            ${r.canDeleteMessages ? '<span class="role-badge" style="background:rgba(240,84,84,0.15);color:var(--red)">Can Delete</span>' : ''}
             <div class="role-actions">
               <button class="role-edit-btn" onclick="editRole('${r.id}')">Edit</button>
               <button class="role-del-btn" onclick="deleteRole('${r.id}','${esc(r.name)}')">Delete</button>
             </div>
-            <label class="toggle-row" style="grid-column:1/-1;margin:4px 0 0"><input type="checkbox" ${r.gradientStart ? 'checked' : ''} onchange="toggleRoleGradient('${r.id}',this.checked)"><span class="toggle-label"><span class="toggle-title">Animated gradient</span></span></label>
-          </div>`).join('')
+            <div class="role-row-meta">
+              <span>${r.isAdmin ? 'Administrator' : 'Custom role'}</span>
+              <span>${memberCount} member${memberCount === 1 ? '' : 's'}</span>
+            </div>
+          </div>`;
+        }).join('')
       : '<p style="font-size:13px;color:var(--text-muted);padding:8px 0">No custom roles yet. Create one below.</p>';
   }
 
-  window.editRole = function(roleId) { const role = activeServerData.roles.find(r => r.id === roleId); if (!role) return; $('role-editor').style.display='block'; $('edit-role-id').value=role.id; $('edit-role-name').value=role.name; $('edit-role-color').value=role.color; $('edit-role-admin').value=String(!!role.isAdmin); $('edit-role-gradient').checked=!!role.gradientStart; $('edit-role-gradient-colors').style.display=role.gradientStart?'flex':'none'; $('edit-role-gradient-start').value=role.gradientStart||'#62e6ff'; $('edit-role-gradient-end').value=role.gradientEnd||'#b06cff'; };
+  window.editRole = function(roleId) {
+    const role = activeServerData.roles.find(r => r.id === roleId);
+    if (!role) return;
+    $('role-editor').style.display = 'block';
+    $('edit-role-id').value = role.id;
+    $('edit-role-name').value = role.name;
+    $('edit-role-color').value = role.color;
+    $('edit-role-admin').value = String(!!role.isAdmin);
+    $('edit-role-gradient').checked = !!role.gradientStart;
+    $('edit-role-display-separately').checked = !!role.displaySeparately;
+    $('edit-role-gradient-colors').style.display = role.gradientStart ? 'flex' : 'none';
+    $('edit-role-gradient-start').value = role.gradientStart || '#62e6ff';
+    $('edit-role-gradient-end').value = role.gradientEnd || '#b06cff';
+    document.querySelectorAll('[data-role-permission]').forEach(input => {
+      input.checked = !!(role.permissions || {})[input.dataset.rolePermission];
+    });
+    $('role-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   $('edit-role-gradient').addEventListener('change', function(){ $('edit-role-gradient-colors').style.display=this.checked?'flex':'none'; });
   $('cancel-role-editor-btn').addEventListener('click', ()=> $('role-editor').style.display='none');
-  $('save-role-editor-btn').addEventListener('click', async ()=> { const payload={name:$('edit-role-name').value.trim(),color:$('edit-role-color').value,isAdmin:$('edit-role-admin').value==='true',gradientAnimated:$('edit-role-gradient').checked}; if(payload.gradientAnimated){payload.gradientStart=$('edit-role-gradient-start').value;payload.gradientEnd=$('edit-role-gradient-end').value;} const r=await api('PATCH',`/api/servers/${activeServerId}/roles/${$('edit-role-id').value}`,payload); if(r.error)return toast(r.error,'error'); const s=await api('GET',`/api/servers/${activeServerId}`); activeServerData=s; renderRolesList(s.roles||[]); renderMemberList(s.members); $('role-editor').style.display='none'; toast('Role updated','success'); });
+  $('save-role-editor-btn').addEventListener('click', async () => {
+    const permissions = {};
+    document.querySelectorAll('[data-role-permission]').forEach(input => {
+      permissions[input.dataset.rolePermission] = input.checked;
+    });
+    const payload = {
+      name: $('edit-role-name').value.trim(),
+      color: $('edit-role-color').value,
+      isAdmin: $('edit-role-admin').value === 'true',
+      gradientAnimated: $('edit-role-gradient').checked,
+      displaySeparately: $('edit-role-display-separately').checked,
+      permissions
+    };
+    if (payload.gradientAnimated) {
+      payload.gradientStart = $('edit-role-gradient-start').value;
+      payload.gradientEnd = $('edit-role-gradient-end').value;
+    }
+    const r = await api('PATCH', `/api/servers/${activeServerId}/roles/${$('edit-role-id').value}`, payload);
+    if (r.error) return toast(r.error, 'error');
+    const s = await api('GET', `/api/servers/${activeServerId}`);
+    activeServerData = s;
+    renderRolesList(s.roles || []);
+    renderMemberList(s.members);
+    $('role-editor').style.display = 'none';
+    toast('Role updated', 'success');
+  });
   window.toggleRoleGradient = function(roleId, enabled) { editRole(roleId); $('edit-role-gradient').checked=enabled; $('edit-role-gradient-colors').style.display=enabled?'flex':'none'; };
 
   window.deleteRole = async function(roleId, name) {
@@ -2875,6 +3571,10 @@
   $('save-server-btn').addEventListener('click', async () => {
     const name = $('settings-server-name').value.trim();
     if (!name) return showError('settings-server-error', 'Name required');
+    const inviteResult = await saveInviteStyle();
+    if (!inviteResult || inviteResult.error) {
+      return showError('settings-server-error', inviteResult?.error || 'Could not save invite card');
+    }
     const fd = new FormData();
     fd.append('name', name);
     const iconFile = $('settings-icon-input').files[0];
@@ -2922,7 +3622,7 @@
     $('invite-friends-list').innerHTML = nonMembers.length
       ? nonMembers.map(f => `
           <div class="invite-friend-row">
-            <div class="avatar" id="invav-${f.id}" style="width:32px;height:32px;font-size:13px;flex-shrink:0"></div>
+            <div class="invite-avatar-viewport"><div class="avatar-wrap invite-avatar-host"><div class="avatar" id="invav-${f.id}"></div></div></div>
             <div class="person-info"><div class="display-name" style="font-size:13px">${esc(f.displayName)}</div><div class="username">@${esc(f.username)}</div></div>
             <button class="action-btn primary" onclick="inviteFriend('${f.id}', this)">Invite</button>
           </div>`).join('')
@@ -2953,6 +3653,7 @@
     const el = $('view-' + view);
     if (el) el.classList.add('active');
     if (view === 'shop') loadShop();
+    if (view === 'ringtones') loadRingtones();
     if (view === 'achievements') loadAchievements();
     if (view === 'stats') loadCollectionStats();
     if (view === 'quests') loadQuests();
@@ -2963,11 +3664,16 @@
 
   // Rail selection: 'dms' or a server id
   window.railSelect = function(id) {
+    if (isMobile()) closeMobileMembers();
     document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
     if (id === 'dms') {
       $('rail-dms') && $('rail-dms').classList.add('active');
       $('sidebar-dms').style.display = 'flex';
       $('sidebar-server').style.display = 'none';
+      $('server-members-panel').classList.remove('active');
+      $('server-members-panel').classList.remove('mobile-open');
+      if ($('mobile-members-btn')) $('mobile-members-btn').style.display = 'none';
+      $('sidebar-server').closest('.sidebar')?.classList.remove('server-context');
       activeServerId = null;
       activeChannelId = null;
       switchView('friends');
@@ -2977,6 +3683,9 @@
       if (btn) btn.classList.add('active');
       $('sidebar-dms').style.display = 'none';
       $('sidebar-server').style.display = 'flex';
+      $('sidebar-server').closest('.sidebar')?.classList.add('server-context');
+      $('server-members-panel').classList.add('active');
+      if ($('mobile-members-btn')) $('mobile-members-btn').style.display = isMobile() ? 'flex' : 'none';
       loadServerSidebar(id);
       switchView('channel');
     }
@@ -3049,7 +3758,41 @@
     const r = await api('GET', '/api/friends');
     friends = r.friends || [];
     renderFriendsList();
+    renderDmList();
   }
+
+  function renderDiscoverySettings(server) {
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = Number(server.discoveryExpiresAt || 0);
+    const active = expiresAt > now;
+    $('settings-discovery-toggle').checked = active && !!server.discoveryEnabled;
+    $('settings-discovery-status').innerHTML = active
+      ? `<strong>${server.discoveryEnabled ? 'Listed in Discovery' : 'Listing hidden'}</strong><br>Paid through ${new Date(expiresAt * 1000).toLocaleDateString()}. You can turn the listing back on without paying again before then.`
+      : '<strong>No active subscription</strong><br>Enabling Discovery will charge 15,000 Nexals and list the server for 30 days.';
+    $('save-discovery-btn').textContent = active ? 'Save Discovery Setting' : 'Activate for 15,000 Nexals';
+  }
+
+  $('save-discovery-btn').addEventListener('click', async () => {
+    if (!activeServerId || !activeServerData) return;
+    const enabled = $('settings-discovery-toggle').checked;
+    const expiresAt = Number(activeServerData.server.discoveryExpiresAt || 0);
+    const expired = expiresAt <= Math.floor(Date.now() / 1000);
+    if (enabled && expired && !confirm('Activate Server Discovery for 15,000 Nexals for 30 days?')) {
+      $('settings-discovery-toggle').checked = false;
+      return;
+    }
+    const button = $('save-discovery-btn');
+    button.disabled = true;
+    showError('settings-discovery-error', '');
+    const result = await api('POST', `/api/servers/${activeServerId}/discovery`, { enabled });
+    button.disabled = false;
+    if (result.error) return showError('settings-discovery-error', result.error);
+    activeServerData.server.discoveryEnabled = result.discoveryEnabled;
+    if (result.discoveryExpiresAt) activeServerData.server.discoveryExpiresAt = result.discoveryExpiresAt;
+    if (typeof result.nexals === 'number') updateNexalDisplay(result.nexals);
+    renderDiscoverySettings(activeServerData.server);
+    toast(result.charged ? 'Server listed in Discovery for 30 days' : (enabled ? 'Discovery listing enabled' : 'Discovery listing hidden'), 'success');
+  });
 
   function renderFriendsList() {
     const list = $('friends-list');
@@ -3268,10 +4011,14 @@
   }
 
   let dmLoadingOlder = false; // lock to prevent multiple simultaneous loads
+  let dmInitialScrollPending = false;
+  const exhaustedDmHistory = new Set();
 
   async function loadMessages(userId, prepend = false) {
+    if (prepend && exhaustedDmHistory.has(userId)) return;
     if (prepend && dmLoadingOlder) return; // prevent double-fire
     if (prepend) dmLoadingOlder = true;
+    else exhaustedDmHistory.delete(userId);
 
     const list = $('messages-list');
     const wrap = $('messages-wrap');
@@ -3279,9 +4026,14 @@
     const beforeTs = prepend && oldest ? oldest.dataset.ts : undefined;
 
     // Don't re-fetch if we got nothing last time for this conversation
-    const url = `/api/messages/${userId}${beforeTs ? `?before=${beforeTs}` : ''}`;
+    const url = `/api/messages/${userId}?limit=30${beforeTs ? `&before=${beforeTs}` : ''}`;
     const r = await api('GET', url);
+    if (activeDmUserId !== userId) {
+      if (prepend) dmLoadingOlder = false;
+      return;
+    }
     const messages = hydrateMessages(r);
+    if (messages.length < 30) exhaustedDmHistory.add(userId);
 
     if (!messages.length) {
       if (prepend) dmLoadingOlder = false;
@@ -3289,10 +4041,11 @@
     }
 
     if (!prepend) {
+      dmInitialScrollPending = true;
       list.innerHTML = '';
       messages.forEach(m => appendMessage(m, false));
-      // Use requestAnimationFrame so DOM is painted before we scroll
-      requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
+      settleMessageViewAtLatest(wrap);
+      setTimeout(() => { dmInitialScrollPending = false; }, 900);
     } else {
       // Save scroll position from the bottom before adding content
       const distFromBottom = wrap.scrollHeight - wrap.scrollTop;
@@ -3307,8 +4060,9 @@
 
   function appendMessage(msg, scroll = true) {
     const list = $('messages-list');
-    const el = buildMessageEl(msg, list.lastElementChild);
+    const el = buildMessageEl(msg, lastRenderedMessage(list));
     list.appendChild(el);
+    refreshDateSeparators(list);
     if (scroll) {
       const wrap = $('messages-wrap');
       requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
@@ -3320,6 +4074,45 @@
     // Build without grouping context (prepended messages are old, grouping is cosmetic)
     const el = buildMessageEl(msg, null);
     list.prepend(el);
+    refreshDateSeparators(list);
+  }
+
+  function lastRenderedMessage(list) {
+    const messages = list.querySelectorAll('.message');
+    return messages.length ? messages[messages.length - 1] : null;
+  }
+
+  function messageDateKey(timestamp) {
+    const date = new Date((parseInt(timestamp, 10) || 0) * 1000);
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  }
+
+  function messageDateLabel(timestamp) {
+    const date = new Date((parseInt(timestamp, 10) || 0) * 1000);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const key = messageDateKey(timestamp);
+    const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+    const yesterdayKey = `${yesterday.getFullYear()}-${yesterday.getMonth()}-${yesterday.getDate()}`;
+    if (key === todayKey) return 'Today';
+    if (key === yesterdayKey) return 'Yesterday';
+    return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  function refreshDateSeparators(list) {
+    list.querySelectorAll('.message-date-separator').forEach(separator => separator.remove());
+    let previousDate = '';
+    [...list.querySelectorAll('.message')].forEach(message => {
+      const dateKey = messageDateKey(message.dataset.ts);
+      if (dateKey === previousDate) return;
+      const separator = document.createElement('div');
+      separator.className = 'message-date-separator';
+      separator.setAttribute('role', 'separator');
+      separator.innerHTML = `<span>${esc(messageDateLabel(message.dataset.ts))}</span>`;
+      message.before(separator);
+      previousDate = dateKey;
+    });
   }
 
   function renderReactionChips(msgId, channelId, reactions) {
@@ -3367,7 +4160,6 @@
     window.toggleChannelReaction(msgId, channelId, encodeURIComponent(emoji.trim().slice(0, 16)));
   };
 
-  const reactionEmojiSet = ['👍', '👎', '❤️', '🔥', '😂', '😮', '😢', '😡', '🎉', '✨', '👀', '✅', '❌', '💯', '🫡', '🤝', '🚀', '💜'];
   let activeEmojiPicker = null;
   function closeChannelEmojiPicker() {
     if (activeEmojiPicker) activeEmojiPicker.remove();
@@ -3380,14 +4172,14 @@
     picker.className = 'channel-emoji-picker';
     picker.setAttribute('role', 'dialog');
     picker.setAttribute('aria-label', 'Choose a reaction');
-    picker.innerHTML = `<div class="emoji-picker-title">Quick reactions</div><div class="emoji-picker-grid">${reactionEmojiSet.map(emoji => `<button type="button" title="${emoji}">${emoji}</button>`).join('')}</div>`;
-    picker.querySelectorAll('button').forEach((button, index) => button.addEventListener('click', () => {
-      window.toggleChannelReaction(msgId, channelId, encodeURIComponent(reactionEmojiSet[index]));
+    picker.innerHTML = `<div class="emoji-picker-title">Choose a reaction</div><div class="emoji-picker-grid">${unicodeEmojiCatalog.map(emoji => `<button type="button" title="${emoji}" data-emoji="${emoji}">${emoji}</button>`).join('')}</div>`;
+    picker.querySelectorAll('[data-emoji]').forEach(button => button.addEventListener('click', () => {
+      window.toggleChannelReaction(msgId, channelId, encodeURIComponent(button.dataset.emoji));
       closeChannelEmojiPicker();
     }));
     document.body.appendChild(picker);
     const rect = event?.currentTarget?.getBoundingClientRect();
-    const width = 270;
+    const width = 336;
     picker.style.left = `${Math.max(10, Math.min((rect?.left || 20), window.innerWidth - width - 10))}px`;
     picker.style.top = `${Math.max(10, (rect?.bottom || 40) + 8)}px`;
     activeEmojiPicker = picker;
@@ -3410,7 +4202,9 @@
     const el = document.createElement('div');
     const prevTs = prevEl ? parseInt(prevEl.dataset.ts) : 0;
     const prevFrom = prevEl ? prevEl.dataset.from : '';
-    const grouped = prevFrom === msg.fromId && (msg.createdAt - prevTs) < 300;
+    const grouped = activeChannelType !== 'forum' && prevFrom === msg.fromId &&
+      messageDateKey(prevTs) === messageDateKey(msg.createdAt) &&
+      (msg.createdAt - prevTs) < 300;
     const isMentioned = msg.content && currentUser && (
       msg.content.includes('<@user:' + currentUser.id + '>') ||
       msg.content.includes('<@everyone>') ||
@@ -3453,8 +4247,12 @@
     const isOwnMsg = msg.fromId === currentUser.id;
     const meInServer = activeServerData && activeServerData.members && activeServerData.members.find(m => m.id === currentUser.id);
     const myRole = meInServer && activeServerData.roles && activeServerData.roles.find(r => r.id === meInServer.roleId);
-    const canDeleteThisMsg = isOwnMsg || (meInServer && (meInServer.role === 'admin' || meInServer.isAdmin)) || (myRole && myRole.canDeleteMessages);
-    const canManagePins = isChannelMsg && meInServer && (meInServer.role === 'admin' || meInServer.isAdmin);
+    const myRoleIds = new Set((meInServer && meInServer.roleIds) || []);
+    const canManageMessages = activeServerData && activeServerData.roles && activeServerData.roles.some(role =>
+      myRoleIds.has(role.id) && (role.canDeleteMessages || (role.permissions && role.permissions.manageMessages))
+    );
+    const canDeleteThisMsg = isOwnMsg || (meInServer && (meInServer.role === 'admin' || meInServer.isAdmin)) || canManageMessages || (myRole && myRole.canDeleteMessages);
+    const canManagePins = isChannelMsg && meInServer && ((meInServer.role === 'admin' || meInServer.isAdmin) || canManageMessages);
 
     const replyPreviewHtml = msg.replyTo
       ? `<div class="msg-reply-preview"><strong>${esc(msg.replyTo.displayName || 'User')}</strong>: ${esc(String(msg.replyTo.content || '').slice(0, 120))}</div>`
@@ -3478,6 +4276,11 @@
     const reactionBar = isChannelMsg
       ? `<div class="msg-reactions" id="reactions-${msg.id}">${renderReactionChips(msg.id, msg.channelId, msg.reactions || [])}</div>`
       : '';
+    const forumParts = activeChannelType === 'forum' ? String(msg.content || '').split('\n') : null;
+    const messageContentHtml = forumParts
+      ? `<div class="forum-post-title">${renderContent(forumParts.shift() || 'Untitled post', msg.mentions, author.activeColor || null)}</div>
+         ${forumParts.length ? `<div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(forumParts.join('\n'), msg.mentions, author.activeColor || null)}</div>` : ''}`
+      : `<div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(msg.content, msg.mentions, author.activeColor || null)}</div>`;
 
     el.innerHTML = `
       <div class="avatar-wrap profile-hover-target" data-profile="${profilePayload}" style="flex-shrink:0;align-self:flex-start;margin-top:2px"><div class="avatar" id="mav-${msg.id}"></div></div>
@@ -3488,7 +4291,7 @@
           ${pinBadge}
         </div>
         ${replyPreviewHtml}
-        <div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(msg.content, msg.mentions, author.activeColor || null)}</div>
+        ${messageContentHtml}
         ${reactionBar}
         ${replyAction}
         ${pinAction}
@@ -3507,7 +4310,7 @@
 
   // Infinite scroll (load older) — only fires when near the top
   $('messages-wrap').addEventListener('scroll', function () {
-    if (this.scrollTop < 80 && activeDmUserId && !dmLoadingOlder) {
+    if (this.scrollTop < 80 && activeDmUserId && !dmLoadingOlder && !dmInitialScrollPending) {
       loadMessages(activeDmUserId, true);
     }
   });
@@ -3537,9 +4340,22 @@
   let availableCallGame = null;
   let pendingActivityInvite = null;
   let pendingUnoCardId = null;
+  function clearCallActivityState() {
+    activeCallGame = null;
+    availableCallGame = null;
+    pendingActivityInvite = null;
+    pendingUnoCardId = null;
+    $('activity-invite-modal')?.classList.remove('active');
+    $('call-games-modal')?.classList.remove('active');
+    const content = $('call-games-content');
+    if (content) content.innerHTML = '';
+  }
   function nexalsToTableTokens(nexals) { return Math.floor(((parseInt(nexals, 10) || 0) * 1000) / 900); }
   function activeGameRoomId() { return (groupCallState && groupCallState.roomId) || (callState && callState.roomId) || null; }
-  function gameCard(card) { return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`; }
+  function gameCard(card) {
+    if (!card) return '';
+    return `<span class="game-card${card.hidden ? ' hidden' : ''}">${card.hidden ? '?' : esc(card.rank + card.suit)}</span>`;
+  }
   function activityName(type) { return type === 'poker' ? "Texas Hold'em" : type === 'uno' ? 'UNO' : type === 'connect4' ? 'Connect Four' : 'Blackjack'; }
   function unoSymbol(value) { return ({ skip: '⊘', reverse: '↻', draw2: '+2', wild: 'W', wild4: '+4' })[value] || value; }
   function unoCardHtml(card, options = {}) {
@@ -3592,7 +4408,7 @@
     activeCallGame = game;
     const content = $('call-games-content');
     if (!game) {
-      const openRoom = availableCallGame ? `<button class="game-choice open" onclick="joinAvailableCallGame()"><strong>${activityName(availableCallGame.type)} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span></button>` : '';
+      const openRoom = availableCallGame ? `<button class="game-choice open" data-join-available="true"><strong>${activityName(availableCallGame.type)} is open</strong><span>${esc(availableCallGame.hostName || 'A caller')} started an activity. Join the room.</span><b>Join Activity</b></button>` : '';
       content.innerHTML = `<div class="call-token-panel"><label>Nexal buy-in <input id="call-buyin-input" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet <input id="call-bet-input" type="number" min="1" step="50" value="100"></label><span id="call-token-preview">Table-token settings apply to Blackjack and Poker only.</span></div><div class="game-picker">${openRoom}<button class="game-choice" data-game-type="blackjack"><strong>Blackjack</strong><span>Dealer table. Each player bets table tokens.</span></button><button class="game-choice" data-game-type="poker"><strong>Texas Hold'em</strong><span>Buy in with table tokens and play a shared pot.</span></button><button class="game-choice uno-choice" onclick="openUnoBrowser()"><strong>UNO</strong><span>Free to play. Open UNO rooms or create a new one.</span><b>Play</b></button><button class="game-choice connect4-choice" onclick="openConnectFourBrowser()"><strong>Connect Four</strong><span>Free two-player drop-disc strategy.</span><b>Play</b></button></div>`;
       const buyInput = $('call-buyin-input');
       if (buyInput) buyInput.addEventListener('input', () => { const tokens = nexalsToTableTokens(buyInput.value); $('call-token-preview').textContent = `${(parseInt(buyInput.value, 10) || 0).toLocaleString()} Nexals = ${tokens.toLocaleString()} table tokens`; });
@@ -3600,15 +4416,32 @@
     }
     const cards = list => `<div class="game-cards">${(list || []).map(gameCard).join('')}</div>`;
     const joined = game.players.some(player => player.id === currentUser.id);
-    const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for another call participant to join.' : `${game.players.length} players joined. Start when ready.`}</p>${!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : ''}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,10,15].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${activityName(game.type)}</button>` : ''}`;
+    const paidJoin = !joined && ['blackjack', 'poker'].includes(game.type)
+      ? `<div class="call-join-panel"><div><strong>Join ${activityName(game.type)}</strong><span>Choose your own table balance and opening bet.</span></div><label>Nexal buy-in<input id="call-join-buyin" type="number" min="1" max="100000" step="450" value="900"></label><label>Token bet<input id="call-join-bet" type="number" min="1" step="50" value="100"></label><button class="btn-primary" onclick="joinCallGame()">Join Table</button></div>`
+      : (!joined ? '<button class="btn-primary" onclick="joinCallGame()">Join Activity</button>' : '');
+    const lobby = `<p style="color:var(--text-secondary);font-size:12px">${game.players.length < 2 ? 'Invite sent. Waiting for another call participant to join.' : `${game.players.length} players joined. Start when ready.`}</p>${paidJoin}${game.hostId === currentUser.id ? `<label class="call-round-picker">Rounds <select id="call-round-count">${[1,2,3,5,10,15].map(count => `<option value="${count}" ${count === (game.roundsTotal || 3) ? 'selected' : ''}>${count}</option>`).join('')}</select></label><button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start ${activityName(game.type)}</button>` : ''}`;
     const end = game.hostId === currentUser.id ? '<button class="btn-danger" onclick="endCallGame()">End Activity</button>' : '';
     const leave = joined ? '<button class="btn-secondary" onclick="leaveCallGame()">Leave Activity</button>' : '';
+    const sessionControls = game.phase !== 'lobby'
+      ? `<div class="activity-session-controls"><div><strong>${activityName(game.type)}</strong><span>${game.phase === 'complete' ? 'Activity complete' : 'Activity in progress'}</span></div><div>${leave}${end}</div></div>`
+      : '';
+    if (sessionControls) {
+      queueMicrotask(() => {
+        if (content.isConnected && !content.querySelector('.activity-session-controls')) {
+          content.insertAdjacentHTML('afterbegin', sessionControls);
+        }
+      });
+    }
     if (game.type === 'uno' && game.phase === 'lobby') {
       content.innerHTML = `<div class="uno-lobby"><div class="uno-lobby-banner"><span class="uno-browser-logo">UNO</span><div><small>OPEN ROOM</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s UNO room</h2><p>${game.players.length} / 6 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST</b>' : '<b>READY</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for another caller to join...' : 'Players ready. The host can start the game.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinUnoRoom()">Join Room</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start UNO</button>` : ''}${leave}${end}</div></div>`;
       return;
     }
     if (game.type === 'connect4' && game.phase === 'lobby') {
       content.innerHTML = `<div class="connect4-lobby"><div class="connect4-lobby-banner"><div class="connect4-mini-board">${Array.from({ length: 20 }, () => '<i></i>').join('')}</div><div><small>OPEN TABLE</small><h2>${esc(game.players.find(player => player.id === game.hostId)?.displayName || 'Caller')}'s Connect Four table</h2><p>${game.players.length} / 2 players joined</p></div></div><div class="uno-lobby-players">${game.players.map(player => `<div><span>${esc(player.displayName)}</span>${player.id === game.hostId ? '<b>HOST · RED</b>' : '<b>READY · YELLOW</b>'}</div>`).join('')}</div><div class="uno-lobby-status">${game.players.length < 2 ? 'Waiting for an opponent...' : 'Both players are ready.'}</div><div class="uno-actions">${!joined ? '<button class="btn-primary" onclick="joinConnectFourRoom()">Join Table</button>' : ''}${game.hostId === currentUser.id ? `<button class="btn-primary" onclick="startCallGame()" ${game.players.length < 2 ? 'disabled' : ''}>Start Game</button>` : ''}${leave}${end}</div></div>`;
+      return;
+    }
+    if (['blackjack', 'poker'].includes(game.type) && game.phase === 'lobby') {
+      content.innerHTML = `<div class="paid-game-lobby"><div class="paid-game-lobby-head"><span class="blackjack-table-mark">${game.type === 'blackjack' ? '21' : 'S'}</span><div><small>CALL ACTIVITY</small><h2>${activityName(game.type)}</h2><p>${game.players.length} / 6 players at the table</p></div></div><div class="paid-game-player-list">${game.players.map(player => `<div><span>${esc(player.displayName)}${player.id === currentUser.id ? ' (YOU)' : ''}</span><b>${(player.chips || 0).toLocaleString()} tokens · Bet ${(player.bet || 0).toLocaleString()}</b></div>`).join('')}</div><div class="paid-game-lobby-actions">${lobby}${leave}${end}</div></div>`;
       return;
     }
     if (game.type === 'blackjack' && game.phase !== 'lobby') {
@@ -3665,8 +4498,44 @@
     renderCallGame({ type, phase: 'lobby', hostId: currentUser.id, players: [{ id: currentUser.id, displayName: currentUser.displayName, chips: nexalsToTableTokens(buyIn), buyIn, bet, hand: [] }], dealer: type === 'blackjack' ? { hand: [], score: null } : null, community: [], pot: 0, message: 'Opening table...' });
     socket.emit('call_game_open', { roomId, type, buyIn, bet }, result => { if (result && result.error) { activeCallGame = null; renderCallGame(null); toast(result.error, 'error'); } });
   };
-  window.joinCallGame = function() { const roomId = activeGameRoomId(); const buyIn = parseInt($('call-buyin-input')?.value, 10) || 0; const bet = parseInt($('call-bet-input')?.value, 10) || 0; if (roomId && socket) socket.emit('call_game_join', { roomId, buyIn, bet }); };
-  window.joinAvailableCallGame = function() { window.joinCallGame(); };
+  window.joinCallGame = function(options = {}) {
+    const roomId = options.roomId || activeGameRoomId();
+    const paidGame = ['blackjack', 'poker'].includes(activeCallGame?.type || pendingActivityInvite?.type || availableCallGame?.type);
+    const buyIn = parseInt($('call-join-buyin')?.value || $('call-buyin-input')?.value, 10) || (paidGame ? 900 : 0);
+    const bet = parseInt($('call-join-bet')?.value || $('call-bet-input')?.value, 10) || (paidGame ? 100 : 0);
+    if (!roomId || !socket) return toast('Join the call before joining an activity.', 'error');
+    const joinButton = $('activity-invite-join');
+    if (joinButton) {
+      joinButton.disabled = true;
+      joinButton.textContent = 'Joining...';
+    }
+    let completed = false;
+    const joinTimeout = setTimeout(() => {
+      if (completed) return;
+      completed = true;
+      if (joinButton) {
+        joinButton.disabled = false;
+        joinButton.textContent = 'Join Activity';
+      }
+      toast('The activity did not respond. Close Activities and try again.', 'error');
+    }, 8000);
+    socket.emit('call_game_join', { roomId, buyIn, bet }, result => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(joinTimeout);
+      if (joinButton) {
+        joinButton.disabled = false;
+        joinButton.textContent = 'Join Activity';
+      }
+      if (result?.error) return toast(result.error, 'error');
+      pendingActivityInvite = null;
+      $('call-games-modal').classList.add('active');
+    });
+  };
+  window.joinAvailableCallGame = function() {
+    toast(`Joining ${activityName(availableCallGame?.type || 'blackjack')}...`, 'info', 1800);
+    window.joinCallGame();
+  };
   window.startCallGame = function() { const roomId = activeGameRoomId(); const rounds = parseInt($('call-round-count')?.value, 10) || 3; if (roomId && socket) socket.emit('call_game_start', { roomId, rounds }); };
   window.nextCallGameRound = function() { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_next_round', { roomId }); };
   window.callGameAction = function(action) { const roomId = activeGameRoomId(); if (roomId && socket) socket.emit('call_game_action', { roomId, action }); };
@@ -3694,13 +4563,19 @@
   $('call-games-btn').addEventListener('click', () => { if (!activeGameRoomId()) return toast('Join a call first', 'error'); $('call-games-modal').classList.add('active'); renderCallGame(activeCallGame); });
   $('call-games-close').addEventListener('click', () => $('call-games-modal').classList.remove('active'));
   $('call-games-modal').addEventListener('click', e => { if (e.target === $('call-games-modal')) $('call-games-modal').classList.remove('active'); });
-  $('call-games-content').addEventListener('click', e => { const choice = e.target.closest('[data-game-type]'); if (choice) window.openCallGame(choice.dataset.gameType); });
+  $('call-games-content').addEventListener('click', e => {
+    const available = e.target.closest('[data-join-available]');
+    if (available) return window.joinAvailableCallGame();
+    const choice = e.target.closest('[data-game-type]');
+    if (choice) window.openCallGame(choice.dataset.gameType);
+  });
   $('activity-invite-join').addEventListener('click', () => {
     if (!pendingActivityInvite || !socket) return;
-    socket.emit('call_game_join', { roomId: pendingActivityInvite.roomId, buyIn: 900, bet: 100 });
+    const invite = pendingActivityInvite;
     $('activity-invite-modal').classList.remove('active');
     $('call-games-modal').classList.add('active');
-    pendingActivityInvite = null;
+    renderCallGame(activeCallGame);
+    window.joinCallGame({ roomId: invite.roomId });
   });
   $('activity-invite-ignore').addEventListener('click', () => { pendingActivityInvite = null; $('activity-invite-modal').classList.remove('active'); });
 
@@ -3762,6 +4637,23 @@
 
     socket = io({ transports: ['websocket', 'polling'], auth: { deviceId: getDeviceId() } });
 
+    socket.on('tos_required', ({ tos }) => {
+      if (!tos || !currentUser) return;
+      if (callState) {
+        socket.emit('call_end', { roomId: callState.roomId });
+        endCallLocal();
+      }
+      if (groupCallState) leaveGroupCall(true);
+      showTosAgreement(tos);
+    });
+    socket.on('error', error => {
+      if (error?.message === 'TOS_REQUIRED' && currentUser) {
+        api('GET', '/api/auth/tos').then(result => {
+          if (result.tos) showTosAgreement(result.tos);
+        });
+      }
+    });
+
     socket.on('call_game_state', ({ roomId, game }) => {
       if (roomId !== activeGameRoomId()) return;
       pendingUnoCardId = null;
@@ -3799,6 +4691,7 @@
       if (!currentUser) return;
       currentUser.proActive = !!active;
       currentUser.proExpiresAt = expiresAt || 0;
+      applyUserAppTheme();
       updateSelfCard();
       toast(active ? 'Nexus Pro was activated on your account' : 'Nexus Pro was removed from your account', active ? 'success' : 'info');
     });
@@ -3949,7 +4842,10 @@
     });
 
     socket.on('call_ended', ({ roomId }) => {
-      if (callState && callState.roomId === roomId) endCallLocal();
+      if (!callState || callState.roomId === roomId) {
+        clearCallActivityState();
+        endCallLocal();
+      }
     });
 
     socket.on('new_channel_message', msg => {
@@ -3987,6 +4883,11 @@
       const el = $(`reactions-${messageId}`);
       if (!el) return;
       el.innerHTML = renderReactionChips(messageId, channelId, reactions || []);
+    });
+
+    socket.on('group_call_error', ({ error }) => {
+      if (groupCallState && !groupCallState.roomId) leaveGroupCall(false);
+      toast(error || 'Could not join voice channel', 'error');
     });
 
     socket.on('group_call_joined', async ({ roomId, serverId, channelId, participants }) => {
@@ -4072,6 +4973,9 @@
 
     socket.on('channel_error', ({ channelId, error }) => {
       if (channelId === activeChannelId) toast(error, 'error');
+    });
+    socket.on('message_error', ({ error }) => {
+      toast(error || 'Message could not be sent', 'error');
     });
 
     socket.on('screenshare_started', ({ fromId }) => {
@@ -4581,6 +5485,7 @@
     $('video-toggle-btn').classList.remove('video-off');
     $('view-screen-btn').style.display = 'none';
     $('view-screen-btn').classList.remove('viewing');
+    clearCallActivityState();
   }
 
   async function ensureGroupPeerConnection(peerId, initiateOffer) {
@@ -4804,13 +5709,15 @@
   }
 
   async function loadAppearanceSettings() {
-    const [shop, ringtones] = await Promise.all([api('GET', '/api/shop'), api('GET', '/api/ringtones')]);
+    const [shop, ringtones, perks] = await Promise.all([api('GET', '/api/shop'), api('GET', '/api/ringtones'), api('GET', '/api/perks')]);
     const deco = $('appearance-decoration-select');
     const nameplate = $('appearance-nameplate-select');
     const ring = $('appearance-ringtone-select');
     if (!shop.error) deco.innerHTML = `<option value="">No decoration</option>${(shop.decorations || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
     if (!shop.error && nameplate) nameplate.innerHTML = `<option value="">No nameplate</option>${(shop.nameplates || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.activeNameplate ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
     if (!ringtones.error) ring.innerHTML = `<option value="">Default ringtone</option>${(ringtones.ringtones || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === ringtones.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+    $('simplistic-ui-toggle').checked = localStorage.getItem('nexus-simplistic-ui') === 'true';
+    if (!perks.error) renderAppThemeSettings(perks.pro);
   }
 
   async function saveNexusLinkSettings() {
@@ -4833,18 +5740,110 @@
     loadProfileTagChoices();
     loadNexusLinkSettings();
     loadAppearanceSettings();
+    $('avatar-upload-hint').textContent = currentUser.proActive
+      ? 'Pro: animated GIF/WebP, JPEG or PNG - max 5 MB'
+      : 'JPEG, PNG or WebP - max 2 MB';
+    $('developer-mode-toggle').checked = !!currentUser.developerMode;
     $('profile-modal').classList.add('active');
   });
-  $('profile-modal-close').addEventListener('click', () => $('profile-modal').classList.remove('active'));
-  $('profile-modal').addEventListener('click', e => { if (e.target === $('profile-modal')) $('profile-modal').classList.remove('active'); });
+  $('profile-modal-close').addEventListener('click', () => {
+    $('profile-modal').classList.remove('active');
+    applyUserAppTheme();
+  });
+  $('profile-modal').addEventListener('click', e => {
+    if (e.target === $('profile-modal')) {
+      $('profile-modal').classList.remove('active');
+      applyUserAppTheme();
+    }
+  });
   document.querySelectorAll('.profile-settings-tab').forEach(button => button.addEventListener('click', () => {
     document.querySelectorAll('.profile-settings-tab').forEach(item => item.classList.toggle('active', item === button));
     document.querySelectorAll('.profile-settings-panel').forEach(panel => panel.classList.toggle('active', panel.dataset.ppanel === button.dataset.ptab));
   }));
-  function applyTheme(theme) { document.body.classList.toggle('light-theme', theme === 'light'); localStorage.setItem('nexus-theme', theme); }
+  function applyTheme(theme) {
+    document.body.classList.toggle('light-theme', theme === 'light');
+    localStorage.setItem('nexus-theme', theme);
+  }
+  function applySimplisticUi(enabled = localStorage.getItem('nexus-simplistic-ui') === 'true') {
+    document.body.classList.toggle('simplistic-ui', enabled);
+  }
+  function applyUserAppTheme(theme = currentUser?.appTheme) {
+    const body = document.body;
+    body.classList.remove('pro-app-theme', 'theme-style-solid', 'theme-style-gradient', 'theme-style-glass', 'theme-motion');
+    body.style.removeProperty('--theme-primary');
+    body.style.removeProperty('--theme-secondary');
+    if (!currentUser?.proActive || !theme) {
+      applyTheme(localStorage.getItem('nexus-theme') || 'dark');
+      return;
+    }
+    applyTheme(theme.base || 'dark');
+    body.style.setProperty('--theme-primary', theme.primary || '#5b6ef5');
+    body.style.setProperty('--theme-secondary', theme.secondary || '#a855f7');
+    body.classList.add('pro-app-theme', `theme-style-${theme.style || 'gradient'}`);
+    body.classList.toggle('theme-motion', !!theme.motion);
+  }
+  function appThemeFromControls() {
+    return {
+      base: $('app-theme-base')?.value || 'dark',
+      primary: $('app-theme-primary')?.value || '#5b6ef5',
+      secondary: $('app-theme-secondary')?.value || '#a855f7',
+      style: $('app-theme-style')?.value || 'gradient',
+      motion: !!$('app-theme-motion')?.checked
+    };
+  }
+  function previewAppTheme() {
+    const theme = appThemeFromControls();
+    const preview = $('app-theme-preview');
+    if (preview) {
+      preview.style.setProperty('--preview-a', theme.primary);
+      preview.style.setProperty('--preview-b', theme.secondary);
+    }
+    if (currentUser?.proActive) applyUserAppTheme(theme);
+  }
+  function renderAppThemeSettings(pro) {
+    const active = !!pro?.active;
+    $('app-theme-status').textContent = active ? 'Active' : 'Pro only';
+    $('app-theme-locked').style.display = active ? 'none' : 'block';
+    $('app-theme-controls').style.display = active ? 'grid' : 'none';
+    const theme = pro?.appTheme || currentUser?.appTheme || { base:'dark', primary:'#5b6ef5', secondary:'#a855f7', style:'gradient', motion:false };
+    $('app-theme-primary').value = theme.primary;
+    $('app-theme-secondary').value = theme.secondary;
+    $('app-theme-style').value = theme.style;
+    $('app-theme-base').value = theme.base;
+    $('app-theme-motion').checked = !!theme.motion;
+    previewAppTheme();
+  }
   applyTheme(localStorage.getItem('nexus-theme') || 'dark');
+  applySimplisticUi();
   $('theme-dark-btn').addEventListener('click', () => applyTheme('dark'));
   $('theme-light-btn').addEventListener('click', () => applyTheme('light'));
+  $('simplistic-ui-toggle').addEventListener('change', e => {
+    localStorage.setItem('nexus-simplistic-ui', String(e.target.checked));
+    applySimplisticUi(e.target.checked);
+    toast(e.target.checked ? 'Simplistic UI enabled' : 'Nexus type restored', 'success');
+  });
+  ['app-theme-primary', 'app-theme-secondary', 'app-theme-style', 'app-theme-base', 'app-theme-motion'].forEach(id => {
+    $(id).addEventListener('input', previewAppTheme);
+    $(id).addEventListener('change', previewAppTheme);
+  });
+  $('save-app-theme').addEventListener('click', async () => {
+    const theme = appThemeFromControls();
+    const result = await api('PATCH', '/api/perks/app-theme', theme);
+    if (result.error) return toast(result.error, 'error');
+    currentUser.appTheme = result.appTheme;
+    applyUserAppTheme(result.appTheme);
+    toast('Personal theme saved', 'success');
+  });
+  $('developer-mode-toggle').addEventListener('change', async e => {
+    const enabled = e.target.checked;
+    const r = await api('PATCH', '/api/users/preferences', { developerMode: enabled });
+    if (r.error) {
+      e.target.checked = !enabled;
+      return toast(r.error, 'error');
+    }
+    currentUser.developerMode = enabled;
+    toast(`Developer Mode ${enabled ? 'enabled' : 'disabled'}`, 'success');
+  });
   $('connect-discord-btn').addEventListener('click', () => { window.location.href = '/api/nexus-link/connect'; });
   $('appearance-decoration-select').addEventListener('change', async e => { const r = await api('POST', '/api/shop/equip', { decorationId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeDecoration = e.target.value || null; toast('Decoration updated', 'success'); });
   $('appearance-nameplate-select').addEventListener('change', async e => { const r = await api('POST', '/api/shop/nameplates/equip', { nameplateId: e.target.value || null }); if (r.error) return toast(r.error, 'error'); currentUser.activeNameplate = e.target.value || null; updateSelfCard(); toast('Nameplate updated', 'success'); });
@@ -4856,6 +5855,15 @@
   $('avatar-file-input').addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
+    const maxBytes = currentUser.proActive ? 5 * 1024 * 1024 : 2 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      e.target.value = '';
+      return toast(currentUser.proActive ? 'Pro avatars must be smaller than 5 MB' : 'Avatars must be smaller than 2 MB', 'error');
+    }
+    if (!currentUser.proActive && file.type === 'image/gif') {
+      e.target.value = '';
+      return toast('Animated avatars require Nexus Pro', 'error');
+    }
     const fd = new FormData();
     fd.append('avatar', file);
     const res = await fetch('/api/users/avatar', { method: 'POST', body: fd, credentials: 'same-origin', headers: deviceHeaders() });
@@ -4908,6 +5916,8 @@
     leaveGroupCall(false);
     if (socket) socket.disconnect();
     currentUser = null; socket = null; friends = [];
+    appInitialized = false;
+    pendingTos = null;
     activeDmUserId = null; activeDmUser = null;
     endCallLocal();
     showScreen('auth-screen');
@@ -4938,6 +5948,8 @@
     btn.style.display = isAppAdmin ? 'flex' : 'none';
     const reportsTab = document.querySelector('.admin-tab[data-tab="reports"]');
     if (reportsTab) reportsTab.style.display = isCoreAdmin ? '' : 'none';
+    const tosTab = document.querySelector('.admin-tab[data-tab="tos"]');
+    if (tosTab) tosTab.style.display = isCoreAdmin ? '' : 'none';
   }
 
   window.openAdminPanel = function() {
@@ -4953,6 +5965,7 @@
   });
 
   function adminSwitchTab(tab) {
+    if ((tab === 'tos' || tab === 'reports') && !isCoreAdmin) return toast('Core admins only', 'error');
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
     document.querySelectorAll('.admin-pane').forEach(p => p.classList.remove('active'));
     const pane = $('admin-pane-' + tab);
@@ -4962,7 +5975,8 @@
     if (tab === 'admins') adminLoadAdmins();
     if (tab === 'reports') adminLoadSystemReport();
     if (tab === 'userreports') adminLoadUserReports();
-    if (tab === 'suspend') adminLoadIpBans();
+    if (tab === 'tos') adminLoadTos();
+    if (tab === 'suspend') { adminLoadIpBans(); adminLoadGlobalMutes(); }
     if (tab === 'userinfo') { $('admin-userinfo-result').innerHTML = ''; }
   }
 
@@ -4998,6 +6012,34 @@
     $('admin-unsuspend-username').value = '';
     toast('✓ @' + username + ' unsuspended', 'success');
   });
+
+  async function adminLoadGlobalMutes() {
+    const result = await api('GET', '/api/admin/global-mutes');
+    if (result.error) return showError('admin-global-mute-error', result.error);
+    $('admin-global-mutes-list').innerHTML = (result.mutes || []).length
+      ? result.mutes.map(mute => `<div class="active-mute-row"><div><b>@${esc(mute.username)}</b><span>Until ${new Date(mute.mutedUntil * 1000).toLocaleString()}${mute.reason ? ` · ${esc(mute.reason)}` : ''}</span></div><button class="btn-secondary" onclick="adminRemoveGlobalMute('${mute.id}')">Unmute</button></div>`).join('')
+      : '<p class="field-hint">No active global mutes.</p>';
+  }
+
+  $('admin-global-mute-btn').addEventListener('click', async () => {
+    const durationSeconds = Number($('admin-global-mute-duration').value) * Number($('admin-global-mute-unit').value);
+    const result = await api('POST', '/api/admin/global-mutes', {
+      username: $('admin-global-mute-username').value,
+      durationSeconds,
+      reason: $('admin-global-mute-reason').value
+    });
+    if (result.error) return showError('admin-global-mute-error', result.error);
+    $('admin-global-mute-username').value = '';
+    $('admin-global-mute-reason').value = '';
+    await adminLoadGlobalMutes();
+    toast(`@${result.username} globally muted`, 'success');
+  });
+
+  window.adminRemoveGlobalMute = async function(muteId) {
+    const result = await api('DELETE', `/api/admin/global-mutes/${muteId}`);
+    if (result.error) return toast(result.error, 'error');
+    await adminLoadGlobalMutes();
+  };
 
   if ($('admin-ipban-btn')) {
     $('admin-ipban-btn').addEventListener('click', async () => {
@@ -5484,6 +6526,7 @@
     const list = $('admin-userreports-list');
     if (!list) return;
     const status = $('admin-userreports-status')?.value || 'open';
+    if (isCoreAdmin) adminLoadGlobalSafetyTerms();
     list.innerHTML = '<div style="padding:14px;color:var(--text-muted)">Loading reports...</div>';
     const r = await api('GET', '/api/admin/user-reports?status=' + encodeURIComponent(status));
     if (r.error) {
@@ -5514,10 +6557,76 @@
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn-secondary" style="font-size:11px;padding:5px 9px" onclick="adminFillSuspend('${esc(report.target.username)}')">Suspend</button>
+          ${report.messageType === 'dm' && isCoreAdmin ? `<button class="btn-secondary" style="font-size:11px;padding:5px 9px" onclick="adminOpenDmContextReview('${report.id}')">See Context</button>` : ''}
           ${report.status === 'open' ? `<button class="action-btn ghost" style="font-size:11px;padding:5px 9px" onclick="adminResolveUserReport('${report.id}')">Resolve</button>` : ''}
+          ${report.status === 'resolved' && isCoreAdmin ? `<button class="action-btn ghost" style="font-size:11px;padding:5px 9px" onclick="adminReopenUserReport('${report.id}')">Reopen</button>` : ''}
         </div>
       </div>`;
     }).join('');
+  }
+
+  async function adminLoadTos() {
+    if (!isCoreAdmin) return;
+    showError('admin-tos-error', '');
+    const result = await api('GET', '/api/admin/tos');
+    if (result.error) return showError('admin-tos-error', result.error);
+    $('admin-tos-title').value = result.tos.title || '';
+    $('admin-tos-content').value = result.tos.content || '';
+    $('admin-tos-version').textContent = `Current version: ${result.tos.version}`;
+  }
+
+  if ($('admin-tos-publish')) {
+    $('admin-tos-publish').addEventListener('click', async () => {
+      if (!confirm('Publish a new Terms of Service version? Every user, including you, must agree again immediately.')) return;
+      showError('admin-tos-error', '');
+      const button = $('admin-tos-publish');
+      button.disabled = true;
+      button.textContent = 'Publishing...';
+      const result = await api('PUT', '/api/admin/tos', {
+        title: $('admin-tos-title').value.trim(),
+        content: $('admin-tos-content').value.trim()
+      });
+      button.disabled = false;
+      button.textContent = 'Publish New Version';
+      if (result.error) return showError('admin-tos-error', result.error);
+      $('admin-tos-version').textContent = `Current version: ${result.tos.version}`;
+      toast('New Terms of Service published', 'success');
+    });
+  }
+
+  async function adminLoadGlobalSafetyTerms() {
+    const editor = $('admin-global-safety-editor');
+    if (!editor) return;
+    editor.style.display = isCoreAdmin ? 'block' : 'none';
+    if (!isCoreAdmin) return;
+    const result = await api('GET', '/api/admin/safety-terms');
+    if (result.error) return showError('admin-global-safety-error', result.error);
+    const categories = result.categories || { discriminatory: result.terms || [], nsfw: [], child_safety: [] };
+    $('admin-global-safety-terms').value = (categories.discriminatory || []).join('\n');
+    $('admin-global-nsfw-terms').value = (categories.nsfw || []).join('\n');
+    $('admin-global-child-terms').value = (categories.child_safety || []).join('\n');
+    const count = Object.values(categories).reduce((total, terms) => total + terms.length, 0);
+    $('admin-global-safety-count').textContent = `${count} global terms`;
+  }
+
+  if ($('admin-global-safety-save')) {
+    $('admin-global-safety-save').addEventListener('click', async () => {
+      showError('admin-global-safety-error', '');
+      const lines = id => $(id).value.split(/\r?\n/).map(term => term.trim()).filter(Boolean);
+      const categories = {
+        discriminatory: lines('admin-global-safety-terms'),
+        nsfw: lines('admin-global-nsfw-terms'),
+        child_safety: lines('admin-global-child-terms')
+      };
+      const result = await api('PUT', '/api/admin/safety-terms', { categories });
+      if (result.error) return showError('admin-global-safety-error', result.error);
+      $('admin-global-safety-terms').value = result.categories.discriminatory.join('\n');
+      $('admin-global-nsfw-terms').value = result.categories.nsfw.join('\n');
+      $('admin-global-child-terms').value = result.categories.child_safety.join('\n');
+      const count = Object.values(result.categories).reduce((total, terms) => total + terms.length, 0);
+      $('admin-global-safety-count').textContent = `${count} global terms`;
+      toast('Global NexusGuard filter updated', 'success');
+    });
   }
 
   window.adminFillSuspend = function(username) {
@@ -5532,6 +6641,84 @@
     toast('Report resolved', 'success');
     await adminLoadUserReports();
   };
+
+  window.adminReopenUserReport = async function(reportId) {
+    if (!isCoreAdmin) return toast('Core admins only', 'error');
+    if (!confirm('Reopen this resolved report?')) return;
+    const r = await api('POST', '/api/admin/user-reports/' + reportId + '/reopen');
+    if (r.error) return toast(r.error, 'error');
+    toast('Report reopened', 'success');
+    await adminLoadUserReports();
+  };
+
+  let dmContextReportId = null;
+
+  function resetDmContextReview() {
+    $('dm-context-confirm-one').style.display = 'block';
+    $('dm-context-confirm-two').style.display = 'none';
+    $('dm-context-results').style.display = 'none';
+    $('dm-context-step-label').textContent = 'Confirmation 1 of 2';
+    $('dm-context-suspicion-check').checked = false;
+    $('dm-context-privacy-check').checked = false;
+    $('dm-context-participants').innerHTML = '';
+    $('dm-context-messages').innerHTML = '';
+    showError('dm-context-error', '');
+  }
+
+  window.adminOpenDmContextReview = function(reportId) {
+    if (!isCoreAdmin) return toast('Core admins only', 'error');
+    dmContextReportId = reportId;
+    resetDmContextReview();
+    $('dm-context-review-modal').classList.add('active');
+  };
+
+  function closeDmContextReview() {
+    dmContextReportId = null;
+    $('dm-context-review-modal').classList.remove('active');
+    resetDmContextReview();
+  }
+
+  $('dm-context-close').addEventListener('click', closeDmContextReview);
+  $('dm-context-review-modal').addEventListener('click', event => {
+    if (event.target === $('dm-context-review-modal')) closeDmContextReview();
+  });
+  $('dm-context-next').addEventListener('click', () => {
+    if (!$('dm-context-suspicion-check').checked) return showError('dm-context-error', 'You must confirm reasonable suspicion to continue.');
+    showError('dm-context-error', '');
+    $('dm-context-confirm-one').style.display = 'none';
+    $('dm-context-confirm-two').style.display = 'block';
+    $('dm-context-step-label').textContent = 'Confirmation 2 of 2';
+  });
+  $('dm-context-back').addEventListener('click', () => {
+    showError('dm-context-error', '');
+    $('dm-context-confirm-two').style.display = 'none';
+    $('dm-context-confirm-one').style.display = 'block';
+    $('dm-context-step-label').textContent = 'Confirmation 1 of 2';
+  });
+  $('dm-context-view').addEventListener('click', async () => {
+    if (!$('dm-context-privacy-check').checked) return showError('dm-context-error', 'You must accept the accountability notice to continue.');
+    if (!dmContextReportId) return;
+    const button = $('dm-context-view');
+    button.disabled = true;
+    button.textContent = 'Loading...';
+    const result = await api('POST', `/api/admin/user-reports/${dmContextReportId}/dm-context`, {
+      confirmSuspicion: true,
+      confirmPrivacy: true
+    });
+    button.disabled = false;
+    button.textContent = 'View Context';
+    if (result.error) return showError('dm-context-error', result.error);
+    $('dm-context-confirm-two').style.display = 'none';
+    $('dm-context-results').style.display = 'block';
+    $('dm-context-step-label').textContent = 'Audited report context';
+    $('dm-context-participants').innerHTML = `Conversation between <strong>@${esc(result.reporter.username)}</strong> and <strong>@${esc(result.target.username)}</strong>`;
+    $('dm-context-messages').innerHTML = (result.messages || []).length
+      ? result.messages.map(message => `<div class="dm-context-message ${message.fromId === result.target.id ? 'reported-user' : ''}">
+          <div><strong>${esc(message.author.displayName || message.author.username)}</strong><span>${new Date(message.createdAt * 1000).toLocaleString()}</span></div>
+          <p>${esc(message.content)}</p>
+        </div>`).join('')
+      : '<div class="empty-state">No nearby messages remain available.</div>';
+  });
 
   if ($('admin-userreports-refresh')) $('admin-userreports-refresh').addEventListener('click', adminLoadUserReports);
   if ($('admin-userreports-status')) $('admin-userreports-status').addEventListener('change', adminLoadUserReports);
@@ -5677,7 +6864,7 @@
     });
   }
 
-  async function adminLoadHistory() {
+  async function adminLoadSuspensionHistory() {
     const list = $('admin-history-list');
     list.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center">Loading…</div>';
     const r = await api('GET', '/api/admin/suspensions');
@@ -5697,6 +6884,92 @@
     }).join('');
   }
 
+  async function adminLoadHistory() {
+    const list = $('admin-history-list');
+    list.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center">Loading...</div>';
+    const r = await api('GET', '/api/admin/audit-log');
+    if (r.error) {
+      list.innerHTML = '<div style="color:var(--red)">' + esc(r.error) + '</div>';
+      return;
+    }
+    if (!(r.logs || []).length) {
+      list.innerHTML = '<div style="color:var(--text-muted)">No admin actions logged yet</div>';
+      return;
+    }
+    list.innerHTML = r.logs.map(renderAdminAuditLog).join('');
+  }
+
+  function adminAuditPresentation(action) {
+    const value = String(action || '');
+    if (value === 'VIEW_DM_REPORT_CONTEXT' || value.endsWith('/dm-context')) return ['DM context reviewed', 'privacy'];
+    if (value.includes('/user-reports/') && value.endsWith('/resolve')) return ['User report resolved', 'moderation'];
+    if (value.includes('/user-reports/') && value.endsWith('/reopen')) return ['User report reopened', 'moderation'];
+    if (value.endsWith('/nexals')) return ['Nexal balance changed', 'economy'];
+    if (value.endsWith('/password')) return ['User password reset', 'account'];
+    if (value.endsWith('/identity')) return ['User profile changed', 'account'];
+    if (value.includes('/decorations')) return [value.startsWith('DELETE') ? 'Decoration removed' : 'Decoration granted', 'inventory'];
+    if (value.includes('/nameplates')) return [value.startsWith('DELETE') ? 'Nameplate removed' : 'Nameplate granted', 'inventory'];
+    if (value.endsWith('/pro')) return [value.startsWith('DELETE') ? 'Nexus Pro removed' : 'Nexus Pro granted', 'economy'];
+    if (value.includes('/fonts')) return [value.startsWith('DELETE') ? 'Font removed' : 'Font granted', 'inventory'];
+    if (value.endsWith('/warn')) return ['User warned', 'moderation'];
+    if (value.endsWith('/client-control')) return ['Remote client control used', 'account'];
+    if (value.endsWith('/suspend')) return ['User suspended', 'moderation'];
+    if (value.endsWith('/unsuspend')) return ['User suspension removed', 'moderation'];
+    if (value.includes('/global-mutes')) return [value.startsWith('DELETE') ? 'Global mute removed' : 'User globally muted', 'moderation'];
+    if (value.includes('/ip-ban')) return [value.startsWith('DELETE') ? 'Device ban removed' : 'Device banned', 'moderation'];
+    if (value.includes('/admins')) return [value.startsWith('DELETE') ? 'Administrator removed' : 'Administrator added', 'security'];
+    if (value.endsWith('/tos')) return ['Terms of Service published', 'policy'];
+    if (value.endsWith('/safety-terms')) return ['NexusGuard policy updated', 'policy'];
+    if (value.endsWith('/system-report')) return [value.startsWith('DELETE') ? 'System alert cleared' : 'System alert published', 'policy'];
+    if (value.includes('/servers/') && value.endsWith('/join')) return ['Administrator joined server', 'server'];
+    if (value.includes('/servers/')) return ['Server deleted', 'server'];
+    return ['Admin setting changed', 'account'];
+  }
+
+  function adminAuditDetailChips(details) {
+    const labels = {
+      username: 'User',
+      nexals: 'New balance',
+      duration: 'Duration',
+      unit: 'Unit',
+      reason: 'Reason',
+      displayName: 'Display name',
+      decorationId: 'Decoration',
+      nameplateId: 'Nameplate',
+      fontId: 'Font',
+      days: 'Days',
+      category: 'Category',
+      title: 'Title',
+      contentLength: 'Document length',
+      messageCount: 'Messages reviewed',
+      categoryCounts: 'Filter counts'
+    };
+    return Object.entries(details || {})
+      .filter(([key]) => labels[key])
+      .map(([key, value]) => `<span><b>${esc(labels[key])}</b>${esc(typeof value === 'object' ? JSON.stringify(value) : String(value))}</span>`)
+      .join('');
+  }
+
+  function renderAdminAuditLog(log) {
+    const [title, kind] = adminAuditPresentation(log.action);
+    const target = log.targetLabel || (log.details && log.details.username ? '@' + log.details.username : '');
+    const chips = adminAuditDetailChips(log.details);
+    return `<article class="admin-audit-card audit-${kind}">
+      <div class="admin-audit-icon" aria-hidden="true"></div>
+      <div class="admin-audit-main">
+        <div class="admin-audit-heading">
+          <strong>${esc(title)}</strong>
+          <time>${new Date(log.createdAt * 1000).toLocaleString()}</time>
+        </div>
+        <div class="admin-audit-summary">
+          <span>Performed by <b>${log.actor ? '@' + esc(log.actor.username) : 'System'}</b></span>
+          ${target ? `<span class="admin-audit-target">${esc(target)}</span>` : ''}
+        </div>
+        ${chips ? `<div class="admin-audit-details">${chips}</div>` : ''}
+      </div>
+    </article>`;
+  }
+
   // ---- Shop ----
   let shopData = null;
   let ringtoneShopData = null;
@@ -5708,7 +6981,6 @@
     updateNexalDisplay(r.nexals || 0);
     renderPackShop(r.packs || []);
     renderShop(r.decorations, r.active, r.nameplates || [], r.activeNameplate || null);
-    await loadRingtones();
   }
 
   if ($('admin-verify-code-btn')) {
@@ -5726,9 +6998,11 @@
     const el1 = $('shop-nexal-count');
     const el2 = $('ach-nexal-count');
     const el3 = $('auction-nexal-count');
+    const el4 = $('ringtone-nexal-count');
     if (el1) el1.textContent = fmt;
     if (el2) el2.textContent = fmt;
     if (el3) el3.textContent = fmt;
+    if (el4) el4.textContent = fmt;
   }
 
   let auctionData = null;
@@ -5768,7 +7042,6 @@
                 <div class="avatar-wrap auction-preview" data-deco-id="${esc(a.decoration.id)}"><div class="avatar">N</div></div>
                 <span class="shop-rarity rarity-${esc(String(a.decoration.rarity || 'common').toLowerCase())}">${esc(a.decoration.rarity)}</span>
                 <h3>${esc(a.decoration.name)}</h3>
-                <p>${esc(a.decoration.description || '')}</p>
                 <div class="auction-seller">Seller: @${esc(a.sellerUsername || a.sellerName || 'user')}</div>
                 <strong>${a.price.toLocaleString()} Nexals</strong>
                 ${a.isMine
@@ -5845,7 +7118,6 @@
           <span class="shop-rarity ${rarityClass}">${d.rarity}</span>
           ${d.packOnly ? '<span class="pack-only-chip">PACK-ONLY</span>' : ''}
           <div class="shop-card-name">${esc(d.name)}</div>
-          <div class="shop-card-desc">${esc(d.description)}</div>
           ${isOwned && d.packOnly ? `<div class="shop-card-desc">Owned: ${d.quantity || 1} | Sell: ${(d.sellPrice || 0).toLocaleString()} Nexals</div>` : ''}
           ${(!isOwned && priceLabel) ? `<div class="shop-card-price">${priceLabel}</div>` : ''}
           <button class="shop-card-btn ${btnClass}" onclick="shopAction('${d.id}','${isEquipped ? 'unequip' : isOwned ? 'equip' : canBuy ? 'buy' : 'locked'}')">
@@ -5865,7 +7137,6 @@
           <span class="pack-only-chip">PACK-ONLY</span>
         </div>
         <div class="shop-card-name">${esc(nameplate.name)}</div>
-        <div class="shop-card-desc">${esc(nameplate.description)}</div>
         ${owned ? `<div class="shop-card-desc">Owned: ${nameplate.quantity} | Sell: ${nameplate.sellPrice.toLocaleString()} Nexals</div>` : ''}
         <button class="shop-card-btn ${equipped ? 'unequip' : owned ? 'equip' : 'locked'}" onclick="nameplateAction('${nameplate.id}','${equipped ? 'unequip' : owned ? 'equip' : 'locked'}')">${equipped ? 'Equipped' : owned ? 'Equip' : 'Pack Only'}</button>
         ${owned ? `<button class="shop-card-btn shop-sell-btn" onclick="sellNameplate('${nameplate.id}','${esc(nameplate.name)}',${nameplate.sellPrice})">Sell One</button>` : ''}
@@ -5883,7 +7154,6 @@
           <div><span>PACK COLLECTION</span><strong>Pack-only decorations and nameplates</strong></div>
           <small>${packDecorations.length + nameplates.length} collectibles</small>
         </summary>
-        <div class="shop-drawer-copy">These collectibles only drop from packs. Open this collection to browse, equip, or sell them.</div>
         <h3>Avatar Decorations</h3>
         <div class="shop-grid-inner">${packDecorations.map(decorationCard).join('')}</div>
         <h3>Nameplates</h3>
@@ -5958,7 +7228,6 @@
     tabsHost.innerHTML = `
       <div class="shop-subsection shop-pack-section">
         <h2>Collectible Packs</h2>
-        <p>Open packs for exclusive avatar decorations and nameplates. Every item shows its exact odds.</p>
       </div>
       <div class="shop-pack-grid">
         ${(packs || []).map(pack => {
@@ -5974,7 +7243,6 @@
               </div>
               <div class="shop-card-name">${esc(pack.name)}</div>
               <div class="shop-pack-owned">${esc(pack.raritySummary || '')}</div>
-              <div class="shop-card-desc">${esc(pack.description)}</div>
               <div class="shop-pack-previews">
                 ${(pack.collectibles || pack.decorations || []).map(item => `
                   <div class="${item.collectibleType === 'nameplate' ? 'shop-pack-nameplate-mini nameplate-' + esc(item.id) : 'avatar-wrap shop-pack-mini'} ${item.owned ? 'owned' : ''}" ${item.collectibleType === 'nameplate' ? '' : `data-deco-id="${item.id}"`} title="${esc(item.name)} - ${item.chance}%${item.quantity ? ' - Owned: ' + item.quantity : ''}">
@@ -6150,10 +7418,12 @@
     if (r.error) {
       const fallback = Object.entries(RINGTONE_PRESETS).map(([id, preset]) => ({ id, name: preset.name || id.replace(/_/g, ' '), description: 'Premium call ringtone.', price: 5000, owned: false }));
       ringtoneShopData = { ringtones: fallback, active: null, nexals: currentUser?.nexals || 0 };
+      updateNexalDisplay(ringtoneShopData.nexals);
       renderRingtoneShop(fallback, null);
       return;
     }
     ringtoneShopData = r;
+    updateNexalDisplay(r.nexals || 0);
     renderRingtoneShop(r.ringtones, r.active);
   }
 
@@ -6189,7 +7459,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="30" height="30"><path d="M12 3v18"/><path d="M8 7v10"/><path d="M16 7v10"/><path d="M4 10v4"/><path d="M20 10v4"/></svg>
           </div>
           <div class="shop-card-name">${esc(r.name)}</div>
-          <div class="shop-card-desc">${esc(r.description)}</div>
           <div class="shop-card-price">${r.price.toLocaleString()} Nexals</div>
           <button class="shop-card-btn preview" onclick="ringtoneAction('${r.id}','preview')">Preview</button>
           <button class="shop-card-btn ${btnClass}" onclick="ringtoneAction('${r.id}','${action}')">${btnText}</button>
@@ -6216,7 +7485,8 @@
       const r = await api('POST', '/api/ringtones/buy', { ringtoneId });
       if (r.error) return toast(r.error, 'error');
       toast('Ringtone purchased! 🔔', 'success');
-      await loadShop();
+      if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals);
+      await loadRingtones();
       return;
     }
 
@@ -6433,6 +7703,8 @@
   window.cashoutBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/cashout'); if (r.error) return toast(r.error, 'error'); updateNexalDisplay(r.nexals); renderStatsBlackjack(r.table); toast(`Cashed out ${r.earned} Nexals`, 'success'); };
   window.closeStatsBlackjack = async function() { const r = await api('POST', '/api/games/blackjack/close'); if (typeof r.nexals === 'number') updateNexalDisplay(r.nexals); lastStatsBlackjackTable = null; $('games-blackjack-table').innerHTML = ''; if (r.earned) toast(`Table closed. Cashed out ${r.earned.toLocaleString()} Nexals.`, 'success'); };
   window.addEventListener('pagehide', () => {
+    const roomId = activeGameRoomId();
+    if (roomId && socket?.connected) socket.emit('call_end', { roomId });
     if (currentUser && navigator.sendBeacon) navigator.sendBeacon('/api/games/blackjack/close', new Blob(['{}'], { type: 'application/json' }));
   });
 
@@ -6450,7 +7722,8 @@
       </div>
       <div class="pro-benefits">
         <div><b>Profile theme</b><span>Set primary and accent colors across your complete profile card.</span></div>
-        <div><b>Custom banner</b><span>Upload a PNG, JPG, GIF, or WebP banner up to 2 MB.</span></div>
+        <div><b>Personal app themes</b><span>Build private gradient or glass themes with animated color motion.</span></div>
+        <div><b>Premium uploads</b><span>Use animated avatars up to 5 MB and profile banners up to 6 MB.</span></div>
         <div><b>Profile effects</b><span>Choose a full-card animation that plays when your profile is viewed.</span></div>
         <div><b>Display name style</b><span>Apply shimmer or prism motion to your name in profiles and DMs.</span></div>
       </div>
@@ -6549,10 +7822,29 @@
   window.uploadProBanner = async function(input) {
     const file = input?.files?.[0];
     if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+      input.value = '';
+      return toast('Choose a JPEG, PNG, GIF, or WebP banner', 'error');
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      input.value = '';
+      return toast('Pro banners must be smaller than 6 MB', 'error');
+    }
     const form = new FormData();
     form.append('banner', file);
-    const response = await fetch('/api/users/profile-banner', { method: 'POST', body: form, credentials: 'same-origin', headers: deviceHeaders() });
-    const result = await response.json().catch(() => ({ error: 'Could not upload banner' }));
+    toast('Uploading profile banner...', 'info', 1800);
+    let response;
+    try {
+      response = await fetch(normalizeAssetUrl('/api/users/profile-banner'), { method: 'POST', body: form, credentials: 'include', headers: deviceHeaders() });
+    } catch (error) {
+      input.value = '';
+      return toast('Banner upload could not reach Nexus', 'error');
+    }
+    const responseText = await response.text();
+    let result;
+    try { result = JSON.parse(responseText); }
+    catch (_) { result = { error: responseText.slice(0, 140) || 'Could not upload banner' }; }
+    input.value = '';
     if (!response.ok || result.error) return toast(result.error || 'Could not upload banner', 'error');
     currentUser.profileBannerUrl = result.profileBannerUrl;
     const banner = $('pro-preview-banner');
@@ -6716,7 +8008,8 @@
 
       // Set text
       $('claim-name').textContent = decoration.name;
-      $('claim-desc').textContent = decoration.description;
+      $('claim-desc').textContent = '';
+      $('claim-desc').style.display = 'none';
       $('claim-stamp').style.opacity = '0';
       $('claim-dismiss').style.opacity = '0';
 
@@ -6979,9 +8272,10 @@
       card.style.transform = 'translateY(22px) scale(0.93)';
 
       if (nameEl) nameEl.textContent = decoration && decoration.name ? decoration.name : 'The Stormveil';
-      if (descEl) descEl.textContent = decoration && (decoration.flavorText || decoration.description)
-        ? (decoration.flavorText || decoration.description)
-        : "It doesn't rain here. It hunts.";
+      if (descEl) {
+        descEl.textContent = '';
+        descEl.style.display = 'none';
+      }
       if (rarityEl) rarityEl.textContent = decoration && decoration.rarity ? decoration.rarity : '??SECRET??';
 
       const secretPreviewId = decoration && decoration.id ? decoration.id : SECRET_DECORATION_ID;
@@ -7335,6 +8629,8 @@
     $('popup-bio').textContent = '';
 
     $('popup-role').style.display = 'none';
+    $('popup-server-roles').style.display = 'none';
+    $('popup-server-roles').innerHTML = '';
     const reportBtn = $('popup-report-user');
     if (reportBtn) {
       const canReport = currentUser && data.id && data.id !== currentUser.id;
@@ -7360,7 +8656,8 @@
 
     // Fetch full profile for bio
     try {
-      const r = await api('GET', '/api/users/profile/' + data.id);
+      const profileQuery = activeServerId ? `?serverId=${encodeURIComponent(activeServerId)}` : '';
+      const r = await api('GET', '/api/users/profile/' + data.id + profileQuery);
       if (r.bio) {
         $('popup-bio').textContent = r.bio;
         $('popup-bio-section').style.display = 'block';
@@ -7380,6 +8677,7 @@
         popupBanner.style.backgroundImage = `linear-gradient(180deg,transparent,rgba(0,0,0,.18)),url('${normalizeAssetUrl(r.profileBannerUrl)}')`;
       }
       $('popup-name').className = 'profile-popup-name';
+      renderPopupServerRoles(data.id, r);
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');
@@ -7400,6 +8698,58 @@
         };
       } else { tag.style.display = 'none'; $('popup-tag-invite').style.display = 'none'; }
     } catch(err) {}
+  };
+
+  function renderPopupServerRoles(userId, profile) {
+    const host = $('popup-server-roles');
+    const assigned = profile.serverRoles || [];
+    const available = profile.availableServerRoles || [];
+    if (!activeServerId || (!assigned.length && !profile.canManageServerRoles)) {
+      host.style.display = 'none';
+      host.innerHTML = '';
+      return;
+    }
+    const chips = assigned.map(role => `
+      <span class="profile-role-chip" style="--role-color:${esc(role.color || '#8892a4')}">
+        <i></i>${esc(role.name)}
+        ${profile.canManageServerRoles ? `<button type="button" title="Remove role" onclick="removePopupRole('${userId}','${role.id}')">&times;</button>` : ''}
+      </span>`).join('');
+    const assignedIds = new Set(assigned.map(role => role.id));
+    const choices = available.filter(role => !assignedIds.has(role.id));
+    host.innerHTML = chips + (profile.canManageServerRoles ? `
+      <button type="button" class="profile-role-chip profile-role-add" onclick="togglePopupRoleMenu()">+ Add role</button>
+      <div class="profile-role-menu" id="popup-role-menu" style="display:none">
+        ${choices.length ? choices.map(role => `<button type="button" onclick="addPopupRole('${userId}','${role.id}')"><span style="color:${esc(role.color || '#8892a4')}">&#9679;</span> ${esc(role.name)}</button>`).join('') : '<button type="button" disabled>All roles assigned</button>'}
+      </div>` : '');
+    host.style.display = 'flex';
+  }
+
+  window.togglePopupRoleMenu = function() {
+    const menu = $('popup-role-menu');
+    if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  };
+
+  async function refreshPopupRoles(userId) {
+    const r = await api('GET', `/api/users/profile/${userId}?serverId=${encodeURIComponent(activeServerId)}`);
+    if (r.error) return toast(r.error, 'error');
+    renderPopupServerRoles(userId, r);
+    const server = await api('GET', `/api/servers/${activeServerId}`);
+    if (!server.error) {
+      activeServerData = server;
+      renderMemberList(server.members || []);
+    }
+  }
+
+  window.addPopupRole = async function(userId, roleId) {
+    const r = await api('POST', `/api/servers/${activeServerId}/members/${userId}/roles/${roleId}`, {});
+    if (r.error) return toast(r.error, 'error');
+    await refreshPopupRoles(userId);
+  };
+
+  window.removePopupRole = async function(userId, roleId) {
+    const r = await api('DELETE', `/api/servers/${activeServerId}/members/${userId}/roles/${roleId}`);
+    if (r.error) return toast(r.error, 'error');
+    await refreshPopupRoles(userId);
   };
 
   let profileHoverTimer = null;
@@ -7441,6 +8791,7 @@
     $('popup-name').textContent = tag.private ? 'Private Server' : (tag.serverName || 'Server');
     $('popup-username').textContent = tag.private ? `[${tag.tag}]` : 'Server invite';
     $('popup-role').style.display = 'none'; $('popup-bio-section').style.display = 'none';
+    $('popup-server-roles').style.display = 'none';
     $('popup-discord-activity').style.display = 'none';
     $('popup-server-tag').style.display = 'none';
     if ($('popup-report-user')) $('popup-report-user').style.display = 'none';
@@ -7591,9 +8942,75 @@
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  function buildUnicodeEmojiCatalog() {
+    const emojis = new Set('😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥸 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 ☹️ 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🫣 🤭 🫢 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕 👍 👎 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 🤝 👏 🙌 🫶 👐 🤲 🙏 ✍️ 💅 🤳 💪 🦾 🦿 🦵 🦶 👂 👃 🧠 🫀 🫁 👀 👁️ 💋 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 🔥 ✨ 🎉 🎊 💯 ✅ ❌ ⚠️ ⭐ 🌟 💫 ⚡ ☀️ 🌙 ☁️ 🌈 ❄️ ☔ 🍎 🍕 🍔 🍟 🌮 🍿 🍪 🎂 ☕ 🥤 ⚽ 🏀 🏈 ⚾ 🎾 🏐 🎮 🎲 🎯 🏆 🚗 ✈️ 🚀 🛸 🏠 🎵 🎶 🎤 🎧 📱 💻 ⌨️ 🖥️ 📷 💡 🔒 🔑 🎁 📌 📣 💬 🗨️ 💤'.split(/\s+/));
+    try {
+      const pictographic = /\p{Extended_Pictographic}/u;
+      [[0x2300, 0x27ff], [0x1f000, 0x1faff]].forEach(([start, end]) => {
+        for (let code = start; code <= end; code++) {
+          const symbol = String.fromCodePoint(code);
+          if (pictographic.test(symbol)) emojis.add(symbol);
+        }
+      });
+    } catch (_) {}
+    return [...emojis];
+  }
+  const unicodeEmojiCatalog = buildUnicodeEmojiCatalog();
+
+  function openGlobalEmojiPicker(button, targetId) {
+    const picker = $('global-emoji-picker');
+    const rect = button.getBoundingClientRect();
+    picker.dataset.target = targetId;
+    picker.style.display = 'block';
+    picker.style.left = `${Math.max(8, Math.min(window.innerWidth - 338, rect.right - 330))}px`;
+    picker.style.top = `${Math.max(8, rect.top - 390)}px`;
+    renderGlobalEmojiPicker('');
+  }
+
+  function renderGlobalEmojiPicker(query) {
+    const picker = $('global-emoji-picker');
+    const normalized = String(query || '').trim().toLowerCase();
+    const custom = activeView === 'channel'
+      ? activeServerEmojis.filter(emoji => !normalized || emoji.name.includes(normalized))
+      : [];
+    picker.innerHTML = `<div class="global-emoji-search"><input id="global-emoji-search-input" placeholder="Search emojis" value="${esc(query || '')}"><button type="button" id="global-emoji-close">×</button></div>
+      ${custom.length ? `<div class="emoji-section-title">SERVER EMOJIS</div><div class="global-emoji-grid custom">${custom.map(emoji => `<button type="button" data-custom-emoji="${esc(emoji.name)}" title=":${esc(emoji.name)}:"><img src="${emoji.imageDataUrl}" alt=""></button>`).join('')}</div>` : ''}
+      <div class="emoji-section-title">STANDARD EMOJIS</div>
+      <div class="global-emoji-grid">${unicodeEmojiCatalog.map(emoji => `<button type="button" data-unicode-emoji="${emoji}">${emoji}</button>`).join('')}</div>`;
+    $('global-emoji-search-input').addEventListener('input', event => renderGlobalEmojiPicker(event.target.value));
+    $('global-emoji-close').addEventListener('click', () => { picker.style.display = 'none'; });
+  }
+
+  document.querySelectorAll('.message-emoji-btn').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      openGlobalEmojiPicker(button, button.dataset.emojiTarget);
+    });
+  });
+  $('global-emoji-picker').addEventListener('click', event => {
+    const button = event.target.closest('[data-unicode-emoji],[data-custom-emoji]');
+    if (!button) return;
+    const input = $(event.currentTarget.dataset.target);
+    if (!input) return;
+    const value = button.dataset.unicodeEmoji || `:${button.dataset.customEmoji}:`;
+    const start = input.selectionStart;
+    input.value = input.value.slice(0, start) + value + input.value.slice(input.selectionEnd);
+    input.selectionStart = input.selectionEnd = start + value.length;
+    input.focus();
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('#global-emoji-picker,.message-emoji-btn')) $('global-emoji-picker').style.display = 'none';
+  });
+
   // ---- Render message content with mentions ----
   function renderContent(rawContent, mentions, authorColor) {
     let html = esc(rawContent);
+    if (activeView === 'channel' && activeServerEmojis.length) {
+      activeServerEmojis.forEach(emoji => {
+        const token = `:${emoji.name}:`;
+        html = html.split(token).join(`<img class="inline-custom-emoji" src="${emoji.imageDataUrl}" alt="${token}" title="${token}">`);
+      });
+    }
     html = html.replace(/&lt;@(everyone|here)&gt;/g, (match, name) => {
       return `<span class="mention-role mention-special">@${name}</span>`;
     });

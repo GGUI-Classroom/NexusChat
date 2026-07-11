@@ -5716,6 +5716,7 @@
     if (!shop.error) deco.innerHTML = `<option value="">No decoration</option>${(shop.decorations || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
     if (!shop.error && nameplate) nameplate.innerHTML = `<option value="">No nameplate</option>${(shop.nameplates || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === shop.activeNameplate ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
     if (!ringtones.error) ring.innerHTML = `<option value="">Default ringtone</option>${(ringtones.ringtones || []).filter(item => item.owned).map(item => `<option value="${esc(item.id)}" ${item.id === ringtones.active ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+    $('simplistic-ui-toggle').checked = localStorage.getItem('nexus-simplistic-ui') === 'true';
     if (!perks.error) renderAppThemeSettings(perks.pro);
   }
 
@@ -5762,6 +5763,9 @@
   function applyTheme(theme) {
     document.body.classList.toggle('light-theme', theme === 'light');
     localStorage.setItem('nexus-theme', theme);
+  }
+  function applySimplisticUi(enabled = localStorage.getItem('nexus-simplistic-ui') === 'true') {
+    document.body.classList.toggle('simplistic-ui', enabled);
   }
   function applyUserAppTheme(theme = currentUser?.appTheme) {
     const body = document.body;
@@ -5810,8 +5814,14 @@
     previewAppTheme();
   }
   applyTheme(localStorage.getItem('nexus-theme') || 'dark');
+  applySimplisticUi();
   $('theme-dark-btn').addEventListener('click', () => applyTheme('dark'));
   $('theme-light-btn').addEventListener('click', () => applyTheme('light'));
+  $('simplistic-ui-toggle').addEventListener('change', e => {
+    localStorage.setItem('nexus-simplistic-ui', String(e.target.checked));
+    applySimplisticUi(e.target.checked);
+    toast(e.target.checked ? 'Simplistic UI enabled' : 'Nexus type restored', 'success');
+  });
   ['app-theme-primary', 'app-theme-secondary', 'app-theme-style', 'app-theme-base', 'app-theme-motion'].forEach(id => {
     $(id).addEventListener('input', previewAppTheme);
     $(id).addEventListener('change', previewAppTheme);

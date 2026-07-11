@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DynaPuff&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="/css/main.css?v=20260628-economy-private-tags" />
 </head>
 <body>
   <div id="app">
@@ -79,7 +79,11 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <span id="mobile-topbar-title">Nexus</span>
-        <div id="mobile-topbar-right"></div>
+        <div id="mobile-topbar-right">
+          <button id="mobile-members-btn" class="mobile-topbar-btn" type="button" title="Members" aria-label="Open server members" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>
+          </button>
+        </div>
       </div>
 
       <!-- Sidebar backdrop (mobile only) -->
@@ -100,6 +104,9 @@
           <!-- Add server -->
           <button class="rail-btn add-server" title="Add a Server" id="add-server-rail-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button class="rail-btn discover-server" title="Discover Servers" id="discover-servers-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="22" height="22"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9z"/><circle cx="12" cy="12" r="1"/></svg>
           </button>
           <!-- Admin Panel (only shown to admins) -->
           <button class="rail-btn" id="rail-admin-btn" title="Admin Panel" style="display:none;background:rgba(255,40,40,0.1);border:1px solid rgba(255,40,40,0.3)" onclick="openAdminPanel()">
@@ -130,6 +137,10 @@
             <button class="nav-btn" data-view="shop">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
               <span>Shop</span>
+            </button>
+            <button class="nav-btn" data-view="ringtones">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M12 3v18M8 7v10M16 7v10M4 10v4M20 10v4"/></svg>
+              <span>Ringtones</span>
             </button>
             <button class="nav-btn" data-view="pro">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.3"/></svg>
@@ -164,6 +175,9 @@
           <div class="server-sidebar-header" id="server-sidebar-header">
             <span id="server-sidebar-name">Server</span>
             <div style="display:flex;gap:2px">
+              <button class="icon-btn" id="server-events-btn" title="Server Events">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+              </button>
               <button class="icon-btn" id="server-economy-btn" title="Server Shop">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M4 7h16l-1 14H5L4 7z"/><path d="M8 7a4 4 0 0 1 8 0"/><path d="M9 12h6"/></svg>
               </button>
@@ -185,8 +199,6 @@
             </button>
           </div>
           <div id="channel-list" class="channel-list"></div>
-          <div class="server-members-label">MEMBERS</div>
-          <div id="server-member-list" class="server-member-list"></div>
         </div>
 
         <div class="sidebar-footer">
@@ -263,6 +275,7 @@
             <div class="message-input-wrap" style="position:relative">
               <div class="mention-autocomplete" id="dm-mention-autocomplete" style="display:none"></div>
               <textarea id="message-input" placeholder="Message…" rows="1" maxlength="4000"></textarea>
+              <button class="message-emoji-btn" data-emoji-target="message-input" title="Emoji">☺</button>
               <button class="send-btn" id="send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
             </div>
             <aside class="dm-profile-panel" id="dm-profile-panel" aria-label="Conversation profile"></aside>
@@ -309,11 +322,13 @@
               <video id="group-local-video" autoplay muted playsinline></video>
               <div id="group-video-grid" class="group-video-grid"></div>
             </div>
+            <div id="forum-view" class="forum-view" style="display:none"></div>
             <div class="messages-wrap" id="channel-messages-wrap"><div id="channel-messages-list" class="messages-list"></div><div class="typing-indicator" id="channel-typing-indicator" style="display:none"><span id="channel-typing-name">Someone</span> is typing<span class="typing-dots"><span></span><span></span><span></span></span></div></div>
             <div class="message-input-wrap" style="position:relative">
               <div class="mention-autocomplete" id="channel-mention-autocomplete" style="display:none"></div>
               <div id="channel-reply-preview" class="channel-reply-preview" style="display:none"></div>
               <textarea id="channel-message-input" placeholder="Message #general…" rows="1" maxlength="4000"></textarea>
+              <button class="message-emoji-btn" data-emoji-target="channel-message-input" title="Emoji">☺</button>
               <button class="send-btn" id="channel-send-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
             </div>
           </div>
@@ -341,9 +356,12 @@
           </div>
           <div id="shop-dynamic-tabs"></div>
           <div id="shop-grid" class="shop-grid"></div>
-          <div class="shop-subsection">
-            <h2>Phone Ringtones</h2>
-            <p>Buy premium ringtones for 5,000 Nexals each and preview them before you equip.</p>
+        </div>
+
+        <div class="view" id="view-ringtones" style="overflow-y:auto">
+          <div class="view-header" style="padding:20px 20px 0;justify-content:space-between">
+            <h1>Ringtones</h1>
+            <div class="nexal-balance"><span id="ringtone-nexal-count">0</span> Nexals</div>
           </div>
           <div id="ringtone-grid" class="shop-grid ringtone-grid"></div>
         </div>
@@ -400,7 +418,21 @@
         </div>
 
       </main>
+
+      <aside class="server-members-panel" id="server-members-panel" aria-label="Server members">
+        <div class="server-members-panel-header"><span>Members</span><small id="server-member-count">0</small></div>
+        <div id="server-member-list" class="server-member-list"></div>
+      </aside>
     </div>
+  </div>
+
+  <div class="server-context-menu" id="server-context-menu" role="menu" aria-hidden="true">
+    <button type="button" data-server-action="invite">Invite Friends</button>
+    <button type="button" data-server-action="boost">Boost Server</button>
+    <button type="button" data-server-action="settings">Server Settings</button>
+    <button type="button" data-server-action="copy-id" id="server-context-copy-id" style="display:none">Copy Server ID</button>
+    <div></div>
+    <button type="button" class="danger" data-server-action="leave">Leave Server</button>
   </div>
 
   <!-- Profile Modal -->
@@ -409,9 +441,9 @@
       <div class="modal-header"><h2>Settings</h2><button class="modal-close" id="profile-modal-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
       <div class="modal-body">
         <div class="profile-settings-tabs"><button class="profile-settings-tab active" data-ptab="profile">Profile</button><button class="profile-settings-tab" data-ptab="link">Nexus LINK</button><button class="profile-settings-tab" data-ptab="appearance">Appearance</button><button class="profile-settings-tab" data-ptab="account">Account</button></div>
-        <section class="profile-settings-panel active" data-ppanel="profile"><div class="avatar-upload-area">
-          <div class="avatar-preview" id="profile-avatar-preview">?</div>
-          <div class="avatar-upload-info"><label for="avatar-file-input" class="btn-secondary">Choose Photo</label><input type="file" id="avatar-file-input" accept="image/*" style="display:none" /><p class="field-hint">JPEG, PNG, GIF, WebP – max 2 MB</p></div>
+        <section class="profile-settings-panel active" data-ppanel="profile"><div class="avatar-upload-area profile-avatar-upload">
+          <div class="profile-avatar-clip"><div class="avatar-wrap profile-avatar-host"><div class="avatar-preview" id="profile-avatar-preview">?</div></div></div>
+          <div class="avatar-upload-info"><label for="avatar-file-input" class="btn-secondary">Choose Photo</label><input type="file" id="avatar-file-input" accept="image/*" style="display:none" /><p class="field-hint" id="avatar-upload-hint">JPEG, PNG, WebP - max 2 MB</p></div>
         </div>
         <div class="field-group"><label>Display Name</label><input type="text" id="profile-display-name" /></div>
         <div class="field-group">
@@ -434,7 +466,7 @@
           <label class="toggle-row"><input type="checkbox" id="nexus-link-call-notify" /><span class="toggle-label"><span class="toggle-title">Discord Call Notifications</span><span class="toggle-hint">Notify me on Discord when someone calls on Nexus.</span></span></label>
           <div class="form-error" id="nexus-link-error"></div>
         </div>
-        </section><section class="profile-settings-panel" data-ppanel="appearance"><div class="section-label">APPEARANCE</div><p class="field-hint">Choose how Nexus looks on this device.</p><div class="field-group"><label>Decoration</label><select id="appearance-decoration-select"></select></div><div class="field-group"><label>Nameplate</label><select id="appearance-nameplate-select"></select></div><div class="field-group"><label>Phone Ringtone</label><select id="appearance-ringtone-select"></select></div><div class="settings-actions"><button class="btn-secondary" id="theme-dark-btn">Dark Mode</button><button class="btn-secondary" id="theme-light-btn">Light Mode</button></div></section><section class="profile-settings-panel" data-ppanel="account"><div class="profile-divider"></div>
+        </section><section class="profile-settings-panel" data-ppanel="appearance"><div class="section-label">APPEARANCE</div><p class="field-hint">Choose how Nexus looks for you.</p><div class="field-group"><label>Decoration</label><select id="appearance-decoration-select"></select></div><div class="field-group"><label>Nameplate</label><select id="appearance-nameplate-select"></select></div><div class="field-group"><label>Phone Ringtone</label><select id="appearance-ringtone-select"></select></div><label class="toggle-row"><input type="checkbox" id="simplistic-ui-toggle"><span class="toggle-label"><span class="toggle-title">Simplistic UI</span><span class="toggle-hint">Use the cleaner, plain text style across Nexus.</span></span></label><div class="settings-actions"><button class="btn-secondary" id="theme-dark-btn">Dark Mode</button><button class="btn-secondary" id="theme-light-btn">Light Mode</button></div><div class="app-theme-studio" id="app-theme-studio"><div class="app-theme-heading"><div><span>NEXUS PRO</span><h3>Personal Theme</h3></div><b id="app-theme-status">Locked</b></div><div class="app-theme-preview" id="app-theme-preview"><div></div><div></div><div></div><strong>NEXUS</strong></div><div id="app-theme-locked" class="app-theme-locked">Activate Pro to build a private gradient theme across Nexus.</div><div id="app-theme-controls" class="app-theme-controls" style="display:none"><div class="app-theme-color-row"><label>Primary<input type="color" id="app-theme-primary" value="#5b6ef5"></label><label>Secondary<input type="color" id="app-theme-secondary" value="#a855f7"></label></div><label>Surface style<select id="app-theme-style"><option value="gradient">Gradient</option><option value="glass">Glass</option><option value="solid">Solid</option></select></label><label>Base mode<select id="app-theme-base"><option value="dark">Dark</option><option value="light">Light</option></select></label><label class="toggle-row"><input type="checkbox" id="app-theme-motion"><span class="toggle-label"><span class="toggle-title">Animated Gradient</span><span class="toggle-hint">Slowly shift the colors behind your workspace.</span></span></label><button type="button" class="btn-primary" id="save-app-theme">Save Theme</button></div></div><label class="toggle-row" style="margin-top:18px"><input type="checkbox" id="developer-mode-toggle"><span class="toggle-label"><span class="toggle-title">Developer Mode</span><span class="toggle-hint">Show Copy Server ID when you right-click a server.</span></span></label></section><section class="profile-settings-panel" data-ppanel="account"><div class="profile-divider"></div>
         <div class="section-label" style="margin-bottom:12px">CHANGE PASSWORD</div>
         <div class="field-group"><label>Current Password</label><input type="password" id="profile-old-password" placeholder="••••••••" autocomplete="current-password" /></div>
         <div class="field-group"><label>New Password</label><input type="password" id="profile-new-password" placeholder="••••••••" autocomplete="new-password" /></div>
@@ -464,6 +496,7 @@
           <div class="field-group"><label>Server Name</label><input type="text" id="server-name-input" placeholder="My Awesome Server" /></div>
           <div class="form-error" id="create-server-error"></div>
           <button class="btn-primary" id="create-server-btn">Create Server</button>
+          <p class="field-hint" id="create-server-progress" style="display:none;margin-top:10px">Creating server, please be patient...</p>
         </div>
         <div class="stab-panel" id="stab-join">
           <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">Enter an invite code to join an existing server.</p>
@@ -475,15 +508,33 @@
     </div>
   </div>
 
+  <!-- Server Discovery -->
+  <div class="modal-overlay" id="server-discovery-modal">
+    <div class="modal server-discovery-modal">
+      <div class="modal-header"><div><h2>Discover Servers</h2><p>Find active communities and join instantly.</p></div><button class="modal-close" id="server-discovery-close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div class="modal-body">
+        <div class="discovery-toolbar">
+          <input type="search" id="server-discovery-search" placeholder="Search servers" autocomplete="off" />
+          <button class="btn-secondary" id="server-discovery-refresh">Refresh</button>
+        </div>
+        <div id="server-discovery-list" class="server-discovery-grid"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Server Settings Modal -->
   <div class="modal-overlay" id="server-settings-modal">
-    <div class="modal modal-wide">
+    <div class="modal server-settings-full">
       <div class="modal-header"><h2>Server Settings</h2><button class="modal-close" id="server-settings-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
       <div class="settings-tabs">
         <button class="settings-tab active" data-stab="overview" onclick="switchSettingsTab('overview')">Overview</button>
         <button class="settings-tab" data-stab="nexusguard" onclick="switchSettingsTab('nexusguard')">NexusGuard</button>
         <button class="settings-tab" data-stab="roles" onclick="switchSettingsTab('roles')">Roles</button>
         <button class="settings-tab" data-stab="economy" onclick="switchSettingsTab('economy')">Economy</button>
+        <button class="settings-tab" data-stab="onboarding" onclick="switchSettingsTab('onboarding')">Onboarding</button>
+        <button class="settings-tab" data-stab="emojis" onclick="switchSettingsTab('emojis')">Emojis</button>
+        <button class="settings-tab" data-stab="moderation" onclick="switchSettingsTab('moderation')">Moderation</button>
+        <button class="settings-tab" data-stab="discovery" onclick="switchSettingsTab('discovery')">Discovery</button>
         <button class="settings-tab" data-stab="boosts" onclick="switchSettingsTab('boosts')">Boosts</button>
         <button class="settings-tab" data-stab="bans" onclick="switchSettingsTab('bans')">Bans</button>
       </div>
@@ -568,6 +619,22 @@
             <div class="field-group"><label>Role Name</label><input id="edit-role-name" /></div>
             <div style="display:flex;gap:10px"><div class="field-group" style="flex:1"><label>Color</label><input type="color" id="edit-role-color" /></div><div class="field-group" style="flex:1"><label>Permissions</label><select id="edit-role-admin"><option value="false">Member</option><option value="true">Admin</option></select></div></div>
             <label class="toggle-row"><input type="checkbox" id="edit-role-gradient" /><span class="toggle-label"><span class="toggle-title">Animated gradient</span><span class="toggle-hint">Requires the Gradient boost allocation</span></span></label>
+            <label class="toggle-row"><input type="checkbox" id="edit-role-display-separately" /><span class="toggle-label"><span class="toggle-title">Display members separately</span><span class="toggle-hint">Give this role its own section in the member list</span></span></label>
+            <div class="role-permissions-editor">
+              <div class="section-label">PERMISSIONS</div>
+              <p class="field-hint">Choose exactly what members with this role can do.</p>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="manageChannels"><span class="toggle-label"><span class="toggle-title">Manage Channels</span><span class="toggle-hint">Create, edit, reorder, and delete channels.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="manageRoles"><span class="toggle-label"><span class="toggle-title">Manage Roles</span><span class="toggle-hint">Create roles and assign roles to members.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="kickMembers"><span class="toggle-label"><span class="toggle-title">Kick Members</span><span class="toggle-hint">Remove members from the server.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="banMembers"><span class="toggle-label"><span class="toggle-title">Ban Members</span><span class="toggle-hint">Ban members from returning.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="manageMessages"><span class="toggle-label"><span class="toggle-title">Manage Messages</span><span class="toggle-hint">Delete and pin other members' messages.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="mentionEveryone"><span class="toggle-label"><span class="toggle-title">Mention Everyone</span><span class="toggle-hint">Use @everyone and @here.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="createInvites"><span class="toggle-label"><span class="toggle-title">Create Invites</span><span class="toggle-hint">Invite people to this server.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="connectVoice" checked><span class="toggle-label"><span class="toggle-title">Connect to Voice</span><span class="toggle-hint">Join server voice channels.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="createForumPosts" checked><span class="toggle-label"><span class="toggle-title">Create Forum Posts</span><span class="toggle-hint">Start new posts in forum channels.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="replyForumPosts" checked><span class="toggle-label"><span class="toggle-title">Reply in Forums</span><span class="toggle-hint">Reply to posts that are open.</span></span></label>
+              <label class="toggle-row"><input type="checkbox" data-role-permission="lockForumPosts"><span class="toggle-label"><span class="toggle-title">Manage Forum Replies</span><span class="toggle-hint">Lock or unlock replies on individual posts.</span></span></label>
+            </div>
             <div id="edit-role-gradient-colors" style="display:none;gap:10px;margin-top:10px"><input type="color" id="edit-role-gradient-start" value="#62e6ff" /><input type="color" id="edit-role-gradient-end" value="#b06cff" /></div>
             <div style="display:flex;gap:8px;margin-top:12px"><button class="btn-primary" id="save-role-editor-btn">Save Role</button><button class="btn-secondary" id="cancel-role-editor-btn">Cancel</button></div>
           </div>
@@ -597,6 +664,54 @@
         </div>
         <div class="settings-tab-panel" id="settings-tab-economy" style="display:none">
           <div id="server-economy-content"></div>
+        </div>
+        <div class="settings-tab-panel" id="settings-tab-onboarding" style="display:none">
+          <div class="server-feature-panel">
+            <div class="section-label">NEW MEMBER ONBOARDING</div>
+            <label class="toggle-row"><input type="checkbox" id="onboarding-enabled"><span class="toggle-label"><span class="toggle-title">Enable onboarding</span><span class="toggle-hint">New members review the welcome screen and rules before entering.</span></span></label>
+            <div class="field-group"><label>Welcome title</label><input id="onboarding-title" maxlength="80"></div>
+            <div class="field-group"><label>Welcome message</label><textarea id="onboarding-message" rows="4" maxlength="1200"></textarea></div>
+            <div class="field-group"><label>Rules (one per line)</label><textarea id="onboarding-rules" rows="7" maxlength="3000"></textarea></div>
+            <label class="toggle-row"><input type="checkbox" id="onboarding-role-selection"><span class="toggle-label"><span class="toggle-title">Let members choose a role</span><span class="toggle-hint">Only non-admin roles can be selected.</span></span></label>
+            <button class="btn-primary" id="save-onboarding-btn">Save Onboarding</button>
+            <div class="form-error" id="onboarding-error"></div>
+          </div>
+        </div>
+        <div class="settings-tab-panel" id="settings-tab-emojis" style="display:none">
+          <div class="server-feature-panel">
+            <div class="section-label">CUSTOM EMOJIS</div>
+            <p class="field-hint">Requires the one-boost Custom Emojis allocation. Upload up to 50 images.</p>
+            <div class="emoji-upload-row"><input id="server-emoji-name" maxlength="32" placeholder="emoji_name"><input id="server-emoji-file" type="file" accept="image/png,image/gif,image/webp,image/jpeg"><button class="btn-primary" id="upload-server-emoji-btn">Upload</button></div>
+            <div id="server-emoji-settings-grid" class="server-emoji-grid"></div>
+            <div class="form-error" id="server-emoji-error"></div>
+          </div>
+        </div>
+        <div class="settings-tab-panel" id="settings-tab-moderation" style="display:none">
+          <div class="server-feature-panel">
+            <div class="section-label">SERVER MUTES</div>
+            <div class="server-mute-form"><select id="server-mute-user"></select><input id="server-mute-duration" type="number" min="1" max="43200" value="60"><select id="server-mute-unit"><option value="60">Minutes</option><option value="3600">Hours</option><option value="86400">Days</option></select><input id="server-mute-reason" maxlength="300" placeholder="Reason"><button class="btn-primary" id="server-mute-btn">Mute</button></div>
+            <div id="server-active-mutes"></div>
+            <div class="section-label" style="margin-top:22px">ACTIVITY AND MODERATION TIMELINE</div>
+            <div class="timeline-filters"><input id="moderation-timeline-search" type="search" placeholder="Filter actions, users, or details"></div>
+            <div id="moderation-timeline" class="moderation-timeline"></div>
+            <div class="form-error" id="server-moderation-error"></div>
+          </div>
+        </div>
+        <div class="settings-tab-panel" id="settings-tab-discovery" style="display:none">
+          <div class="discovery-settings-card">
+            <div>
+              <div class="section-label">SERVER DISCOVERY</div>
+              <h3>List this server publicly</h3>
+              <p>Discovery costs 15,000 Nexals for 30 days. Anyone browsing Discovery can view this server and join it.</p>
+            </div>
+            <div id="settings-discovery-status" class="discovery-subscription-status"></div>
+            <label class="toggle-row">
+              <input type="checkbox" id="settings-discovery-toggle" />
+              <span class="toggle-label"><span class="toggle-title">Show in Server Discovery</span><span class="toggle-hint">Turning this on starts a paid month if the previous month has expired.</span></span>
+            </label>
+            <button class="btn-primary" id="save-discovery-btn">Save Discovery Setting</button>
+            <div class="form-error" id="settings-discovery-error"></div>
+          </div>
         </div>
         <div class="settings-tab-panel" id="settings-tab-bans" style="display:none">
           <div id="bans-list"></div>
@@ -643,6 +758,7 @@
           <select id="channel-create-type">
             <option value="text">Text Channel</option>
             <option value="voice">Voice Channel</option>
+            <option value="forum">Forum Channel</option>
           </select>
         </div>
         <div class="form-error" id="channel-create-error"></div>
@@ -774,7 +890,7 @@
         </div>
       </div>
       <div id="secret-name">The Stormveil</div>
-      <div id="secret-desc">It doesn't rain here. It hunts.</div>
+      <div id="secret-desc" style="display:none"></div>
     </div>
   </div>
 
@@ -795,6 +911,7 @@
         <button class="admin-tab" data-tab="control">🎛 Control</button>
         <button class="admin-tab" data-tab="reports">Reports</button>
         <button class="admin-tab" data-tab="userreports">User Reports</button>
+        <button class="admin-tab" data-tab="tos" style="display:none">Terms of Service</button>
         <button class="admin-tab" data-tab="admins">🛡 Admins</button>
         <button class="admin-tab" data-tab="history">📋 Log</button>
       </div>
@@ -824,6 +941,13 @@
                 <button class="btn-secondary" id="admin-unsuspend-btn">Unsuspend</button>
               </div>
               <div class="form-error" id="admin-unsuspend-error"></div>
+            </div>
+            <div style="border-top:1px solid var(--border);padding-top:14px">
+              <label style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase">Global Mute</label>
+              <p class="field-hint">Blocks the user from sending messages in every server and DM.</p>
+              <div class="global-mute-form"><input id="admin-global-mute-username" placeholder="Username"><input id="admin-global-mute-duration" type="number" min="1" value="60"><select id="admin-global-mute-unit"><option value="60">Minutes</option><option value="3600">Hours</option><option value="86400">Days</option></select><input id="admin-global-mute-reason" placeholder="Reason"><button class="btn-secondary" id="admin-global-mute-btn">Mute Globally</button></div>
+              <div id="admin-global-mutes-list"></div>
+              <div class="form-error" id="admin-global-mute-error"></div>
             </div>
             <div style="border-top:1px solid var(--border);padding-top:14px">
               <label style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase">Device Ban Username</label>
@@ -911,6 +1035,20 @@
           </div>
         </div>
         <div class="admin-pane" id="admin-pane-userreports">
+          <div id="admin-global-safety-editor" style="display:none;margin:16px 16px 8px;padding:16px;border:1px solid var(--border-bright);border-radius:8px;background:var(--bg-surface)">
+            <div class="section-label">GLOBAL DISCRIMINATORY-LANGUAGE FILTER</div>
+            <p style="margin:7px 0 12px;color:var(--text-secondary);font-size:12px;line-height:1.5">Core-admin policy applied to every DM and server. Enter only severe discriminatory terms, one per line. Punctuation, spacing, asterisks, and common character substitutions are detected automatically.</p>
+            <div class="admin-safety-category-grid">
+              <label><span>Discriminatory language</span><textarea id="admin-global-safety-terms" rows="7" maxlength="12000" placeholder="One severe discriminatory term per line"></textarea></label>
+              <label><span>NSFW phrases</span><textarea id="admin-global-nsfw-terms" rows="7" maxlength="12000" placeholder="One explicit phrase per line"></textarea></label>
+              <label><span>Child Safety phrases</span><textarea id="admin-global-child-terms" rows="7" maxlength="12000" placeholder="One child-safety phrase per line"></textarea></label>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+              <button class="btn-primary" id="admin-global-safety-save">Save Global Filter</button>
+              <span id="admin-global-safety-count" style="color:var(--text-muted);font-size:11px"></span>
+            </div>
+            <div class="form-error" id="admin-global-safety-error"></div>
+          </div>
           <div style="padding:16px 20px 8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <select id="admin-userreports-status" style="padding:9px 10px;background:var(--bg-void);border:1px solid var(--border-bright);border-radius:6px;color:var(--text-primary);font-family:Syne,sans-serif;font-size:13px">
               <option value="open">Open reports</option>
@@ -920,6 +1058,22 @@
             <button class="btn-secondary" id="admin-userreports-refresh">Refresh</button>
           </div>
           <div id="admin-userreports-list" style="padding:0 16px 16px"></div>
+        </div>
+        <div class="admin-pane" id="admin-pane-tos">
+          <div class="admin-tos-editor">
+            <div>
+              <div class="section-label">TERMS OF SERVICE</div>
+              <h3>Publish a new agreement</h3>
+              <p>Saving creates a new version and immediately requires every account to review and accept it again.</p>
+            </div>
+            <div class="field-group"><label>Document Title</label><input id="admin-tos-title" type="text" maxlength="120" /></div>
+            <div class="field-group"><label>Terms</label><textarea id="admin-tos-content" rows="18" maxlength="30000"></textarea></div>
+            <div class="admin-tos-publish-row">
+              <span id="admin-tos-version">Current version: -</span>
+              <button class="btn-danger" id="admin-tos-publish">Publish New Version</button>
+            </div>
+            <div class="form-error" id="admin-tos-error"></div>
+          </div>
         </div>
         <div class="admin-pane" id="admin-pane-admins">
           <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
@@ -938,6 +1092,32 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="dm-context-review-modal" style="z-index:1100">
+    <div class="modal dm-context-review-modal">
+      <div class="modal-header">
+        <div><h2>Review Reported DM Context</h2><p id="dm-context-step-label">Confirmation 1 of 2</p></div>
+        <button class="modal-close" id="dm-context-close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <section id="dm-context-confirm-one">
+          <div class="dm-context-warning"><strong>Confirm reasonable suspicion</strong><p>Private-message context may only be reviewed when this report creates a genuine moderation or safety concern.</p></div>
+          <label class="toggle-row"><input type="checkbox" id="dm-context-suspicion-check"><span class="toggle-label"><span class="toggle-title">I believe this report provides reasonable suspicion</span><span class="toggle-hint">I am not opening this conversation out of curiosity or for an unrelated purpose.</span></span></label>
+          <button class="btn-primary" id="dm-context-next">Continue</button>
+        </section>
+        <section id="dm-context-confirm-two" style="display:none">
+          <div class="dm-context-warning"><strong>Confirm accountable access</strong><p>This access will be permanently recorded with your admin identity, report ID, timestamp, and number of messages viewed.</p></div>
+          <label class="toggle-row"><input type="checkbox" id="dm-context-privacy-check"><span class="toggle-label"><span class="toggle-title">I understand and accept this responsibility</span><span class="toggle-hint">I will use the context only to investigate this report.</span></span></label>
+          <div style="display:flex;gap:8px"><button class="btn-secondary" id="dm-context-back">Back</button><button class="btn-primary" id="dm-context-view">View Context</button></div>
+        </section>
+        <section id="dm-context-results" style="display:none">
+          <div id="dm-context-participants" class="dm-context-participants"></div>
+          <div id="dm-context-messages" class="dm-context-messages"></div>
+        </section>
+        <div class="form-error" id="dm-context-error"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="nexus-lock-overlay" id="nexus-lock-overlay" style="display:none">
     <div class="nexus-lock-card">
       <h2>Nexus Client Locked</h2>
@@ -945,6 +1125,30 @@
       <p class="nexus-lock-sub">This affects only Nexus and not your device.</p>
     </div>
   </div>
+
+  <div class="modal-overlay" id="server-events-modal">
+    <div class="modal modal-wide server-events-modal">
+      <div class="modal-header"><h2>Server Events</h2><button class="modal-close" id="server-events-close">×</button></div>
+      <div class="modal-body"><div id="server-events-create"></div><div id="server-events-list"></div></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="server-onboarding-modal" style="z-index:1050">
+    <div class="modal modal-wide onboarding-modal">
+      <div class="modal-body">
+        <div class="section-label">WELCOME TO THE SERVER</div>
+        <h2 id="onboarding-view-title">Welcome</h2>
+        <p id="onboarding-view-message"></p>
+        <div id="onboarding-view-rules"></div>
+        <div id="onboarding-view-role-wrap" style="display:none"><label>Choose a role</label><select id="onboarding-view-role"></select></div>
+        <label class="toggle-row"><input type="checkbox" id="onboarding-agree"><span class="toggle-label"><span class="toggle-title">I have read and agree to follow these rules</span></span></label>
+        <button class="btn-primary" id="complete-onboarding-btn">Enter Server</button>
+        <div class="form-error" id="onboarding-view-error"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="global-emoji-picker" class="global-emoji-picker" style="display:none"></div>
 
   <div class="nexus-quick-popup" id="nexus-quick-popup" style="display:none">
     <div class="nexus-quick-popup-card" id="nexus-quick-popup-text"></div>
@@ -995,6 +1199,7 @@
       <div class="profile-popup-username" id="popup-username">–</div>
       <div class="profile-popup-discord-activity" id="popup-discord-activity" style="display:none"></div>
       <div class="profile-popup-role" id="popup-role" style="display:none"></div>
+      <div class="profile-popup-roles" id="popup-server-roles" style="display:none"></div>
       <button class="profile-popup-tag" id="popup-server-tag" style="display:none"></button>
       <div class="profile-popup-tag-invite" id="popup-tag-invite" style="display:none"></div>
       <div class="profile-popup-divider"></div>
@@ -1039,6 +1244,24 @@
 
   <div id="pending-gifts-stack" class="pending-gifts-stack"></div>
 
+  <div class="tos-overlay" id="tos-overlay" aria-modal="true" role="dialog" style="display:none">
+    <div class="tos-dialog">
+      <div class="tos-brand">NEXUS</div>
+      <div class="tos-heading">
+        <div><span>REQUIRED AGREEMENT</span><h2 id="tos-title">Nexus Terms of Service</h2></div>
+        <small id="tos-version">Version 1</small>
+      </div>
+      <div class="tos-document" id="tos-content"></div>
+      <label class="tos-consent">
+        <input type="checkbox" id="tos-checkbox" />
+        <span>I have read and agree to the current Nexus Terms of Service.</span>
+      </label>
+      <div class="form-error" id="tos-error"></div>
+      <button class="btn-primary" id="tos-accept-btn" disabled>Agree and Continue</button>
+      <button class="tos-signout" id="tos-signout-btn">Sign out instead</button>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="tutorial-overlay" style="z-index:1200">
     <div class="modal tutorial-modal">
       <div class="modal-header"><h2 id="tutorial-title">Welcome to Nexus</h2><button class="modal-close" id="tutorial-skip-x">Skip</button></div>
@@ -1077,8 +1300,8 @@
       document.querySelectorAll('.stab-panel').forEach(p => p.classList.toggle('active', p.id === 'stab-' + tab));
     }
   </script>
+  <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script src="js/local-config.js"></script>
-  <script src="js/app.js"></script>
+  <script src="/js/app.js?v=20260628-economy-private-tags"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /* ===== NEXUS — Dark Theme ===== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
   --bg-void: #080a0f;
@@ -168,6 +168,43 @@ body.pro-app-theme {
   --accent-glow:color-mix(in srgb,var(--theme-primary) 38%,transparent);
   --text-accent:color-mix(in srgb,var(--theme-primary) 55%,white);
 }
+
+/* Typography preference: Nexus defaults to its expressive Syne face.
+   Simplistic UI deliberately switches the workspace back to Inter. */
+body:not(.simplistic-ui),
+body:not(.simplistic-ui) button,
+body:not(.simplistic-ui) input,
+body:not(.simplistic-ui) textarea,
+body:not(.simplistic-ui) select,
+body:not(.simplistic-ui) .shop-rarity,
+body:not(.simplistic-ui) .shop-card-name,
+body:not(.simplistic-ui) .shop-pack-card .shop-card-name,
+body:not(.simplistic-ui) .profile-popup-name,
+body:not(.simplistic-ui) .dm-profile-name,
+body:not(.simplistic-ui) .msg-author,
+body:not(.simplistic-ui) .user-info .display-name,
+body:not(.simplistic-ui) .person-info .display-name {
+  font-family: 'Syne', sans-serif !important;
+}
+
+body.simplistic-ui,
+body.simplistic-ui button,
+body.simplistic-ui input,
+body.simplistic-ui textarea,
+body.simplistic-ui select,
+body.simplistic-ui .shop-rarity,
+body.simplistic-ui .shop-card-name,
+body.simplistic-ui .shop-pack-card .shop-card-name,
+body.simplistic-ui .profile-popup-name,
+body.simplistic-ui .dm-profile-name,
+body.simplistic-ui .msg-author,
+body.simplistic-ui .user-info .display-name,
+body.simplistic-ui .person-info .display-name {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* A tighter conversation rhythm, comparable to Discord while keeping grouped replies readable. */
+.message:not(.grouped) { margin-top: 8px; }
 body.pro-app-theme.theme-style-gradient:not(.light-theme) {
   --bg-void:color-mix(in srgb,var(--theme-primary) 8%,#07090e);
   --bg-base:color-mix(in srgb,var(--theme-secondary) 7%,#0d1017);
@@ -783,7 +820,7 @@ body.light-theme .status-dot.discord-status::after { background:#172033; color:#
 .message:hover { background: rgba(255,255,255,0.02); }
 
 .message.grouped { margin-top: 0; }
-.message:not(.grouped) { margin-top: 12px; }
+.message:not(.grouped) { margin-top: 8px; }
 
 .message .avatar { flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
 .message.grouped .avatar { visibility: hidden; }
