@@ -25,11 +25,13 @@ services:
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAME_SITE
-        value: "none"
+        value: "lax"
       - key: ALLOW_FILE_CLIENTS
-        value: "true"
+        value: "false"
       - key: STATIC_CLIENT_ORIGINS
         value: ""
+      - key: PUBLIC_APP_ORIGIN
+        sync: false
       - key: TRUST_PROXY
         value: "1"
       - key: NEXUS_LINK_SHARED_SECRET
@@ -37,4 +39,10 @@ services:
       - key: NEXUS_LINK_URL
         sync: false
       - key: NEXUS_LINK_STATE_SECRET
+        sync: false
+      - key: ADMIN_QR_CODE
+        sync: false
+      - key: LIMITED_ADMIN_NFC_CODE
+        sync: false
+      - key: LIMITED_ADMIN_ACCESS_CODE
         sync: false

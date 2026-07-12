@@ -1716,10 +1716,10 @@
     $('self-display-name').textContent = currentUser.displayName;
     $('self-display-name').className = currentUser.proActive && currentUser.proNameEffect !== 'none' ? 'display-name pro-name-effect' : 'display-name';
     applyNameplateSurface($('self-display-name').closest('.user-card'), currentUser);
-    $('self-display-name').style.setProperty('--pro-name-start', currentUser.proGradientStart || '#5865f2');
-    $('self-display-name').style.setProperty('--pro-name-end', currentUser.proGradientEnd || '#a855f7');
+    $('self-display-name').style.setProperty('--pro-name-start', safeHexColor(currentUser.proGradientStart, '#5865f2'));
+    $('self-display-name').style.setProperty('--pro-name-end', safeHexColor(currentUser.proGradientEnd, '#a855f7'));
     const tag = $('self-server-tag');
-    if (tag) { tag.style.display = currentUser.activeServerTag ? 'inline-block' : 'none'; tag.textContent = currentUser.activeServerTag ? '[' + currentUser.activeServerTag + ']' : ''; tag.style.setProperty('--tag-bg', currentUser.activeServerTagBackground || '#5865f2'); tag.onclick = e => showIdentityTagInvite(e, currentUser); $('self-display-name').after(tag); }
+    if (tag) { tag.style.display = currentUser.activeServerTag ? 'inline-block' : 'none'; tag.textContent = currentUser.activeServerTag ? '[' + currentUser.activeServerTag + ']' : ''; tag.style.setProperty('--tag-bg', safeHexColor(currentUser.activeServerTagBackground, '#5865f2')); tag.onclick = e => showIdentityTagInvite(e, currentUser); $('self-display-name').after(tag); }
     $('self-username').textContent = '@' + currentUser.username;
     const el = $('self-avatar-display');
     renderAvatar(el, currentUser);
@@ -1808,11 +1808,12 @@
     badge.textContent = invites.length;
     container.innerHTML = invites.map(inv => {
       const mode = ['solid', 'gradient', 'image'].includes(inv.inviteBannerMode) ? inv.inviteBannerMode : 'solid';
-      const bannerStyle = mode === 'image' && inv.inviteBannerImage
-        ? `background-image:linear-gradient(90deg,rgba(10,14,28,.25),rgba(10,14,28,.55)),url('${esc(inv.inviteBannerImage)}')`
+      const imageUrl = safeHttpsUrl(inv.inviteBannerImage);
+      const bannerStyle = mode === 'image' && imageUrl
+        ? `background-image:linear-gradient(90deg,rgba(10,14,28,.25),rgba(10,14,28,.55)),url("${imageUrl}")`
         : mode === 'gradient'
-          ? `background:linear-gradient(135deg,${esc(inv.inviteBannerStart || '#5865f2')},${esc(inv.inviteBannerEnd || '#a855f7')})`
-          : `background:${esc(inv.inviteBannerStart || '#5865f2')}`;
+          ? `background:linear-gradient(135deg,${safeHexColor(inv.inviteBannerStart, '#5865f2')},${safeHexColor(inv.inviteBannerEnd, '#a855f7')})`
+          : `background:${safeHexColor(inv.inviteBannerStart, '#5865f2')}`;
       const tags = String(inv.inviteTags || '').split(',').map(tag => tag.trim()).filter(Boolean).map(tag => `<span>${esc(tag)}</span>`).join('');
       return `
       <div class="server-invite-item rich-server-invite" id="inv-${inv.id}">
@@ -1864,13 +1865,14 @@
   let discoverableServers = [];
 
   function discoveryBannerStyle(server) {
-    if (server.inviteBannerMode === 'image' && /^https:\/\//i.test(server.inviteBannerImage || '')) {
-      return `background-image:linear-gradient(90deg,rgba(8,12,22,.12),rgba(8,12,22,.55)),url('${esc(server.inviteBannerImage)}')`;
+    const imageUrl = safeHttpsUrl(server.inviteBannerImage);
+    if (server.inviteBannerMode === 'image' && imageUrl) {
+      return `background-image:linear-gradient(90deg,rgba(8,12,22,.12),rgba(8,12,22,.55)),url("${imageUrl}")`;
     }
     if (server.inviteBannerMode === 'gradient') {
-      return `background:linear-gradient(135deg,${esc(server.inviteBannerStart || '#5865f2')},${esc(server.inviteBannerEnd || '#a855f7')})`;
+      return `background:linear-gradient(135deg,${safeHexColor(server.inviteBannerStart, '#5865f2')},${safeHexColor(server.inviteBannerEnd, '#a855f7')})`;
     }
-    return `background:${esc(server.inviteBannerStart || '#5865f2')}`;
+    return `background:${safeHexColor(server.inviteBannerStart, '#5865f2')}`;
   }
 
   function renderServerDiscovery() {
@@ -2055,23 +2057,27 @@
 
     const memberHtml = m => {
       const isOwner = m.id === ownerId;
-      const roleStyle = m.roleGradientStart ? `--role-gradient-start:${m.roleGradientStart};--role-gradient-end:${m.roleGradientEnd}` : (m.roleColor ? `color:${m.roleColor}` : '');
+      const hasRoleGradient = isHexColor(m.roleGradientStart) && isHexColor(m.roleGradientEnd);
+      const roleColor = isHexColor(m.roleColor) ? m.roleColor : null;
+      const roleStyle = hasRoleGradient
+        ? `--role-gradient-start:${safeHexColor(m.roleGradientStart)};--role-gradient-end:${safeHexColor(m.roleGradientEnd)}`
+        : (roleColor ? `color:${safeHexColor(roleColor)}` : '');
       const canManage = iAmAdmin && m.id !== currentUser.id && !isOwner;
       const popupData = encodeURIComponent(JSON.stringify({
         id: m.id, displayName: m.displayName, username: m.username,
         avatarDataUrl: m.avatarDataUrl || null, status: m.status,
-        roleName: m.roleName || null, roleColor: m.roleColor || null
+        roleName: m.roleName || null, roleColor
       }));
       return `
-        <div class="server-member-item profile-hover-target${nameplateSurfaceClass(m)}" data-profile="${popupData}" onclick="showProfilePopup(event, '${popupData}')">
+        <div class="server-member-item profile-hover-target${nameplateSurfaceClass(m)}" data-profile="${popupData}" onclick="showProfilePopup(event, ${jsArg(popupData)})">
           <div class="avatar-wrap" style="flex-shrink:0">
             <div class="avatar sm" id="smav-${m.id}"></div>
             <div class="status-dot ${normalizedStatus(visibleStatus(m))}${usesDiscordStatus(m) ? ' discord-status' : ''}" style="border-color:var(--bg-surface)"></div>
           </div>
-          <span class="member-name${m.roleGradientStart ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
+          <span class="member-name${hasRoleGradient ? ' role-gradient-text' : ''}" style="${roleStyle}">${esc(m.displayName)}${identityTagHtml(m)}</span>
           ${canManage ? `<div class="member-actions">
-            <button class="member-action-btn kick" onclick="kickMember('${m.id}','${esc(m.displayName)}')">Kick</button>
-            <button class="member-action-btn ban" onclick="banMember('${m.id}','${esc(m.displayName)}')">Ban</button>
+            <button class="member-action-btn kick" onclick="kickMember(${jsArg(m.id)},${jsArg(m.displayName)})">Kick</button>
+            <button class="member-action-btn ban" onclick="banMember(${jsArg(m.id)},${jsArg(m.displayName)})">Ban</button>
           </div>` : ''}
         </div>`;
     };
@@ -2088,7 +2094,7 @@
       );
       if (!roleMembers.length) return;
       roleMembers.forEach(member => groupedIds.add(member.id));
-      sections.push(`<div class="member-role-heading"><span style="color:${role.color}">${esc(role.name)}</span><b>-</b><small>${roleMembers.length}</small></div>${roleMembers.map(memberHtml).join('')}`);
+      sections.push(`<div class="member-role-heading"><span style="color:${safeHexColor(role.color)}">${esc(role.name)}</span><b>-</b><small>${roleMembers.length}</small></div>${roleMembers.map(memberHtml).join('')}`);
     });
     const remaining = members.filter(member => !groupedIds.has(member.id));
     const online = remaining.filter(member => normalizedStatus(visibleStatus(member)) !== 'offline');
@@ -2226,6 +2232,7 @@
     activeChannelTopic = channel.topic || null;
     activeChannelSlowmode = Math.max(0, parseInt(channel.slowmodeSeconds, 10) || 0);
     setChannelReply(null);
+    if (socket && activeServerId) socket.emit('join_channel_room', { serverId: activeServerId, channelId: channel.id });
     $('channel-container').classList.toggle('forum-channel-mode', activeChannelType === 'forum');
     $('forum-view').style.display = activeChannelType === 'forum' ? 'block' : 'none';
     $('channel-messages-wrap').style.display = activeChannelType === 'forum' ? 'none' : 'flex';
@@ -2791,8 +2798,8 @@
       }
       if (item.type === 'role') {
         return `<button type="button" class="mention-item" data-mention-idx="${i}">
-          <div class="mention-item-icon mention-item-role-icon" style="background:${item.color}22;color:${item.color}">@</div>
-          <div><div class="mention-item-name" style="color:${item.color}">${esc(item.name)}</div><div class="mention-item-sub">Role</div></div>
+          <div class="mention-item-icon mention-item-role-icon" style="background:${safeHexColor(item.color)}22;color:${safeHexColor(item.color)}">@</div>
+          <div><div class="mention-item-name" style="color:${safeHexColor(item.color)}">${esc(item.name)}</div><div class="mention-item-sub">Role</div></div>
         </button>`;
       }
       return `<button type="button" class="mention-item" data-mention-idx="${i}">
@@ -3046,8 +3053,8 @@
     $('settings-invite-description').value = s.inviteDescription || '';
     $('settings-invite-tags').value = s.inviteTags || '';
     $('settings-invite-banner-mode').value = s.inviteBannerMode || 'solid';
-    $('settings-invite-banner-start').value = s.inviteBannerStart || '#5865f2';
-    $('settings-invite-banner-end').value = s.inviteBannerEnd || '#a855f7';
+    $('settings-invite-banner-start').value = safeHexColor(s.inviteBannerStart, '#5865f2');
+    $('settings-invite-banner-end').value = safeHexColor(s.inviteBannerEnd, '#a855f7');
     $('settings-invite-banner-image').value = s.inviteBannerImage || '';
     updateInviteBannerControls();
     $('settings-tag-group').style.display = (s.boostCount || 0) >= 2 ? 'block' : 'none';
@@ -3244,7 +3251,7 @@
             <div>
               <h3>${esc(item.name)}</h3>
               <p>${esc(item.description || 'Server perk')}</p>
-              ${item.rewardRole ? `<span class="economy-role-reward" style="--reward-role:${esc(item.rewardRole.color)}">Includes role: ${esc(item.rewardRole.name)}</span>` : ''}
+              ${item.rewardRole ? `<span class="economy-role-reward" style="--reward-role:${safeHexColor(item.rewardRole.color)}">Includes role: ${esc(item.rewardRole.name)}</span>` : ''}
               <span>${item.sold.toLocaleString()} sold</span>
             </div>
             <strong>${item.price.toLocaleString()} Nexals</strong>
@@ -3288,7 +3295,7 @@
   function identityTagHtml(user) {
     if (!user || !user.activeServerTag || !user.activeServerTagServerId) return '';
     const payload = encodeURIComponent(JSON.stringify({ tag: user.activeServerTag, background: user.activeServerTagBackground, serverId: user.activeServerTagServerId, serverName: user.activeServerTagServerName, inviteCode: user.activeServerTagInviteCode, private: !!user.activeServerTagPrivate })).replace(/'/g, '%27');
-    return ` <button class="identity-tag" style="--tag-bg:${esc(user.activeServerTagBackground || '#5865f2')}" onclick="event.stopPropagation();showIdentityTagInvite(event,decodeURIComponent('${payload}'))">[${esc(user.activeServerTag)}]</button>`;
+    return ` <button class="identity-tag" style="--tag-bg:${safeHexColor(user.activeServerTagBackground, '#5865f2')}" onclick="event.stopPropagation();showIdentityTagInvite(event,decodeURIComponent(${jsArg(payload)}))">[${esc(user.activeServerTag)}]</button>`;
   }
 
   function nameplateClass(user) {
@@ -3444,11 +3451,11 @@
           const memberCount = ((activeServerData && activeServerData.members) || []).filter(member => (member.roleIds || [member.roleId]).includes(r.id)).length;
           return `
           <div class="role-row" id="role-row-${r.id}">
-            <div class="role-dot" style="background:${r.color}"></div>
-            <span class="role-name${r.gradientStart ? ' role-gradient-text' : ''}" style="${r.gradientStart ? `--role-gradient-start:${r.gradientStart};--role-gradient-end:${r.gradientEnd}` : `color:${r.color}`}">${esc(r.name)}</span>
+            <div class="role-dot" style="background:${safeHexColor(r.color)}"></div>
+            <span class="role-name${isHexColor(r.gradientStart) && isHexColor(r.gradientEnd) ? ' role-gradient-text' : ''}" style="${isHexColor(r.gradientStart) && isHexColor(r.gradientEnd) ? `--role-gradient-start:${safeHexColor(r.gradientStart)};--role-gradient-end:${safeHexColor(r.gradientEnd)}` : `color:${safeHexColor(r.color)}`}">${esc(r.name)}</span>
             <div class="role-actions">
               <button class="role-edit-btn" onclick="editRole('${r.id}')">Edit</button>
-              <button class="role-del-btn" onclick="deleteRole('${r.id}','${esc(r.name)}')">Delete</button>
+              <button class="role-del-btn" onclick="deleteRole(${jsArg(r.id)},${jsArg(r.name)})">Delete</button>
             </div>
             <div class="role-row-meta">
               <span>${r.isAdmin ? 'Administrator' : 'Custom role'}</span>
@@ -3543,7 +3550,7 @@
               <div class="ban-name">${esc(b.displayName)} <span style="color:var(--text-muted);font-weight:400">@${esc(b.username)}</span></div>
               ${b.reason ? `<div class="ban-reason">Reason: ${esc(b.reason)}</div>` : ''}
             </div>
-            <button class="action-btn success" onclick="unbanMember('${b.userId}','${esc(b.displayName)}')">Unban</button>
+            <button class="action-btn success" onclick="unbanMember(${jsArg(b.userId)},${jsArg(b.displayName)})">Unban</button>
           </div>`).join('')
       : '<p style="font-size:13px;color:var(--text-muted)">No banned members.</p>';
   }
@@ -3824,7 +3831,7 @@
           <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="fdot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${safeHexColor(f.proGradientStart, '#5865f2')};--pro-name-end:${safeHexColor(f.proGradientEnd, '#a855f7')}">${esc(f.displayName)}${identityTagHtml(f)}</div>
           <div class="username">@${esc(f.username)}</div>
           <div class="status ${f.status === 'online' ? 'online' : ''}" id="fstatus-${f.id}">${f.status === 'online' ? '● Online' : '○ Offline'}</div>
         </div>
@@ -3940,7 +3947,7 @@
           <div class="status-dot ${normalizedStatus(visibleStatus(f))}${usesDiscordStatus(f) ? ' discord-status' : ''}" id="ddot-${f.id}"></div>
         </div>
         <div class="person-info">
-          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${f.proGradientStart || '#5865f2'};--pro-name-end:${f.proGradientEnd || '#a855f7'}">${esc(f.displayName)}${identityTagHtml(f)}</div>
+          <div class="display-name${f.proActive && f.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${safeHexColor(f.proGradientStart, '#5865f2')};--pro-name-end:${safeHexColor(f.proGradientEnd, '#a855f7')}">${esc(f.displayName)}${identityTagHtml(f)}</div>
           <div class="last-msg" id="dlm-${f.id}">${normalizedStatus(visibleStatus(f)) === 'offline' ? 'Offline' : normalizedStatus(visibleStatus(f))}</div>
         </div>
       </div>
@@ -4002,8 +4009,8 @@
     const cardStyle = String(user.profileCardStyle || 'soft').replace(/[^a-z0-9_-]/gi, '');
     const profileEffect = String(user.profileEffect || 'none').replace(/[^a-z0-9_-]/gi, '');
     panel.className = `dm-profile-panel${user.proActive ? ` pro-profile-card profile-style-${cardStyle} profile-effect-${profileEffect}` : ''}`;
-    panel.style.setProperty('--profile-start', user.proGradientStart || '#5865f2');
-    panel.style.setProperty('--profile-end', user.proGradientEnd || '#a855f7');
+    panel.style.setProperty('--profile-start', safeHexColor(user.proGradientStart, '#5865f2'));
+    panel.style.setProperty('--profile-end', safeHexColor(user.proGradientEnd, '#a855f7'));
     const bannerStyle = user.proActive && user.profileBannerUrl
       ? `background-image:linear-gradient(180deg,transparent,rgba(0,0,0,.16)),url('${esc(normalizeAssetUrl(user.profileBannerUrl))}')`
       : '';
@@ -4012,7 +4019,7 @@
       <div class="dm-profile-banner" style="${bannerStyle}"></div>
       <div class="dm-profile-avatar avatar-wrap"><div class="avatar" id="dm-profile-avatar"></div><div class="status-dot ${normalizedStatus(visibleStatus(user))}${usesDiscordStatus(user) ? ' discord-status' : ''}"></div></div>
       <div class="dm-profile-copy">
-        <div class="dm-profile-name${user.proActive && user.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${esc(user.proGradientStart || '#5865f2')};--pro-name-end:${esc(user.proGradientEnd || '#a855f7')}">${esc(user.displayName)}${identityTagHtml(user)}</div>
+        <div class="dm-profile-name${user.proActive && user.proNameEffect !== 'none' ? ' pro-name-effect' : ''}" style="--pro-name-start:${safeHexColor(user.proGradientStart, '#5865f2')};--pro-name-end:${safeHexColor(user.proGradientEnd, '#a855f7')}">${esc(user.displayName)}${identityTagHtml(user)}</div>
         <div class="username">@${esc(user.username)}</div>
         <div class="dm-profile-status">${normalizedStatus(visibleStatus(user)) === 'offline' ? 'Offline' : 'Currently ' + normalizedStatus(visibleStatus(user))}</div>
       </div>
@@ -4140,6 +4147,124 @@
     return `${chips}<button class="msg-reaction-add" title="Add reaction" onclick="openChannelEmojiPicker(event,'${msgId}','${channelId}')">+</button>`;
   }
 
+  function giveawayTimeLabel(giveaway) {
+    if (!giveaway) return '';
+    if (giveaway.status !== 'active') return giveaway.status === 'ended' ? 'Ended' : 'Closed';
+    const seconds = Math.max(0, (parseInt(giveaway.endsAt, 10) || 0) - Math.floor(Date.now() / 1000));
+    if (seconds <= 0) return 'Drawing winners...';
+    if (seconds < 60) return `Ends in ${seconds}s`;
+    if (seconds < 3600) return `Ends in ${Math.ceil(seconds / 60)}m`;
+    if (seconds < 86400) return `Ends in ${Math.ceil(seconds / 3600)}h`;
+    return `Ends in ${Math.ceil(seconds / 86400)}d`;
+  }
+
+  function renderGiveawayEmbed(giveaway) {
+    const isActive = giveaway.status === 'active';
+    const winners = Array.isArray(giveaway.winners) ? giveaway.winners : [];
+    const hasEntered = !!giveaway.entered;
+    const canEnd = !!isCurrentServerAdmin;
+    const winnerLabel = giveaway.winnerCount === 1 ? '1 winner' : `${giveaway.winnerCount} winners`;
+    const winnerHtml = winners.length
+      ? `<div class="giveaway-winners"><span>Winners</span><strong>${winners.map(winner => esc(winner.displayName || winner.username || 'Member')).join(', ')}</strong></div>`
+      : giveaway.status === 'ended'
+        ? '<div class="giveaway-winners empty"><span>Result</span><strong>No eligible entries</strong></div>'
+        : '';
+    return `<section class="nextbot-giveaway ${isActive ? 'active' : 'ended'}" data-giveaway-id="${esc(giveaway.id)}" data-entered="${hasEntered ? 'true' : 'false'}">
+      <div class="giveaway-accent"></div>
+      <div class="giveaway-main">
+        <div class="giveaway-heading"><span class="giveaway-glyph">*</span><div><span class="giveaway-eyebrow">NEXTBOT GIVEAWAY</span><h3>${esc(giveaway.prize)}</h3></div></div>
+        ${giveaway.description ? `<p>${esc(giveaway.description)}</p>` : ''}
+        ${winnerHtml}
+        <div class="giveaway-meta"><span class="giveaway-count">${(giveaway.entryCount || 0).toLocaleString()} entries</span><span>${winnerLabel}</span><span class="giveaway-countdown" data-giveaway-ends="${giveaway.endsAt}">${giveawayTimeLabel(giveaway)}</span></div>
+        <div class="giveaway-actions">
+          ${isActive ? `<button class="giveaway-enter ${hasEntered ? 'entered' : ''}" onclick="toggleGiveawayEntry('${esc(giveaway.id)}')">${hasEntered ? 'Entered' : 'Enter Giveaway'}</button>` : '<span class="giveaway-finished">Giveaway complete</span>'}
+          ${isActive && canEnd ? `<button class="giveaway-end" onclick="endGiveaway('${esc(giveaway.id)}')">End Now</button>` : ''}
+        </div>
+      </div>
+    </section>`;
+  }
+
+  function refreshGiveawayCard(giveaway) {
+    if (!giveaway?.id) return;
+    document.querySelectorAll(`.nextbot-giveaway[data-giveaway-id="${giveaway.id}"]`).forEach(card => {
+      const retainEntered = card.dataset.entered === 'true';
+      const hasOwnEntry = Object.prototype.hasOwnProperty.call(giveaway, 'entered');
+      card.outerHTML = renderGiveawayEmbed({ ...giveaway, entered: hasOwnEntry ? giveaway.entered : retainEntered });
+    });
+  }
+
+  function refreshGiveawayCountdowns() {
+    document.querySelectorAll('.giveaway-countdown[data-giveaway-ends]').forEach(node => {
+      const seconds = Math.max(0, parseInt(node.dataset.giveawayEnds, 10) - Math.floor(Date.now() / 1000));
+      node.textContent = seconds <= 0 ? 'Drawing winners...' : seconds < 60 ? `Ends in ${seconds}s` : seconds < 3600 ? `Ends in ${Math.ceil(seconds / 60)}m` : seconds < 86400 ? `Ends in ${Math.ceil(seconds / 3600)}h` : `Ends in ${Math.ceil(seconds / 86400)}d`;
+    });
+  }
+  setInterval(refreshGiveawayCountdowns, 1000);
+
+  window.toggleGiveawayEntry = function(giveawayId) {
+    if (!socket?.connected) return toast('Chat connection is reconnecting. Try again in a moment.', 'error');
+    socket.emit('toggle_giveaway_entry', { giveawayId }, result => {
+      if (result?.error) return toast(result.error, 'error');
+      if (result?.giveaway) refreshGiveawayCard(result.giveaway);
+      toast(result?.entered ? 'You entered the giveaway' : 'You left the giveaway', 'success');
+    });
+  };
+
+  window.endGiveaway = function(giveawayId) {
+    if (!confirm('End this giveaway and draw winners now?')) return;
+    socket.emit('end_giveaway', { giveawayId }, result => {
+      if (result?.error) return toast(result.error, 'error');
+      if (result?.giveaway) refreshGiveawayCard(result.giveaway);
+    });
+  };
+
+  function openGiveawayComposer({ serverId, channelId }) {
+    document.getElementById('giveaway-composer-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'giveaway-composer-overlay';
+    overlay.className = 'modal-overlay active giveaway-composer-overlay';
+    overlay.innerHTML = `<form class="modal giveaway-composer" id="giveaway-composer-form">
+      <div class="modal-header"><div><span class="giveaway-eyebrow">NEXTBOT</span><h2>Create Giveaway</h2></div><button type="button" class="modal-close" aria-label="Close">&times;</button></div>
+      <div class="modal-body">
+        <label class="field-group"><span>Prize</span><input id="giveaway-prize" maxlength="160" placeholder="Example: 1 month of Nexus Pro" required></label>
+        <label class="field-group"><span>Description <small>optional</small></span><textarea id="giveaway-description" maxlength="400" placeholder="Add any eligibility or delivery details"></textarea></label>
+        <div class="giveaway-composer-grid">
+          <label class="field-group"><span>Duration</span><input id="giveaway-duration" value="1h" maxlength="4" inputmode="text" placeholder="1h" required><small>Examples: 30m, 1h, 2d</small></label>
+          <label class="field-group"><span>Winners</span><input id="giveaway-winners" type="number" min="1" max="20" value="1" required></label>
+        </div>
+        <div class="giveaway-preview-note"><span></span><p>NextBOT will post an interactive giveaway card in this channel. Winners are drawn automatically when time runs out.</p></div>
+        <div class="form-error" id="giveaway-composer-error"></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn-secondary giveaway-cancel">Cancel</button><button class="btn-primary" type="submit">Start Giveaway</button></div>
+    </form>`;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('.modal-close').onclick = close;
+    overlay.querySelector('.giveaway-cancel').onclick = close;
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    overlay.querySelector('form').addEventListener('submit', event => {
+      event.preventDefault();
+      const error = overlay.querySelector('#giveaway-composer-error');
+      const submit = overlay.querySelector('[type="submit"]');
+      submit.disabled = true;
+      error.textContent = '';
+      socket.emit('create_giveaway', {
+        serverId,
+        channelId,
+        prize: overlay.querySelector('#giveaway-prize').value,
+        description: overlay.querySelector('#giveaway-description').value,
+        duration: overlay.querySelector('#giveaway-duration').value,
+        winnerCount: overlay.querySelector('#giveaway-winners').value
+      }, result => {
+        submit.disabled = false;
+        if (result?.error) { error.textContent = result.error; return; }
+        close();
+        toast('NextBOT started the giveaway', 'success');
+      });
+    });
+    requestAnimationFrame(() => overlay.querySelector('#giveaway-prize').focus());
+  }
+
   window.reportUser = async function(targetUserId, displayName) {
     if (!targetUserId || (currentUser && targetUserId === currentUser.id)) return;
     const reason = prompt(`Report ${displayName || 'this user'}? Add a short reason for admins:`);
@@ -4216,7 +4341,7 @@
     const el = document.createElement('div');
     const prevTs = prevEl ? parseInt(prevEl.dataset.ts) : 0;
     const prevFrom = prevEl ? prevEl.dataset.from : '';
-    const grouped = activeChannelType !== 'forum' && prevFrom === msg.fromId &&
+    const grouped = !msg.giveaway && activeChannelType !== 'forum' && prevFrom === msg.fromId &&
       messageDateKey(prevTs) === messageDateKey(msg.createdAt) &&
       (msg.createdAt - prevTs) < 300;
     const isMentioned = msg.content && currentUser && (
@@ -4241,12 +4366,13 @@
       ? { id: currentUser.id, displayName: currentUser.displayName, username: currentUser.username, avatarDataUrl: currentUser.avatarDataUrl, activeDecoration: currentUser.activeDecoration || null, activeNameplate: currentUser.activeNameplate || null, activeColor: currentUser.activeColor || null, activeFont: currentUser.activeFont || null, roleColor: currentRoleForMessage?.color || null, roleGradientStart: currentRoleForMessage?.gradientStart || (currentUser.proActive ? currentUser.proGradientStart : null), roleGradientEnd: currentRoleForMessage?.gradientEnd || (currentUser.proActive ? currentUser.proGradientEnd : null), proActive: currentUser.proActive, proNameEffect: currentUser.proNameEffect, proGradientStart: currentUser.proGradientStart, proGradientEnd: currentUser.proGradientEnd, activeServerTag: currentUser.activeServerTag, activeServerTagBackground: currentUser.activeServerTagBackground, activeServerTagServerId: currentUser.activeServerTagServerId, activeServerTagServerName: currentUser.activeServerTagServerName, activeServerTagInviteCode: currentUser.activeServerTagInviteCode, activeServerTagPrivate: !!currentUser.activeServerTagPrivate }
       : msg.author;
 
-    const roleColor = author.roleColor || null;
-    const roleGradient = author.roleGradientStart && author.roleGradientEnd;
-    const proGradient = author.proActive && author.proNameEffect !== 'none';
-    const roleStyle = roleGradient ? `style="--role-gradient-start:${author.roleGradientStart};--role-gradient-end:${author.roleGradientEnd}"` : proGradient ? `style="--pro-name-start:${author.proGradientStart};--pro-name-end:${author.proGradientEnd}"` : (roleColor ? `style="color:${roleColor}"` : '');
+    const roleColor = isHexColor(author.roleColor) ? author.roleColor : null;
+    const roleGradient = isHexColor(author.roleGradientStart) && isHexColor(author.roleGradientEnd);
+    const proGradient = author.proActive && author.proNameEffect !== 'none' && isHexColor(author.proGradientStart) && isHexColor(author.proGradientEnd);
+    const roleStyle = roleGradient ? `style="--role-gradient-start:${safeHexColor(author.roleGradientStart)};--role-gradient-end:${safeHexColor(author.roleGradientEnd)}"` : proGradient ? `style="--pro-name-start:${safeHexColor(author.proGradientStart)};--pro-name-end:${safeHexColor(author.proGradientEnd)}"` : (roleColor ? `style="color:${safeHexColor(roleColor)}"` : '');
     const roleClass = roleGradient ? 'msg-author has-role role-gradient-text' : proGradient ? 'msg-author has-role pro-name-effect' : roleColor ? 'msg-author has-role' : 'msg-author';
     const roleTip = author.roleName ? `title="${esc(author.roleName)}"` : '';
+    const botBadge = author.isBot ? '<span class="bot-app-badge">APP</span>' : '';
     const profilePayload = encodeURIComponent(JSON.stringify({
       id: author.id || msg.fromId,
       displayName: author.displayName,
@@ -4273,7 +4399,7 @@
       : '';
     const pinBadge = msg.isPinned ? '<span class="msg-pinned-badge">PINNED</span>' : '';
     const replyAction = isChannelMsg
-      ? `<button class="msg-action-btn" onclick="startChannelReply('${msg.id}','${encodeURIComponent(author.displayName || author.username || 'User')}','${encodeURIComponent(String(msg.content || '').slice(0, 160))}')" title="Reply">
+      ? `<button class="msg-action-btn" onclick="startChannelReply(${jsArg(msg.id)},${jsArg(encodeURIComponent(author.displayName || author.username || 'User'))},${jsArg(encodeURIComponent(String(msg.content || '').slice(0, 160)))})" title="Reply">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="9 17 4 12 9 7"/><line x1="4" y1="12" x2="20" y2="12"/></svg>
         </button>`
       : '';
@@ -4283,7 +4409,7 @@
         </button>`
       : '';
     const reportAction = !isMe
-      ? `<button class="msg-action-btn" onclick="reportMessage('${msg.id}','${isChannelMsg ? 'channel' : 'dm'}','${msg.fromId}','${encodeURIComponent(author.displayName || author.username || 'User')}')" title="Report message">
+      ? `<button class="msg-action-btn" onclick="reportMessage(${jsArg(msg.id)},${jsArg(isChannelMsg ? 'channel' : 'dm')},${jsArg(msg.fromId)},${jsArg(encodeURIComponent(author.displayName || author.username || 'User'))})" title="Report message">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
         </button>`
       : '';
@@ -4291,7 +4417,9 @@
       ? `<div class="msg-reactions" id="reactions-${msg.id}">${renderReactionChips(msg.id, msg.channelId, msg.reactions || [])}</div>`
       : '';
     const forumParts = activeChannelType === 'forum' ? String(msg.content || '').split('\n') : null;
-    const messageContentHtml = forumParts
+    const messageContentHtml = msg.giveaway
+      ? renderGiveawayEmbed(msg.giveaway)
+      : forumParts
       ? `<div class="forum-post-title">${renderContent(forumParts.shift() || 'Untitled post', msg.mentions, author.activeColor || null)}</div>
          ${forumParts.length ? `<div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(forumParts.join('\n'), msg.mentions, author.activeColor || null)}</div>` : ''}`
       : `<div class="msg-content${author.activeFont ? ' msg-font-' + author.activeFont : ''}">${renderContent(msg.content, msg.mentions, author.activeColor || null)}</div>`;
@@ -4300,7 +4428,7 @@
       <div class="avatar-wrap profile-hover-target" data-profile="${profilePayload}" style="flex-shrink:0;align-self:flex-start;margin-top:2px"><div class="avatar" id="mav-${msg.id}"></div></div>
       <div class="msg-body">
         <div class="msg-header">
-          <span class="${roleClass} profile-hover-target" data-profile="${profilePayload}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>${identityTagHtml(author)}
+          <span class="${roleClass} profile-hover-target" data-profile="${profilePayload}" ${roleStyle} ${roleTip}>${esc(author.displayName)}</span>${botBadge}${identityTagHtml(author)}
           <span class="msg-time">${formatTime(msg.createdAt)}</span>
           ${pinBadge}
         </div>
@@ -4718,6 +4846,8 @@
 
     socket.on('connect', () => {
       console.log('Socket connected');
+      if (activeServerId) socket.emit('join_server_room', { serverId: activeServerId });
+      if (activeServerId && activeChannelId) socket.emit('join_channel_room', { serverId: activeServerId, channelId: activeChannelId });
       joinExternalNexusCall();
     });
     socket.on('disconnect', () => console.log('Socket disconnected'));
@@ -4860,6 +4990,18 @@
         clearCallActivityState();
         endCallLocal();
       }
+    });
+
+    socket.on('giveaway_composer_open', data => {
+      if (data?.serverId === activeServerId && data?.channelId === activeChannelId) openGiveawayComposer(data);
+    });
+
+    socket.on('giveaway_updated', giveaway => {
+      refreshGiveawayCard(giveaway);
+    });
+
+    socket.on('giveaway_won', ({ prize }) => {
+      toast(`You won: ${prize}`, 'success', 8000);
     });
 
     socket.on('new_channel_message', msg => {
@@ -5675,7 +5817,7 @@
     const data = await api('GET', '/api/perks');
     if (data.error) return;
     const serversWithTags = (data.servers || []).filter(s => s.tag);
-    choices.innerHTML = `<button type="button" class="tag-choice${!currentUser.activeServerTag ? ' selected' : ''}" onclick="adoptServerTag('')">No tag</button>${serversWithTags.map(s => `<button type="button" class="tag-choice${currentUser.activeServerTagServerId === s.id ? ' selected' : ''}" style="--tag-bg:${esc(s.tagBackground || '#5865f2')}" onclick="adoptServerTag('${s.id}')">[${esc(s.tag)}] ${esc(s.name)}</button>`).join('')}`;
+    choices.innerHTML = `<button type="button" class="tag-choice${!currentUser.activeServerTag ? ' selected' : ''}" onclick="adoptServerTag('')">No tag</button>${serversWithTags.map(s => `<button type="button" class="tag-choice${currentUser.activeServerTagServerId === s.id ? ' selected' : ''}" style="--tag-bg:${safeHexColor(s.tagBackground, '#5865f2')}" onclick="adoptServerTag(${jsArg(s.id)})">[${esc(s.tag)}] ${esc(s.name)}</button>`).join('')}`;
   }
 
   async function joinExternalNexusCall() {
@@ -5938,10 +6080,10 @@
   });
 
   // ---- Admin Panel ----
-  const REQUIRED_ADMIN_QR_CODE = 'JJKLOL12DAJWUDIUWQ';
   let adminQrScanStream = null;
   let adminQrScanCancelled = false;
   let adminQrVerified = false;
+  let adminQrPayload = '';
 
   function stopAdminQrScanner() {
     adminQrScanCancelled = true;
@@ -6125,7 +6267,7 @@
         </div>
         <div class="admin-server-actions">
           ${!isMember ? `<button class="btn-secondary" style="font-size:11px;padding:5px 10px" onclick="adminJoinServer('${s.id}')">Join</button>` : `<span style="font-size:11px;color:var(--green)">✓ Joined</span>`}
-          <button class="action-btn danger" style="font-size:11px;padding:5px 10px" onclick="adminDeleteServer('${s.id}','${esc(s.name)}')">Delete</button>
+          <button class="action-btn danger" style="font-size:11px;padding:5px 10px" onclick="adminDeleteServer(${jsArg(s.id)},${jsArg(s.name)})">Delete</button>
         </div>
       </div>`;
     }).join('');
@@ -6570,7 +6712,7 @@
           ${report.resolvedBy ? `<div class="admin-history-meta">Resolved by @${esc(report.resolvedBy)}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-          <button class="btn-secondary" style="font-size:11px;padding:5px 9px" onclick="adminFillSuspend('${esc(report.target.username)}')">Suspend</button>
+          <button class="btn-secondary" style="font-size:11px;padding:5px 9px" onclick="adminFillSuspend(${jsArg(report.target.username)})">Suspend</button>
           ${report.messageType === 'dm' && isCoreAdmin ? `<button class="btn-secondary" style="font-size:11px;padding:5px 9px" onclick="adminOpenDmContextReview('${report.id}')">See Context</button>` : ''}
           ${report.status === 'open' ? `<button class="action-btn ghost" style="font-size:11px;padding:5px 9px" onclick="adminResolveUserReport('${report.id}')">Resolve</button>` : ''}
           ${report.status === 'resolved' && isCoreAdmin ? `<button class="action-btn ghost" style="font-size:11px;padding:5px 9px" onclick="adminReopenUserReport('${report.id}')">Reopen</button>` : ''}
@@ -6758,7 +6900,7 @@
           <div style="font-size:10px;color:var(--text-muted)">${a.seeded ? 'Core admin' : 'Added admin'}</div>
         </div>
         ${a.removable
-          ? `<button class="action-btn danger" style="font-size:10px;padding:4px 8px" onclick="adminRemoveAdmin('${a.id}','${esc(a.username)}')">Remove</button>`
+          ? `<button class="action-btn danger" style="font-size:10px;padding:4px 8px" onclick="adminRemoveAdmin(${jsArg(a.id)},${jsArg(a.username)})">Remove</button>`
           : `<span style="font-size:10px;color:var(--text-muted)">Locked</span>`}
       </div>`).join('');
   }
@@ -6776,13 +6918,14 @@
       showError('admin-add-error', '');
       const username = ($('admin-add-username').value || '').trim();
       if (!username) return showError('admin-add-error', 'Username is required');
-      if (!adminQrVerified) return showError('admin-add-error', 'Scan the required QR code first');
-      const qrCode = REQUIRED_ADMIN_QR_CODE;
+      if (!adminQrVerified || !adminQrPayload) return showError('admin-add-error', 'Enter or scan the admin verification code first');
+      const qrCode = adminQrPayload;
       const r = await api('POST', '/api/admin/admins', { username, qrCode });
       if (r.error) return showError('admin-add-error', r.error);
       $('admin-add-username').value = '';
       $('admin-qr-code').value = '';
       adminQrVerified = false;
+      adminQrPayload = '';
       toast('Admin added successfully', 'success');
       await adminLoadAdmins();
     });
@@ -6792,6 +6935,7 @@
     $('admin-scan-qr-btn').addEventListener('click', async () => {
       showError('admin-add-error', '');
       adminQrVerified = false;
+      adminQrPayload = '';
       $('admin-qr-code').value = '';
       const hasNativeScanner = 'BarcodeDetector' in window;
       const hasFallbackScanner = typeof window.jsQR === 'function';
@@ -6837,16 +6981,16 @@
           }
           if (codes && codes.length) {
             const raw = String(codes[0].rawValue || '').trim();
-            if (raw === REQUIRED_ADMIN_QR_CODE) {
+            if (raw) {
               matched = true;
               adminQrVerified = true;
+              adminQrPayload = raw;
               $('admin-qr-code').value = 'Verified by scanner';
               showError('admin-add-error', '');
-              $('admin-qr-scan-status').textContent = 'Verified. QR code matches.';
-              toast('Required QR code verified', 'success');
+              $('admin-qr-scan-status').textContent = 'QR captured. It will be verified securely by Nexus.';
+              toast('QR code captured', 'success');
               break;
             }
-            $('admin-qr-scan-status').textContent = 'Scanned QR does not match required code. Try again.';
           }
           if (!matched) await new Promise(resolve => setTimeout(resolve, 220));
         }
@@ -7000,10 +7144,11 @@
   if ($('admin-verify-code-btn')) {
     $('admin-verify-code-btn').addEventListener('click', () => {
       const typed = ($('admin-qr-code').value || '').trim();
-      adminQrVerified = typed === REQUIRED_ADMIN_QR_CODE;
-      if (!adminQrVerified) return showError('admin-add-error', 'That verification code is not correct.');
+      if (!typed) return showError('admin-add-error', 'Enter an admin verification code.');
+      adminQrVerified = true;
+      adminQrPayload = typed;
       showError('admin-add-error', '');
-      toast('Admin verification complete', 'success');
+      toast('Code captured. It will be verified securely by Nexus.', 'info');
     });
   }
 
@@ -7141,8 +7286,8 @@
           <button class="shop-card-btn ${btnClass}" onclick="shopAction('${d.id}','${isEquipped ? 'unequip' : isOwned ? 'equip' : canBuy ? 'buy' : 'locked'}')">
             ${d.packOnly && !isOwned ? 'Pack Only' : btnText}
           </button>
-          ${isOwned && d.packOnly ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="sellDecoration('${d.id}','${esc(d.name)}',${d.sellPrice || 0})">Sell One</button>` : ''}
-          ${isOwned && !d.packOnly ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="unclaimDeco('${d.id}','${esc(d.name)}')">Remove</button>` : ''}
+          ${isOwned && d.packOnly ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="sellDecoration(${jsArg(d.id)},${jsArg(d.name)},${d.sellPrice || 0})">Sell One</button>` : ''}
+          ${isOwned && !d.packOnly ? `<button class="shop-card-btn" style="background:rgba(240,84,84,0.1);color:var(--red);font-size:11px;margin-top:2px" onclick="unclaimDeco(${jsArg(d.id)},${jsArg(d.name)})">Remove</button>` : ''}
         </div>`;
     };
     const nameplateCard = nameplate => {
@@ -7157,7 +7302,7 @@
         <div class="shop-card-name">${esc(nameplate.name)}</div>
         ${owned ? `<div class="shop-card-desc">Owned: ${nameplate.quantity} | Sell: ${nameplate.sellPrice.toLocaleString()} Nexals</div>` : ''}
         <button class="shop-card-btn ${equipped ? 'unequip' : owned ? 'equip' : 'locked'}" onclick="nameplateAction('${nameplate.id}','${equipped ? 'unequip' : owned ? 'equip' : 'locked'}')">${equipped ? 'Equipped' : owned ? 'Equip' : 'Pack Only'}</button>
-        ${owned ? `<button class="shop-card-btn shop-sell-btn" onclick="sellNameplate('${nameplate.id}','${esc(nameplate.name)}',${nameplate.sellPrice})">Sell One</button>` : ''}
+        ${owned ? `<button class="shop-card-btn shop-sell-btn" onclick="sellNameplate(${jsArg(nameplate.id)},${jsArg(nameplate.name)},${nameplate.sellPrice})">Sell One</button>` : ''}
       </div>`;
     };
     const directDecorations = visibleDecorations.filter(d => !d.packOnly);
@@ -7747,12 +7892,12 @@
       </div>
       ${pro.active ? `<div class="pro-studio">
         <div class="pro-studio-preview">
-          <div class="pro-profile-editor-preview pro-profile-card profile-style-${esc(pro.cardStyle)} profile-effect-${esc(pro.profileEffect)}" id="pro-preview" style="--profile-start:${esc(pro.gradientStart)};--profile-end:${esc(pro.gradientEnd)}">
+          <div class="pro-profile-editor-preview pro-profile-card profile-style-${esc(pro.cardStyle)} profile-effect-${esc(pro.profileEffect)}" id="pro-preview" style="--profile-start:${safeHexColor(pro.gradientStart, '#5865f2')};--profile-end:${safeHexColor(pro.gradientEnd, '#a855f7')}">
             <div class="profile-effect-layer"></div>
             <div class="pro-preview-banner" id="pro-preview-banner" ${pro.bannerUrl ? `style="background-image:linear-gradient(180deg,transparent,rgba(0,0,0,.18)),url('${esc(normalizeAssetUrl(pro.bannerUrl))}')"` : ''}></div>
             <div class="pro-preview-avatar avatar" id="pro-preview-avatar">N</div>
             <div class="pro-preview-body">
-              <b class="${pro.nameEffect !== 'none' ? 'pro-name-effect' : ''}" id="pro-preview-name" style="--pro-name-start:${esc(pro.gradientStart)};--pro-name-end:${esc(pro.gradientEnd)}">${esc(currentUser.displayName || 'You')}</b>
+              <b class="${pro.nameEffect !== 'none' ? 'pro-name-effect' : ''}" id="pro-preview-name" style="--pro-name-start:${safeHexColor(pro.gradientStart, '#5865f2')};--pro-name-end:${safeHexColor(pro.gradientEnd, '#a855f7')}">${esc(currentUser.displayName || 'You')}</b>
               <span>@${esc(currentUser.username || '')}</span>
               <p>${esc(currentUser.bio || 'Add a bio in Profile settings.')}</p>
             </div>
@@ -8689,8 +8834,8 @@
           `profile-effect-${String(r.profileEffect || 'none').replace(/[^a-z0-9_-]/gi, '')}`
         );
       }
-      popup.style.setProperty('--profile-start', r.profileGradientStart || '#5865f2');
-      popup.style.setProperty('--profile-end', r.profileGradientEnd || '#a855f7');
+      popup.style.setProperty('--profile-start', safeHexColor(r.profileGradientStart, '#5865f2'));
+      popup.style.setProperty('--profile-end', safeHexColor(r.profileGradientEnd, '#a855f7'));
       if (popupBanner && r.pro && r.profileBannerUrl) {
         popupBanner.style.backgroundImage = `linear-gradient(180deg,transparent,rgba(0,0,0,.18)),url('${normalizeAssetUrl(r.profileBannerUrl)}')`;
       }
@@ -8698,7 +8843,7 @@
       renderPopupServerRoles(data.id, r);
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {
-        tag.style.display = 'flex'; tag.style.setProperty('--tag-background', r.serverTag.background || '#5865f2');
+        tag.style.display = 'flex'; tag.style.setProperty('--tag-background', safeHexColor(r.serverTag.background, '#5865f2'));
         tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${r.serverTag.iconDataUrl}" alt="">` : ''}<span>${esc(r.serverTag.tag)}${r.serverTag.private ? '' : ` | ${esc(r.serverTag.name)}`}</span>`;
         const invite = $('popup-tag-invite');
         tag.onclick = () => {
@@ -8728,16 +8873,16 @@
       return;
     }
     const chips = assigned.map(role => `
-      <span class="profile-role-chip" style="--role-color:${esc(role.color || '#8892a4')}">
+      <span class="profile-role-chip" style="--role-color:${safeHexColor(role.color)}">
         <i></i>${esc(role.name)}
-        ${profile.canManageServerRoles ? `<button type="button" title="Remove role" onclick="removePopupRole('${userId}','${role.id}')">&times;</button>` : ''}
+        ${profile.canManageServerRoles ? `<button type="button" title="Remove role" onclick="removePopupRole(${jsArg(userId)},${jsArg(role.id)})">&times;</button>` : ''}
       </span>`).join('');
     const assignedIds = new Set(assigned.map(role => role.id));
     const choices = available.filter(role => !assignedIds.has(role.id));
     host.innerHTML = chips + (profile.canManageServerRoles ? `
       <button type="button" class="profile-role-chip profile-role-add" onclick="togglePopupRoleMenu()">+ Add role</button>
       <div class="profile-role-menu" id="popup-role-menu" style="display:none">
-        ${choices.length ? choices.map(role => `<button type="button" onclick="addPopupRole('${userId}','${role.id}')"><span style="color:${esc(role.color || '#8892a4')}">&#9679;</span> ${esc(role.name)}</button>`).join('') : '<button type="button" disabled>All roles assigned</button>'}
+        ${choices.length ? choices.map(role => `<button type="button" onclick="addPopupRole(${jsArg(userId)},${jsArg(role.id)})"><span style="color:${safeHexColor(role.color)}">&#9679;</span> ${esc(role.name)}</button>`).join('') : '<button type="button" disabled>All roles assigned</button>'}
       </div>` : '');
     host.style.display = 'flex';
   }
@@ -8802,7 +8947,7 @@
     if (!tag || !tag.serverId) return;
     const popup = $('profile-popup');
     popup.className = 'profile-popup server-tag-card';
-    popup.style.setProperty('--tag-card-color', tag.background || '#5865f2');
+    popup.style.setProperty('--tag-card-color', safeHexColor(tag.background, '#5865f2'));
     popup.querySelector('.profile-popup-banner').style.display = tag.private ? 'none' : 'block';
     popup.querySelector('.profile-popup-avatar-wrap').style.display = 'none';
     popup.querySelector('.profile-popup-divider').style.display = 'none';
@@ -8868,8 +9013,8 @@
       return `
         <div class="perm-role-row" style="flex-direction:column;align-items:flex-start;gap:6px">
           <div style="display:flex;align-items:center;gap:8px;width:100%">
-            <div class="perm-role-dot" style="background:${role.color}"></div>
-            <span class="perm-role-name" style="color:${role.color}">${esc(role.name)}</span>
+            <div class="perm-role-dot" style="background:${safeHexColor(role.color)}"></div>
+            <span class="perm-role-name" style="color:${safeHexColor(role.color)}">${esc(role.name)}</span>
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-left:20px">
             <span style="font-size:11px;color:var(--text-muted);min-width:40px">Send:</span>
@@ -8956,8 +9101,31 @@
 
   // ---- Escape helper ----
   function esc(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    if (str == null) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // Values interpolated into inline event handlers must be encoded as a JavaScript
+  // literal, then HTML-escaped. HTML escaping by itself is not safe in this context.
+  function jsArg(value) {
+    return esc(JSON.stringify(value == null ? '' : String(value)));
+  }
+
+  function isHexColor(value) {
+    return /^#[0-9a-f]{6}$/i.test(String(value || ''));
+  }
+
+  function safeHexColor(value, fallback = '#8892a4') {
+    return isHexColor(value) ? String(value).toLowerCase() : fallback;
+  }
+
+  function safeHttpsUrl(value) {
+    try {
+      const url = new URL(String(value || '').trim());
+      return url.protocol === 'https:' && !url.username && !url.password ? url.href : '';
+    } catch (_) {
+      return '';
+    }
   }
 
   function buildUnicodeEmojiCatalog() {
@@ -9046,7 +9214,7 @@
     html = html.replace(/&lt;@role:([a-f0-9-]+)&gt;/g, (match, id) => {
       const r = mentions.roles && mentions.roles[id];
       const name = r ? r.name : 'Unknown Role';
-      const color = r ? r.color : 'var(--accent)';
+      const color = r ? safeHexColor(r.color) : 'var(--accent)';
       return `<span class="mention-role" style="color:${color}" data-role-id="${id}">@${esc(name)}</span>`;
     });
 

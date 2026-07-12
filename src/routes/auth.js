@@ -6,20 +6,59 @@ const { avatarUrl } = require('../utils/avatar');
 const { getActiveReportForUser } = require('../utils/systemReport');
 const { requestIp, requestDeviceId } = require('../utils/ip');
 const { getCurrentTos, getUserTosState } = require('../utils/tosPolicy');
+const { safeDisplayName } = require('../utils/inputSafety');
 
 const router = express.Router();
 const DEFAULT_SERVER_INVITE_CODE = 'GPFA9B32';
+const SESSION_SECURITY_VERSION = 3;
+const authAttemptBuckets = new Map();
+
+function allowAuthAttempt(req, action) {
+  const now = Date.now();
+  const key = `${action}:${requestIp(req) || 'unknown'}`;
+  const recent = (authAttemptBuckets.get(key) || []).filter(time => now - time < 15 * 60 * 1000);
+  if (recent.length >= 15) {
+    authAttemptBuckets.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  authAttemptBuckets.set(key, recent);
+  return true;
+}
+
+function establishFreshSession(req, userId, tosAcceptedVersion = 0) {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate(error => {
+      if (error) return reject(error);
+      req.session.userId = userId;
+      req.session.authVersion = SESSION_SECURITY_VERSION;
+      req.session.authIssuedAt = Date.now();
+      req.session.tosAcceptedVersion = tosAcceptedVersion;
+      req.session.save(saveError => saveError ? reject(saveError) : resolve());
+    });
+  });
+}
 
 router.post('/register', async (req, res) => {
   const { username, displayName, password } = req.body;
+  if (!allowAuthAttempt(req, 'register')) return res.status(429).json({ error: 'Too many registration attempts. Try again in a few minutes.' });
+  if (typeof username !== 'string' || typeof displayName !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: 'All fields must be text' });
+  }
   if (!username || !displayName || !password)
     return res.status(400).json({ error: 'All fields required' });
   if (username.length < 3 || username.length > 32)
     return res.status(400).json({ error: 'Username must be 3-32 characters' });
   if (!/^[a-zA-Z0-9_.\-]+$/.test(username))
     return res.status(400).json({ error: 'Username may only contain letters, numbers, _, ., -' });
-  if (password.length < 6)
-    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  let safeName;
+  try {
+    safeName = safeDisplayName(displayName);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  if (password.length < 8 || password.length > 128)
+    return res.status(400).json({ error: 'Password must be 8-128 characters' });
   try {
     const ip = requestIp(req);
     const deviceId = requestDeviceId(req);
@@ -32,7 +71,7 @@ router.post('/register', async (req, res) => {
     const hash = await bcrypt.hash(password, 12);
     const id = uuidv4();
     await pool.query('INSERT INTO users (id, username, display_name, password_hash, last_ip, last_device_id, tutorial_completed) VALUES ($1,$2,$3,$4,$5,$6,FALSE)',
-      [id, username.toLowerCase(), displayName, hash, ip || null, deviceId || null]);
+      [id, username.toLowerCase(), safeName, hash, ip || null, deviceId || null]);
     const defaultServer = await pool.query(
       'SELECT id FROM servers WHERE UPPER(invite_code)=UPPER($1) LIMIT 1',
       [DEFAULT_SERVER_INVITE_CODE]
@@ -44,11 +83,10 @@ router.post('/register', async (req, res) => {
         [uuidv4(), defaultServer.rows[0].id, id]
       );
     }
-    req.session.userId = id;
-    req.session.tosAcceptedVersion = 0;
+    await establishFreshSession(req, id, 0);
     const systemReport = await getActiveReportForUser(pool, id);
     const tos = await getCurrentTos();
-    return res.json({ success: true, systemReport, tosRequired: true, tos, user: { id, username: username.toLowerCase(), displayName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null, developerMode: false, tutorialCompleted: false } });
+    return res.json({ success: true, systemReport, tosRequired: true, tos, user: { id, username: username.toLowerCase(), displayName: safeName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null, developerMode: false, tutorialCompleted: false } });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'Server error' });
@@ -57,7 +95,10 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
+  if (!allowAuthAttempt(req, 'login')) return res.status(429).json({ error: 'Too many sign-in attempts. Try again in a few minutes.' });
+  if (typeof username !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'All fields must be text' });
   if (!username || !password) return res.status(400).json({ error: 'All fields required' });
+  if (username.length > 32 || password.length > 128) return res.status(400).json({ error: 'Invalid credentials' });
   try {
     const ip = requestIp(req);
     const deviceId = requestDeviceId(req);
@@ -93,8 +134,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    req.session.userId = user.id;
-    req.session.tosAcceptedVersion = parseInt(user.accepted_tos_version, 10) || 0;
+    await establishFreshSession(req, user.id, parseInt(user.accepted_tos_version, 10) || 0);
     await pool.query('UPDATE users SET last_ip=$1, last_device_id=$2 WHERE id=$3', [ip || null, deviceId || null, user.id]);
     const systemReport = await getActiveReportForUser(pool, user.id);
     const tosState = await getUserTosState(user.id);

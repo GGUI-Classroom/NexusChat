@@ -265,6 +265,41 @@ async function initDb() {
   await runSql(`CREATE INDEX IF NOT EXISTS idx_channel_pins_channel_time ON channel_pins(channel_id, pinned_at DESC)`, 'idx_channel_pins_channel_time');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_channel_reactions_message ON channel_message_reactions(message_id)`, 'idx_channel_reactions_message');
   await runSql(`CREATE INDEX IF NOT EXISTS idx_channel_reactions_user ON channel_message_reactions(user_id)`, 'idx_channel_reactions_user');
+
+  // NextBOT giveaways are durable server events. Entries and winners stay normalized so
+  // the draw remains auditable after a restart and cards can refresh without reloading chat.
+  await runSql(`CREATE TABLE IF NOT EXISTS server_giveaways (
+    id TEXT PRIMARY KEY,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    message_id TEXT UNIQUE,
+    prize TEXT NOT NULL,
+    description TEXT DEFAULT NULL,
+    winner_count INTEGER NOT NULL DEFAULT 1,
+    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    ends_at BIGINT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    ended_at BIGINT DEFAULT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    CHECK (winner_count BETWEEN 1 AND 20),
+    CHECK (status IN ('active','ended','cancelled'))
+  )`, 'server_giveaways');
+  await runSql(`CREATE TABLE IF NOT EXISTS server_giveaway_entries (
+    giveaway_id TEXT NOT NULL REFERENCES server_giveaways(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    entered_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    PRIMARY KEY(giveaway_id, user_id)
+  )`, 'server_giveaway_entries');
+  await runSql(`CREATE TABLE IF NOT EXISTS server_giveaway_winners (
+    giveaway_id TEXT NOT NULL REFERENCES server_giveaways(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    PRIMARY KEY(giveaway_id, user_id),
+    UNIQUE(giveaway_id, position)
+  )`, 'server_giveaway_winners');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_giveaways_due ON server_giveaways(status, ends_at)`, 'idx_server_giveaways_due');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_server_giveaway_entries_giveaway ON server_giveaway_entries(giveaway_id)`, 'idx_server_giveaway_entries_giveaway');
+
   await runSql(`ALTER TABLE channel_permissions ADD COLUMN IF NOT EXISTS allow_view BOOLEAN DEFAULT TRUE`, 'alter_cp_allow_view');
   await runSql(`ALTER TABLE server_roles ADD COLUMN IF NOT EXISTS can_delete_messages BOOLEAN DEFAULT FALSE`, 'alter_roles_delete');
 
@@ -801,6 +836,27 @@ async function initDb() {
   `, 'normalize_nexusguard_user');
 
   await runSql(`
+    INSERT INTO users (id, username, display_name, password_hash, status, active_color, avatar_mime, avatar_data)
+    VALUES (
+      '00000000-0000-0000-0000-000000000002',
+      'nextbot',
+      'NextBOT',
+      'nextbot-local-only',
+      'online',
+      '#7c8cff',
+      'image/svg+xml',
+      'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJuIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMTMxYzQwIi8+PHN0b3Agb2Zmc2V0PSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNzQ1Y2Y0Ii8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImIiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNhYmI4ZmYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29yPSIjNjE2ZWYyIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PGNpcmNsZSBjeD0iNDgiIGN5PSI0OCIgcj0iNDYiIGZpbGw9InVybCgjbikiLz48cGF0aCBkPSJNMjUgNDVoNDZ2MkgzMXYxNmg0MHYxMEgyNVoiIGZpbGw9IiMwYjEwMjAiIG9wYWNpdHk9Ii42Ii8+PHBhdGggZD0iTTI4IDM2aDQwdjI0SDI4eiIgZmlsbD0idXJsKCNiKSIvPjxwYXRoIGQ9Ik0zOSA0NWg0djZoLTZ2LTJ6bTE0IDBoNHY2aC02di0yem0tMTQgMTVoMjB2NEgzOXoiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMjggMjhoOHY2aC04em0zMiAwaDh2NmgtOHoiIGZpbGw9IiNhYmI4ZmYiLz48L3N2Zz4='
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      username='nextbot',
+      display_name='NextBOT',
+      status='online',
+      active_color='#7c8cff',
+      avatar_mime='image/svg+xml',
+      avatar_data=EXCLUDED.avatar_data
+  `, 'seed_nextbot_user');
+
+  await runSql(`
     DELETE FROM friend_requests
     WHERE from_id='00000000-0000-0000-0000-000000000001'
        OR to_id='00000000-0000-0000-0000-000000000001'
@@ -811,6 +867,58 @@ async function initDb() {
     WHERE user1_id='00000000-0000-0000-0000-000000000001'
        OR user2_id='00000000-0000-0000-0000-000000000001'
   `, 'cleanup_nexusguard_friendships');
+
+  // Remove legacy markup payloads and unsafe media metadata that predate the
+  // current input validation and binary image checks.
+  await runOnceMigration('sanitize_legacy_untrusted_content_v1', `
+    UPDATE users
+    SET display_name=LEFT(regexp_replace(display_name, '[<>]', '', 'g'), 32),
+        bio=regexp_replace(COALESCE(bio, ''), '[<>]', '', 'g')
+    WHERE display_name ~ '[<>]' OR COALESCE(bio, '') ~ '[<>]';
+
+    UPDATE servers
+    SET name=LEFT(regexp_replace(name, '[<>]', '', 'g'), 80)
+    WHERE name ~ '[<>]';
+
+    UPDATE server_roles
+    SET name=LEFT(regexp_replace(name, '[<>]', '', 'g'), 64)
+    WHERE name ~ '[<>]';
+
+    UPDATE users
+    SET avatar_data=NULL, avatar_mime=NULL
+    WHERE avatar_mime='image/svg+xml'
+      AND id NOT IN ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002');
+
+    UPDATE users
+    SET profile_banner_data=NULL, profile_banner_mime=NULL
+    WHERE profile_banner_mime='image/svg+xml';
+
+    UPDATE servers
+    SET icon_data=NULL, icon_mime=NULL
+    WHERE icon_mime='image/svg+xml';
+
+    DELETE FROM server_emojis WHERE image_mime='image/svg+xml';
+
+    UPDATE users SET profile_gradient_start='#5865f2'
+    WHERE profile_gradient_start IS NOT NULL AND profile_gradient_start !~ '^#[0-9A-Fa-f]{6}$';
+    UPDATE users SET profile_gradient_end='#a855f7'
+    WHERE profile_gradient_end IS NOT NULL AND profile_gradient_end !~ '^#[0-9A-Fa-f]{6}$';
+    UPDATE users SET app_theme_primary='#5b6ef5'
+    WHERE app_theme_primary IS NOT NULL AND app_theme_primary !~ '^#[0-9A-Fa-f]{6}$';
+    UPDATE users SET app_theme_secondary='#a855f7'
+    WHERE app_theme_secondary IS NOT NULL AND app_theme_secondary !~ '^#[0-9A-Fa-f]{6}$';
+    UPDATE servers SET tag_background='#5865f2'
+    WHERE tag_background IS NOT NULL AND tag_background !~ '^#[0-9A-Fa-f]{6}$';
+    UPDATE servers SET invite_banner_start='#5865f2'
+    WHERE invite_banner_start IS NOT NULL AND invite_banner_start !~ '^#[0-9A-Fa-f]{6}$';
+    UPDATE servers SET invite_banner_end='#a855f7'
+    WHERE invite_banner_end IS NOT NULL AND invite_banner_end !~ '^#[0-9A-Fa-f]{6}$';
+    UPDATE server_roles SET color='#8892a4'
+    WHERE color IS NOT NULL AND color !~ '^#[0-9A-Fa-f]{6}$';
+    UPDATE server_roles SET gradient_start=NULL, gradient_end=NULL, gradient_animated=FALSE
+    WHERE (gradient_start IS NOT NULL AND gradient_start !~ '^#[0-9A-Fa-f]{6}$')
+       OR (gradient_end IS NOT NULL AND gradient_end !~ '^#[0-9A-Fa-f]{6}$');
+  `, 'sanitize_legacy_untrusted_content');
 
   console.log('Database initialized');
 }

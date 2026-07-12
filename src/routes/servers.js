@@ -7,6 +7,9 @@ const { syncAll } = require('./achievements');
 const { avatarUrl } = require('../utils/avatar');
 const { enforceGlobalSafety } = require('../utils/globalSafety');
 const { deleteCachedMedia, getCachedMedia, setCachedMedia } = require('../utils/mediaCache');
+const { normalizeText, safeServerName, safeRoleName, safeHexColor, safeMessageContent } = require('../utils/inputSafety');
+const { getChannelAccess } = require('../utils/channelAccess');
+const { safeUploadMime, safeStoredImageMime } = require('../utils/imageSafety');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -41,6 +44,19 @@ const upload = multer({
 
 function genInviteCode() { return Math.random().toString(36).substring(2,10).toUpperCase(); }
 
+function clientHex(value, fallback = '#8892a4') {
+  return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toLowerCase() : fallback;
+}
+
+function safeHttpsUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function fmtServer(s) {
   return {
     id: s.id, name: s.name, ownerId: s.owner_id,
@@ -51,9 +67,9 @@ function fmtServer(s) {
     inviteDescription: s.invite_description || '',
     inviteTags: s.invite_tags || '',
     inviteBannerMode: s.invite_banner_mode || 'solid',
-    inviteBannerStart: s.invite_banner_start || '#5865f2',
-    inviteBannerEnd: s.invite_banner_end || '#a855f7',
-    inviteBannerImage: s.invite_banner_image || null,
+    inviteBannerStart: clientHex(s.invite_banner_start, '#5865f2'),
+    inviteBannerEnd: clientHex(s.invite_banner_end, '#a855f7'),
+    inviteBannerImage: safeHttpsUrl(s.invite_banner_image),
     discoveryEnabled: !!s.discovery_enabled,
     discoveryExpiresAt: s.discovery_expires_at ? Number(s.discovery_expires_at) : null
   };
@@ -81,10 +97,13 @@ async function activeBoostFeatures(serverId) {
 }
 
 function roleForClient(role, gradientsEnabled) {
+  const hasGradient = gradientsEnabled
+    && /^#[0-9a-f]{6}$/i.test(String(role.gradient_start || ''))
+    && /^#[0-9a-f]{6}$/i.test(String(role.gradient_end || ''));
   return {
     id: role.id,
     name: role.name,
-    color: role.color,
+    color: clientHex(role.color),
     isAdmin: role.is_admin,
     position: role.position,
     displaySeparately: !!role.display_separately,
@@ -102,9 +121,9 @@ function roleForClient(role, gradientsEnabled) {
       replyForumPosts: role.can_reply_forum_posts !== false,
       lockForumPosts: !!role.can_lock_forum_posts
     },
-    gradientStart: gradientsEnabled ? role.gradient_start : null,
-    gradientEnd: gradientsEnabled ? role.gradient_end : null,
-    gradientAnimated: gradientsEnabled && !!role.gradient_animated
+    gradientStart: hasGradient ? clientHex(role.gradient_start) : null,
+    gradientEnd: hasGradient ? clientHex(role.gradient_end) : null,
+    gradientAnimated: hasGradient && !!role.gradient_animated
   };
 }
 
@@ -331,15 +350,21 @@ router.post('/invites/:id/respond', async (req, res) => {
 // Create server
 router.post('/', upload.single('icon'), async (req, res) => {
   const { name } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  let safeName;
+  try {
+    safeName = safeServerName(name);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
   const id = uuidv4();
   const inviteCode = genInviteCode();
+  const iconMime = req.file ? safeUploadMime(req.file) : null;
+  if (req.file && !iconMime) return res.status(400).json({ error: 'Server icon data does not match a supported image format' });
   const iconData = req.file ? req.file.buffer.toString('base64') : null;
-  const iconMime = req.file ? req.file.mimetype : null;
   try {
     await pool.query(
       `INSERT INTO servers (id, name, owner_id, icon_data, icon_mime, invite_code) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [id, name.trim(), req.session.userId, iconData, iconMime, inviteCode]
+      [id, safeName, req.session.userId, iconData, iconMime, inviteCode]
     );
     // Owner joins as admin
     await pool.query(
@@ -377,15 +402,18 @@ router.get('/:id/icon', async (req, res) => {
   const cached = getCachedMedia(cacheKey);
   if (cached) {
     res.set('Cache-Control', 'private, max-age=3600');
-    return res.type(cached.mime).send(cached.data);
+    const mime = safeStoredImageMime(cached.mime, cached.data);
+    return mime ? res.type(mime).send(cached.data) : res.status(404).end();
   }
   const result = await pool.query('SELECT icon_data, icon_mime FROM servers WHERE id=$1', [req.params.id]);
   const icon = result.rows[0];
   if (!icon?.icon_data) return res.status(404).end();
   const data = Buffer.from(icon.icon_data, 'base64');
-  setCachedMedia(cacheKey, data, icon.icon_mime || 'image/png');
+  const mime = safeStoredImageMime(icon.icon_mime, data);
+  if (!mime) return res.status(404).end();
+  setCachedMedia(cacheKey, data, mime);
   res.set('Cache-Control', 'private, max-age=3600');
-  res.type(icon.icon_mime || 'image/png').send(data);
+  res.type(mime).send(data);
 });
 
 // Get server details + channels + members + roles
@@ -565,9 +593,18 @@ router.patch('/:id', upload.single('icon'), async (req, res) => {
   if (!await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Admins only' });
   const s = await pool.query('SELECT * FROM servers WHERE id=$1', [id]);
   if (!s.rows.length) return res.status(404).json({ error: 'Not found' });
-  const name = req.body.name ? req.body.name.trim() : s.rows[0].name;
+  let name = s.rows[0].name;
+  if (req.body.name != null) {
+    try {
+      name = safeServerName(req.body.name);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+  }
+  const uploadedIconMime = req.file ? safeUploadMime(req.file) : null;
+  if (req.file && !uploadedIconMime) return res.status(400).json({ error: 'Server icon data does not match a supported image format' });
   const iconData = req.file ? req.file.buffer.toString('base64') : s.rows[0].icon_data;
-  const iconMime = req.file ? req.file.mimetype : s.rows[0].icon_mime;
+  const iconMime = req.file ? uploadedIconMime : s.rows[0].icon_mime;
   await pool.query('UPDATE servers SET name=$1, icon_data=$2, icon_mime=$3 WHERE id=$4', [name, iconData, iconMime, id]);
   deleteCachedMedia(`server-icon:${id}`);
   const updated = await pool.query('SELECT * FROM servers WHERE id=$1', [id]);
@@ -584,7 +621,8 @@ router.post('/:id/channels', async (req, res) => {
   if (!await hasPermission(id, req.session.userId, 'can_manage_channels')) return res.status(403).json({ error: 'You need Manage Channels permission' });
   const pos = await pool.query('SELECT COUNT(*) FROM channels WHERE server_id=$1', [id]);
   const chId = uuidv4();
-  const chName = name.trim().toLowerCase().replace(/\s+/g,'-');
+  const chName = name.trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9_-]/g, '').slice(0, 60);
+  if (!chName) return res.status(400).json({ error: 'Channel name must contain letters or numbers' });
   await pool.query(
     'INSERT INTO channels (id, server_id, name, position, channel_type) VALUES ($1,$2,$3,$4,$5)',
     [chId, id, chName, parseInt(pos.rows[0].count), channelType]
@@ -754,14 +792,17 @@ router.get('/:id/emojis/:emojiId/image', async (req, res) => {
   const cached = getCachedMedia(cacheKey);
   if (cached) {
     res.set('Cache-Control', 'private, max-age=604800, immutable');
-    return res.type(cached.mime).send(cached.data);
+    const mime = safeStoredImageMime(cached.mime, cached.data);
+    return mime ? res.type(mime).send(cached.data) : res.status(404).end();
   }
   const result = await pool.query('SELECT image_data,image_mime FROM server_emojis WHERE id=$1 AND server_id=$2', [emojiId, id]);
   if (!result.rows.length) return res.status(404).end();
   const data = Buffer.from(result.rows[0].image_data, 'base64');
-  setCachedMedia(cacheKey, data, result.rows[0].image_mime);
+  const mime = safeStoredImageMime(result.rows[0].image_mime, data);
+  if (!mime) return res.status(404).end();
+  setCachedMedia(cacheKey, data, mime);
   res.set('Cache-Control', 'private, max-age=604800, immutable');
-  res.type(result.rows[0].image_mime).send(data);
+  res.type(mime).send(data);
 });
 
 router.post('/:id/emojis', upload.single('image'), async (req, res) => {
@@ -770,13 +811,15 @@ router.post('/:id/emojis', upload.single('image'), async (req, res) => {
   if (!(await activeBoostFeatures(id)).has('emojis')) return res.status(403).json({ error: 'Allocate one boost to Custom Emojis first' });
   const name = String(req.body.name || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 32);
   if (name.length < 2 || !req.file) return res.status(400).json({ error: 'Enter an emoji name and choose an image' });
+  const imageMime = safeUploadMime(req.file);
+  if (!imageMime) return res.status(400).json({ error: 'Emoji data does not match a supported image format' });
   if (req.file.size > 256 * 1024) return res.status(400).json({ error: 'Custom emoji images must be 256 KB or smaller' });
   const count = await pool.query('SELECT COUNT(*)::int AS count FROM server_emojis WHERE server_id=$1', [id]);
   if (count.rows[0].count >= 50) return res.status(400).json({ error: 'This server has reached 50 custom emojis' });
   try {
     await pool.query(
       'INSERT INTO server_emojis (id,server_id,name,image_data,image_mime,uploaded_by) VALUES ($1,$2,$3,$4,$5,$6)',
-      [uuidv4(), id, name, req.file.buffer.toString('base64'), req.file.mimetype, req.session.userId]
+      [uuidv4(), id, name, req.file.buffer.toString('base64'), imageMime, req.session.userId]
     );
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ error: 'That emoji name already exists' });
@@ -859,12 +902,12 @@ router.patch('/:id/invite-style', async (req, res) => {
   const description = String(req.body.description || '').trim().slice(0, 180);
   const tags = String(req.body.tags || '').split(',').map(tag => tag.trim().replace(/[^a-z0-9 _-]/gi, '').slice(0, 18)).filter(Boolean).slice(0, 5).join(', ');
   const mode = String(req.body.bannerMode || 'solid');
-  const start = /^#[0-9a-f]{6}$/i.test(String(req.body.bannerStart || '')) ? req.body.bannerStart : '#5865f2';
-  const end = /^#[0-9a-f]{6}$/i.test(String(req.body.bannerEnd || '')) ? req.body.bannerEnd : '#a855f7';
-  const image = String(req.body.bannerImage || '').trim().slice(0, 2000);
+  const start = clientHex(req.body.bannerStart, '#5865f2');
+  const end = clientHex(req.body.bannerEnd, '#a855f7');
+  const image = safeHttpsUrl(req.body.bannerImage);
   const tagPrivate = req.body.tagPrivate === true;
   if (!['solid', 'gradient', 'image'].includes(mode)) return res.status(400).json({ error: 'Invalid invite banner mode' });
-  if (mode === 'image' && !/^https:\/\/.+/i.test(image)) return res.status(400).json({ error: 'Banner image must use a secure https URL' });
+  if (mode === 'image' && !image) return res.status(400).json({ error: 'Banner image must use a secure https URL' });
   if (mode !== 'solid') {
     const features = await activeBoostFeatures(id);
     if (!features.has('invite_banner')) return res.status(403).json({ error: 'Spend two boosts on Invite Banners before using gradients or images' });
@@ -928,16 +971,23 @@ router.post('/:id/roles', async (req, res) => {
   const { id } = req.params;
   if (!await hasPermission(id, req.session.userId, 'can_manage_roles')) return res.status(403).json({ error: 'You need Manage Roles permission' });
   const { name, color, isAdmin: roleIsAdmin } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  let safeName;
+  let safeColor;
+  try {
+    safeName = safeRoleName(name);
+    safeColor = safeHexColor(color || '#8892a4');
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
   if (roleIsAdmin && !await isAdmin(id, req.session.userId)) return res.status(403).json({ error: 'Only administrators can create administrator roles' });
   const pos = await pool.query('SELECT COUNT(*) FROM server_roles WHERE server_id=$1', [id]);
   const roleId = uuidv4();
   const canDelete = req.body.canDeleteMessages || false;
   await pool.query(
     'INSERT INTO server_roles (id, server_id, name, color, is_admin, position, can_delete_messages, display_separately) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-    [roleId, id, name.trim(), color || '#8892a4', !!roleIsAdmin, parseInt(pos.rows[0].count), !!canDelete, !!roleIsAdmin]
+    [roleId, id, safeName, safeColor, !!roleIsAdmin, parseInt(pos.rows[0].count), !!canDelete, !!roleIsAdmin]
   );
-  res.json({ role: { id: roleId, name: name.trim(), color: color || '#8892a4', isAdmin: !!roleIsAdmin, canDeleteMessages: !!canDelete, displaySeparately: !!roleIsAdmin } });
+  res.json({ role: { id: roleId, name: safeName, color: safeColor, isAdmin: !!roleIsAdmin, canDeleteMessages: !!canDelete, displaySeparately: !!roleIsAdmin } });
 });
 
 // Update role
@@ -945,6 +995,22 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
   const { id, roleId } = req.params;
   if (!await hasPermission(id, req.session.userId, 'can_manage_roles')) return res.status(403).json({ error: 'You need Manage Roles permission' });
   const { name, color, isAdmin: roleIsAdmin, gradientStart, gradientEnd, gradientAnimated, displaySeparately } = req.body;
+  let safeName = null;
+  let safeColor = null;
+  if (name != null) {
+    try {
+      safeName = safeRoleName(name);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+  }
+  if (color != null) {
+    try {
+      safeColor = safeHexColor(color);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+  }
   const existingRole = await pool.query('SELECT is_admin FROM server_roles WHERE id=$1 AND server_id=$2', [roleId, id]);
   if (!existingRole.rows.length) return res.status(404).json({ error: 'Role not found' });
   if ((existingRole.rows[0].is_admin || roleIsAdmin === true) && !await isAdmin(id, req.session.userId)) {
@@ -961,7 +1027,7 @@ router.patch('/:id/roles/:roleId', async (req, res) => {
     }
   }
   const separate = displaySeparately != null ? !!displaySeparately : null;
-  const base = [name || null, color || null, roleIsAdmin != null ? !!roleIsAdmin : null, canDeleteMessages != null ? !!canDeleteMessages : null, separate, roleId, id];
+  const base = [safeName, safeColor, roleIsAdmin != null ? !!roleIsAdmin : null, canDeleteMessages != null ? !!canDeleteMessages : null, separate, roleId, id];
   if (wantsGradient) {
     await pool.query(`UPDATE server_roles SET name=COALESCE($1,name), color=COALESCE($2,color), is_admin=COALESCE($3,is_admin), can_delete_messages=COALESCE($4,can_delete_messages), display_separately=COALESCE($5,display_separately), gradient_start=$6, gradient_end=$7, gradient_animated=TRUE WHERE id=$8 AND server_id=$9`, [...base.slice(0, 5), gradientStart, gradientEnd, roleId, id]);
   } else if (clearingGradient) {
@@ -1295,13 +1361,8 @@ router.delete('/:id/channels/:chId/permissions/:roleId', async (req, res) => {
 });
 
 async function requireForumAccess(serverId, channelId, userId) {
-  const result = await pool.query(
-    `SELECT c.id FROM channels c
-     JOIN server_members sm ON sm.server_id=c.server_id AND sm.user_id=$3
-     WHERE c.server_id=$1 AND c.id=$2 AND c.channel_type='forum'`,
-    [serverId, channelId, userId]
-  );
-  return !!result.rows.length;
+  const channel = await getChannelAccess(pool, serverId, channelId, userId);
+  return channel && channel.channel_type === 'forum';
 }
 
 router.get('/:id/channels/:chId/forum/posts', async (req, res) => {
@@ -1335,9 +1396,14 @@ router.post('/:id/channels/:chId/forum/posts', async (req, res) => {
   if (!await hasPermission(id, req.session.userId, 'can_create_forum_posts')) return res.status(403).json({ error: 'You do not have permission to create forum posts' });
   const muteError = await activeTextMute(id, req.session.userId);
   if (muteError) return res.status(403).json({ error: muteError });
-  const title = String(req.body.title || '').trim().slice(0, 120);
-  const content = String(req.body.content || '').trim().slice(0, 4000);
-  if (!title || !content) return res.status(400).json({ error: 'A title and message are required' });
+  let title;
+  let content;
+  try {
+    title = normalizeText(req.body.title, { field: 'Post title', min: 1, max: 120 });
+    content = safeMessageContent(req.body.content, { field: 'Post content' });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
   const violation = await enforceGlobalSafety({ userId: req.session.userId, content: `${title}\n${content}`, messageType: 'forum_post', serverId: id, channelId: chId });
   if (violation) return res.status(400).json({ error: 'NexusGuard blocked this post for violating global safety rules' });
   const postId = uuidv4();
@@ -1383,8 +1449,12 @@ router.post('/:id/channels/:chId/forum/posts/:postId/replies', async (req, res) 
   if (!await hasPermission(id, req.session.userId, 'can_reply_forum_posts')) return res.status(403).json({ error: 'You do not have permission to reply in forums' });
   const muteError = await activeTextMute(id, req.session.userId);
   if (muteError) return res.status(403).json({ error: muteError });
-  const content = String(req.body.content || '').trim().slice(0, 4000);
-  if (!content) return res.status(400).json({ error: 'Reply cannot be empty' });
+  let content;
+  try {
+    content = safeMessageContent(req.body.content, { field: 'Reply' });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
   const violation = await enforceGlobalSafety({ userId: req.session.userId, content, messageType: 'forum_reply', serverId: id, channelId: chId });
   if (violation) return res.status(400).json({ error: 'NexusGuard blocked this reply for violating global safety rules' });
   const exists = await pool.query('SELECT id, replies_locked FROM forum_posts WHERE id=$1 AND channel_id=$2', [postId, chId]);
@@ -1413,11 +1483,9 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   const { id, chId } = req.params;
   const { before } = req.query;
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 30));
-  const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
-  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
-  const channelMeta = await pool.query('SELECT channel_type FROM channels WHERE id=$1 AND server_id=$2', [chId, id]);
-  if (!channelMeta.rows.length) return res.status(404).json({ error: 'Channel not found' });
-  if ((channelMeta.rows[0].channel_type || 'text') === 'voice') return res.json({ messages: [] });
+  const channel = await getChannelAccess(pool, id, chId, req.session.userId);
+  if (!channel) return res.status(403).json({ error: 'You cannot view that channel' });
+  if ((channel.channel_type || 'text') === 'voice') return res.json({ messages: [] });
   let q = `SELECT cm.id, cm.channel_id, cm.from_id, cm.content, cm.created_at, cm.reply_to_id,
     u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at, u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, ats.id AS tag_server_id, ats.name AS tag_server_name, ats.invite_code AS tag_invite_code, ats.server_tag, ats.tag_background, ats.tag_private,
     sm.role_id, sr.name as role_name, sr.color as role_color, sr.gradient_start as role_gradient_start, sr.gradient_end as role_gradient_end,
@@ -1459,12 +1527,64 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   params.push(limit);
   const r = await pool.query(q, params);
   const messages = r.rows.reverse();
+  const giveawayByMessageId = new Map();
+  const giveawayMessageIds = messages.map(message => message.id);
+  if (giveawayMessageIds.length) {
+    const giveaways = await pool.query(
+      `SELECT g.*,
+        COALESCE(entries.entry_count, 0)::int AS entry_count,
+        COALESCE(winner_data.winners, '[]'::json) AS winners,
+        EXISTS (
+          SELECT 1 FROM server_giveaway_entries self_entry
+          WHERE self_entry.giveaway_id=g.id AND self_entry.user_id=$2
+        ) AS entered
+       FROM server_giveaways g
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS entry_count
+         FROM server_giveaway_entries giveaway_entry
+         WHERE giveaway_entry.giveaway_id=g.id
+       ) entries ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT json_agg(json_build_object(
+           'id', u.id,
+           'displayName', u.display_name,
+           'username', u.username,
+           'position', w.position
+         ) ORDER BY w.position ASC) AS winners
+         FROM server_giveaway_winners w
+         JOIN users u ON u.id=w.user_id
+         WHERE w.giveaway_id=g.id
+       ) winner_data ON TRUE
+       WHERE g.message_id = ANY($1)`,
+      [giveawayMessageIds, req.session.userId]
+    );
+    giveaways.rows.forEach(giveaway => {
+      giveawayByMessageId.set(giveaway.message_id, {
+        id: giveaway.id,
+        serverId: giveaway.server_id,
+        channelId: giveaway.channel_id,
+        messageId: giveaway.message_id,
+        prize: giveaway.prize,
+        description: giveaway.description || '',
+        winnerCount: Math.max(1, parseInt(giveaway.winner_count, 10) || 1),
+        createdBy: giveaway.created_by,
+        createdAt: parseInt(giveaway.created_at, 10) || 0,
+        endsAt: parseInt(giveaway.ends_at, 10) || 0,
+        endedAt: giveaway.ended_at ? parseInt(giveaway.ended_at, 10) : null,
+        status: giveaway.status,
+        entryCount: Math.max(0, parseInt(giveaway.entry_count, 10) || 0),
+        entered: !!giveaway.entered,
+        winners: Array.isArray(giveaway.winners) ? giveaway.winners : []
+      });
+    });
+  }
   const authors = {};
   messages.forEach(m => {
     if (!authors[m.from_id]) {
       authors[m.from_id] = {
         username: m.username, displayName: m.display_name,
         avatarDataUrl: avatarUrl(m.from_id, !!m.has_avatar),
+        isBot: m.username === 'nextbot' || m.username === 'nexusguard',
         roleColor: m.role_color || null, roleName: m.role_name || null, roleGradientStart: m.role_gradient_start || null, roleGradientEnd: m.role_gradient_end || null,
         activeDecoration: m.active_decoration || null,
         activeNameplate: m.active_nameplate || null,
@@ -1504,6 +1624,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
   const messagesForClient = messages.map(m => ({
     id: m.id, channelId: m.channel_id, fromId: m.from_id,
     content: m.content, createdAt: parseInt(m.created_at),
+    giveaway: giveawayByMessageId.get(m.id) || null,
     mentions: mentionsForContent(m.content),
     isPinned: !!m.is_pinned,
     reactions: Array.isArray(m.reactions) ? m.reactions : [],
@@ -1521,8 +1642,7 @@ router.get('/:id/channels/:chId/messages', async (req, res) => {
 // Get pinned messages for a channel
 router.get('/:id/channels/:chId/pins', async (req, res) => {
   const { id, chId } = req.params;
-  const member = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [id, req.session.userId]);
-  if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
+  if (!await getChannelAccess(pool, id, chId, req.session.userId)) return res.status(403).json({ error: 'You cannot view that channel' });
 
   const r = await pool.query(
     `SELECT cp.message_id, cp.pinned_at, cp.pinned_by,
@@ -1557,6 +1677,7 @@ router.get('/:id/channels/:chId/pins', async (req, res) => {
 // Pin a message (admins only)
 router.post('/:id/channels/:chId/messages/:msgId/pin', async (req, res) => {
   const { id, chId, msgId } = req.params;
+  if (!await getChannelAccess(pool, id, chId, req.session.userId)) return res.status(403).json({ error: 'You cannot view that channel' });
   if (!await hasPermission(id, req.session.userId, 'can_manage_messages')) return res.status(403).json({ error: 'You need Manage Messages permission' });
 
   const msg = await pool.query(
@@ -1582,6 +1703,7 @@ router.post('/:id/channels/:chId/messages/:msgId/pin', async (req, res) => {
 // Unpin a message (admins only)
 router.delete('/:id/channels/:chId/messages/:msgId/pin', async (req, res) => {
   const { id, chId, msgId } = req.params;
+  if (!await getChannelAccess(pool, id, chId, req.session.userId)) return res.status(403).json({ error: 'You cannot view that channel' });
   if (!await hasPermission(id, req.session.userId, 'can_manage_messages')) return res.status(403).json({ error: 'You need Manage Messages permission' });
   await pool.query(
     `DELETE FROM channel_pins cp
@@ -1598,6 +1720,7 @@ router.delete('/:id/channels/:chId/messages/:msgId/pin', async (req, res) => {
 // Delete a channel message
 router.delete('/:id/channels/:chId/messages/:msgId', async (req, res) => {
   const { id, chId, msgId } = req.params;
+  if (!await getChannelAccess(pool, id, chId, req.session.userId)) return res.status(403).json({ error: 'You cannot view that channel' });
 
   // Check membership
   const member = await pool.query(

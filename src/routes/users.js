@@ -5,8 +5,22 @@ const { requireAuth } = require('../middleware/auth');
 const { pool } = require('../models/db');
 const { avatarUrl, clearCachedAvatar, getAvatar } = require('../utils/avatar');
 const { deleteCachedMedia, getCachedMedia, setCachedMedia } = require('../utils/mediaCache');
+const { safeDisplayName, safeBio } = require('../utils/inputSafety');
+const { safeUploadMime, safeStoredImageMime } = require('../utils/imageSafety');
 
 const router = express.Router();
+const TRUSTED_BUILT_IN_SVG_USERS = new Set([
+  '00000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000002'
+]);
+
+function avatarMimeForResponse(userId, avatar) {
+  const detected = safeStoredImageMime(avatar.mime, avatar.data);
+  if (detected) return detected;
+  return TRUSTED_BUILT_IN_SVG_USERS.has(String(userId)) && avatar.mime === 'image/svg+xml'
+    ? 'image/svg+xml'
+    : null;
+}
 
 // Store in memory, save as base64 in DB
 const upload = multer({
@@ -29,18 +43,19 @@ router.post('/avatar', requireAuth, (req, res, next) => {
   });
 }, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const mime = safeUploadMime(req.file);
+  if (!mime) return res.status(400).json({ error: 'Avatar data does not match a supported image format' });
   const user = await pool.query('SELECT pro_expires_at FROM users WHERE id=$1', [req.session.userId]);
   const proActive = (user.rows[0]?.pro_expires_at || 0) > Math.floor(Date.now() / 1000);
   if (!proActive && req.file.size > 2 * 1024 * 1024) {
     return res.status(403).json({ error: 'Nexus Pro is required for avatars larger than 2 MB' });
   }
-  const animatedWebp = req.file.mimetype === 'image/webp' && req.file.buffer.includes(Buffer.from('ANIM'));
-  if (!proActive && (req.file.mimetype === 'image/gif' || animatedWebp)) {
+  const animatedWebp = mime === 'image/webp' && req.file.buffer.includes(Buffer.from('ANIM'));
+  if (!proActive && (mime === 'image/gif' || animatedWebp)) {
     return res.status(403).json({ error: 'Animated avatars require Nexus Pro' });
   }
   const base64 = req.file.buffer.toString('base64');
-  const mime = req.file.mimetype;
-  const proOnly = req.file.size > 2 * 1024 * 1024 || req.file.mimetype === 'image/gif' || animatedWebp;
+  const proOnly = req.file.size > 2 * 1024 * 1024 || mime === 'image/gif' || animatedWebp;
   await pool.query('UPDATE users SET avatar_data=$1, avatar_mime=$2, avatar_pro_only=$3 WHERE id=$4',
     [base64, mime, proOnly, req.session.userId]);
   clearCachedAvatar(req.session.userId);
@@ -59,8 +74,11 @@ const bannerUpload = multer({
 router.get('/avatar/:userId', requireAuth, async (req, res) => {
   const avatar = await getAvatar(pool, req.params.userId);
   if (!avatar) return res.sendStatus(404);
+  const mime = avatarMimeForResponse(req.params.userId, avatar);
+  if (!mime) return res.sendStatus(404);
   const etag = `"avatar-${req.params.userId}-${avatar.data.length}"`;
-  res.setHeader('Content-Type', avatar.mime);
+  res.setHeader('Content-Type', mime);
+  if (mime === 'image/svg+xml') res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:");
   res.setHeader('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800');
   res.setHeader('ETag', etag);
   if (req.headers['if-none-match'] === etag) return res.sendStatus(304);
@@ -71,7 +89,9 @@ router.get('/banner/:userId', requireAuth, async (req, res) => {
   const cacheKey = `profile-banner:${req.params.userId}`;
   const cached = getCachedMedia(cacheKey);
   if (cached && cached.proExpiresAt > Math.floor(Date.now() / 1000)) {
-    res.setHeader('Content-Type', cached.mime);
+    const mime = safeStoredImageMime(cached.mime, cached.data);
+    if (!mime) return res.sendStatus(404);
+    res.setHeader('Content-Type', mime);
     res.setHeader('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800');
     return res.send(cached.data);
   }
@@ -83,9 +103,11 @@ router.get('/banner/:userId', requireAuth, async (req, res) => {
   const row = result.rows[0];
   if (!row?.profile_banner_data || (row.pro_expires_at || 0) <= Math.floor(Date.now() / 1000)) return res.sendStatus(404);
   const data = Buffer.from(row.profile_banner_data, 'base64');
-  setCachedMedia(cacheKey, data, row.profile_banner_mime || 'image/png', { proExpiresAt: Number(row.pro_expires_at) || 0 });
+  const mime = safeStoredImageMime(row.profile_banner_mime, data);
+  if (!mime) return res.sendStatus(404);
+  setCachedMedia(cacheKey, data, mime, { proExpiresAt: Number(row.pro_expires_at) || 0 });
   const etag = `"banner-${req.params.userId}-${data.length}"`;
-  res.setHeader('Content-Type', row.profile_banner_mime || 'image/png');
+  res.setHeader('Content-Type', mime);
   res.setHeader('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800');
   res.setHeader('ETag', etag);
   if (req.headers['if-none-match'] === etag) return res.sendStatus(304);
@@ -100,13 +122,15 @@ router.post('/profile-banner', requireAuth, (req, res, next) => {
   });
 }, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Choose a banner image' });
+  const mime = safeUploadMime(req.file);
+  if (!mime) return res.status(400).json({ error: 'Banner data does not match a supported image format' });
   const user = await pool.query('SELECT pro_expires_at FROM users WHERE id=$1', [req.session.userId]);
   if ((user.rows[0]?.pro_expires_at || 0) <= Math.floor(Date.now() / 1000)) {
     return res.status(403).json({ error: 'Active Pro is required for profile banners' });
   }
   await pool.query(
     'UPDATE users SET profile_banner_data=$1, profile_banner_mime=$2 WHERE id=$3',
-    [req.file.buffer.toString('base64'), req.file.mimetype, req.session.userId]
+    [req.file.buffer.toString('base64'), mime, req.session.userId]
   );
   deleteCachedMedia(`profile-banner:${req.session.userId}`);
   res.json({ success: true, profileBannerUrl: `/api/users/banner/${req.session.userId}?v=${Date.now()}` });
@@ -198,17 +222,23 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
 
 router.patch('/profile', requireAuth, async (req, res) => {
   const { displayName, bio } = req.body;
-  if (!displayName || displayName.trim().length < 1)
-    return res.status(400).json({ error: 'Invalid display name' });
+  let safeName;
+  let safeUserBio;
+  try {
+    safeName = safeDisplayName(displayName);
+    safeUserBio = safeBio(bio);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
   await pool.query('UPDATE users SET display_name=$1, bio=$2 WHERE id=$3',
-    [displayName.trim(), (bio || '').slice(0, 300), req.session.userId]);
+    [safeName, safeUserBio, req.session.userId]);
   res.json({ success: true });
 });
 
 router.post('/change-password', requireAuth, async (req, res) => {
   const { oldPassword, newPassword } = req.body;
-  if (!oldPassword || !newPassword) return res.status(400).json({ error: 'All fields required' });
-  if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  if (typeof oldPassword !== 'string' || typeof newPassword !== 'string' || !oldPassword || !newPassword) return res.status(400).json({ error: 'All fields required' });
+  if (newPassword.length < 8 || newPassword.length > 128) return res.status(400).json({ error: 'New password must be 8-128 characters' });
 
   const bcrypt = require('bcryptjs');
   const r = await pool.query('SELECT password_hash FROM users WHERE id=$1', [req.session.userId]);

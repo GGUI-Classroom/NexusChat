@@ -9,8 +9,8 @@ const router = express.Router();
 router.use(requireAuth);
 
 const CORE_ADMIN_IDS = new Set(['537b58c9-b9cd-4239-b0e6-2f862c30ac01']);
-const ADMIN_NFC_CODE = process.env.LIMITED_ADMIN_NFC_CODE || 'GHQI23OADMSH2362&-3DW';
-const ADMIN_ACCESS_CODE = process.env.LIMITED_ADMIN_ACCESS_CODE || 'NX-LIMITED-7QF9-V2MK-4R8X-PZ6T-HC3D';
+const ADMIN_NFC_CODE = String(process.env.LIMITED_ADMIN_NFC_CODE || '');
+const ADMIN_ACCESS_CODE = String(process.env.LIMITED_ADMIN_ACCESS_CODE || '');
 const ADMIN_ACCESS_SECONDS = 20 * 60;
 const FAR_FUTURE = 253402300799;
 const MAX_NEXALS = 100000000;
@@ -25,6 +25,7 @@ function hash(value) {
 }
 
 function secureEquals(left, right) {
+  if (!right) return false;
   const leftHash = Buffer.from(hash(left));
   const rightHash = Buffer.from(hash(right));
   return leftHash.length === rightHash.length && crypto.timingSafeEqual(leftHash, rightHash);
@@ -69,6 +70,9 @@ router.get('/status', requireCoreAdmin, (req, res) => {
 
 router.post('/admin/unlock', requireCoreAdmin, (req, res) => {
   const payload = String(req.body.payload || '').trim();
+  if (!ADMIN_NFC_CODE && !ADMIN_ACCESS_CODE) {
+    return res.status(503).json({ error: 'Limited-admin access is not configured. Set LIMITED_ADMIN_NFC_CODE or LIMITED_ADMIN_ACCESS_CODE.' });
+  }
   if (!secureEquals(payload, ADMIN_NFC_CODE) && !secureEquals(payload, ADMIN_ACCESS_CODE)) {
     return res.status(403).json({ error: 'Invalid limited-admin access code' });
   }

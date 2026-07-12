@@ -7,6 +7,7 @@ const { createClient } = require('redis');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { BoardBase: ConnectFourBoard, BoardPiece: ConnectFourPiece } = require('@kenrick95/c4');
 const { envFlag } = require('./config/env');
@@ -15,11 +16,13 @@ const { avatarUrl } = require('./utils/avatar');
 const { requestIp, requestDeviceId, socketDeviceId } = require('./utils/ip');
 const { enforceGlobalSafety, findConfiguredViolation } = require('./utils/globalSafety');
 const { getCurrentTos, getUserTosState, requireCurrentTos } = require('./utils/tosPolicy');
+const { getChannelAccess, canAccessChannel, getChannelAccessibleUserIds } = require('./utils/channelAccess');
+const { safeMessageContent } = require('./utils/inputSafety');
 
 const app = express();
 const server = http.createServer(app);
 
-const isProd = process.env.NODE_ENV === 'production';
+const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER);
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nexus-dev-secret-change-in-prod';
 const DATABASE_URL = process.env.DATABASE_URL;
 const REDIS_URL = process.env.REDIS_URL;
@@ -28,6 +31,12 @@ const REQUIRE_REDIS = envFlag('REQUIRE_REDIS', false);
 const TRUST_PROXY = process.env.TRUST_PROXY || (isProd ? '1' : '');
 const ALLOW_FILE_CLIENTS = envFlag('ALLOW_FILE_CLIENTS', false);
 const COOKIE_SAME_SITE = (process.env.COOKIE_SAME_SITE || (ALLOW_FILE_CLIENTS ? 'none' : 'lax')).toLowerCase();
+const SESSION_SECURITY_VERSION = 3;
+const PUBLIC_APP_ORIGINS = new Set(
+  [process.env.PUBLIC_APP_ORIGIN, process.env.RENDER_EXTERNAL_URL]
+    .filter(Boolean)
+    .map(origin => String(origin).trim().replace(/\/$/, ''))
+);
 const STATIC_CLIENT_ORIGINS = new Set(
   (process.env.STATIC_CLIENT_ORIGINS || '')
     .split(',')
@@ -36,13 +45,97 @@ const STATIC_CLIENT_ORIGINS = new Set(
 );
 const NEXUS_LINK_SHARED_SECRET = process.env.NEXUS_LINK_SHARED_SECRET || '';
 const ACTIVITY_ONLY_EVENTS = new Set(['call_accept', 'join_call', 'webrtc_offer', 'webrtc_answer', 'webrtc_ice', 'call_end']);
+const socketRateBuckets = new Map();
+const apiRateBuckets = new Map();
 
-function isAllowedClientOrigin(origin) {
+if (isProd && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32)) {
+  throw new Error('SESSION_SECRET must be set to a random value of at least 32 characters in production.');
+}
+if (isProd && ALLOW_FILE_CLIENTS) {
+  throw new Error('ALLOW_FILE_CLIENTS must be false in production. Serve the client from an explicit HTTPS origin instead.');
+}
+if (isProd && !COOKIE_SECURE) {
+  throw new Error('COOKIE_SECURE must be true in production.');
+}
+if (isProd && !['lax', 'strict'].includes(COOKIE_SAME_SITE)) {
+  throw new Error('COOKIE_SAME_SITE must be lax or strict in production.');
+}
+
+function isAllowedClientOrigin(origin, req) {
   if (!origin) return true;
-  // With no explicit allow-list, the hosted app and local file client must both be able to connect.
-  if (!STATIC_CLIENT_ORIGINS.size) return true;
   if (origin === 'null') return ALLOW_FILE_CLIENTS;
-  return STATIC_CLIENT_ORIGINS.has(origin);
+  if (STATIC_CLIENT_ORIGINS.has(origin) || PUBLIC_APP_ORIGINS.has(origin)) return true;
+  if (!req) return false;
+  const protocol = req.protocol || (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+  const host = req.get ? req.get('host') : req.headers.host;
+  return Boolean(host && origin === `${protocol}://${host}`);
+}
+
+function setSecurityHeaders(req, res, next) {
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    "media-src 'self' data: blob:",
+    "connect-src 'self'",
+    "worker-src 'self' blob:"
+  ].join('; '));
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), payment=(), usb=()');
+  next();
+}
+
+function takeSocketRateToken(userId, event, limit, windowMs) {
+  const now = Date.now();
+  const key = `${userId}:${event}`;
+  const active = (socketRateBuckets.get(key) || []).filter(time => now - time < windowMs);
+  if (active.length >= limit) {
+    socketRateBuckets.set(key, active);
+    return false;
+  }
+  active.push(now);
+  socketRateBuckets.set(key, active);
+  return true;
+}
+
+function takeApiRateToken(req, limit, windowMs, scope = 'all') {
+  const now = Date.now();
+  const clientIp = requestIp(req) || req.ip || 'unknown';
+  const normalizedPath = `${req.baseUrl || ''}${req.path || ''}`
+    .replace(/[a-f0-9]{8}-[a-f0-9-]{27,}/gi, ':id')
+    .replace(/\/[A-Za-z0-9_-]{32,}(?=\/|$)/g, '/:id');
+  const key = `${scope}:${clientIp}:${req.method}:${normalizedPath}`;
+  if (apiRateBuckets.size > 5000) apiRateBuckets.clear();
+  const active = (apiRateBuckets.get(key) || []).filter(time => now - time < windowMs);
+  if (active.length >= limit) {
+    apiRateBuckets.set(key, active);
+    return false;
+  }
+  active.push(now);
+  apiRateBuckets.set(key, active);
+  return true;
+}
+
+function channelRoomId(serverId, channelId) {
+  return `channel:${serverId}:${channelId}`;
+}
+
+function emitToChannel(serverId, channelId, event, payload) {
+  io.to(channelRoomId(serverId, channelId)).emit(event, payload);
+}
+
+function leaveChannelRooms(socket) {
+  for (const room of socket.rooms) {
+    if (room.startsWith('channel:')) socket.leave(room);
+  }
 }
 
 function verifyActivityCallToken(rawToken) {
@@ -86,7 +179,13 @@ async function resolveChannelMentions(content, serverId) {
   const mentionData = { users: {}, roles: {} };
   if (userMentions.length) {
     const ids = [...new Set(userMentions.map(match => match[1]))];
-    const result = await pool.query('SELECT id, username, display_name FROM users WHERE id = ANY($1)', [ids]);
+    const result = await pool.query(
+      `SELECT u.id, u.username, u.display_name
+       FROM users u
+       JOIN server_members sm ON sm.user_id=u.id AND sm.server_id=$2
+       WHERE u.id = ANY($1)`,
+      [ids, serverId]
+    );
     result.rows.forEach(user => {
       mentionData.users[user.id] = { username: user.username, displayName: user.display_name };
     });
@@ -131,7 +230,7 @@ const sessionMiddleware = session({
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && isAllowedClientOrigin(origin)) {
+  if (origin && isAllowedClientOrigin(origin, req)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Vary', 'Origin');
@@ -142,17 +241,48 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(setSecurityHeaders);
 app.use(compression({ threshold: 1024 }));
-app.use(express.json({ limit: '4mb' }));
+app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(sessionMiddleware);
+app.use((req, res, next) => {
+  if (!req.session?.userId || req.session.authVersion === SESSION_SECURITY_VERSION) return next();
+  req.session.destroy(() => {
+    res.clearCookie('nexus.sid');
+    if (req.path.startsWith('/api')) return res.status(401).json({ error: 'Your session expired for a security update. Please sign in again.' });
+    next();
+  });
+});
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'OPTIONS' && !takeApiRateToken(req, 240, 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many requests. Please slow down.' });
+  }
+  next();
+});
+app.use('/api', (req, res, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !takeApiRateToken(req, 90, 60 * 1000, 'write')) {
+    return res.status(429).json({ error: 'Too many write requests. Please slow down.' });
+  }
+  next();
+});
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = req.get('origin');
+  if (origin && !isAllowedClientOrigin(origin, req)) return res.status(403).json({ error: 'Blocked cross-origin request' });
+  next();
+});
 app.use((req, res, next) => { req.io = io; req.userSockets = userSockets; next(); });
 app.use(express.static(path.join(__dirname, '../public'), {
   etag: true,
   maxAge: isProd ? '1h' : 0,
   setHeaders(res, filePath) {
-    if (path.extname(filePath).toLowerCase() === '.html') {
+    const extension = path.extname(filePath).toLowerCase();
+    if (extension === '.html') {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else if (extension === '.js') {
+      // Security fixes must replace an old cached client immediately after deploy.
+      res.setHeader('Cache-Control', 'no-cache');
     }
   }
 }));
@@ -196,7 +326,12 @@ app.use('/api/auction', require('./routes/auction'));
 app.use('/api/nexus-link', require('./routes/nexus-link'));
 
 function validNexusLinkRequest(req) {
-  return Boolean(process.env.NEXUS_LINK_SHARED_SECRET) && req.get('x-nexus-link-secret') === process.env.NEXUS_LINK_SHARED_SECRET;
+  const secret = String(process.env.NEXUS_LINK_SHARED_SECRET || '');
+  const provided = String(req.get('x-nexus-link-secret') || '');
+  const expected = Buffer.from(secret);
+  const actual = Buffer.from(provided);
+  if (!secret || actual.length !== expected.length) return false;
+  return crypto.timingSafeEqual(actual, expected);
 }
 
 // Receives a reply sent to Nexus LINK in Discord and creates the matching Nexus DM.
@@ -204,8 +339,13 @@ app.post('/api/nexus-link/inbound-dm', async (req, res) => {
   if (!validNexusLinkRequest(req)) return res.status(401).json({ error: 'Unauthorized Nexus LINK relay' });
   const fromId = String(req.body.nexusUserId || '');
   const toId = String(req.body.nexusPeerId || '');
-  const content = String(req.body.content || '').trim().slice(0, 4000);
-  if (!fromId || !toId || !content) return res.status(400).json({ error: 'A sender, recipient, and message are required' });
+  let content;
+  try {
+    content = safeMessageContent(req.body.content, { field: 'Message' });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  if (!fromId || !toId) return res.status(400).json({ error: 'A sender and recipient are required' });
   const globalMute = await getGlobalMuteState(fromId);
   if (globalMute) return res.status(403).json({ error: 'Your Nexus account is globally muted' });
   const friendship = await pool.query(
@@ -244,8 +384,13 @@ app.post('/api/nexus-link/outbound-dm', async (req, res) => {
   if (!validNexusLinkRequest(req)) return res.status(401).json({ error: 'Unauthorized Nexus LINK relay' });
   const fromId = String(req.body.nexusUserId || '');
   const username = String(req.body.username || '').trim().replace(/^@/, '');
-  const content = String(req.body.content || '').trim().slice(0, 4000);
-  if (!fromId || !username || !content) return res.status(400).json({ error: 'A recipient and message are required' });
+  let content;
+  try {
+    content = safeMessageContent(req.body.content, { field: 'Message' });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  if (!fromId || !username) return res.status(400).json({ error: 'A recipient is required' });
   const globalMute = await getGlobalMuteState(fromId);
   if (globalMute) return res.status(403).json({ error: 'Your Nexus account is globally muted' });
 
@@ -297,12 +442,21 @@ app.post('/api/nexus-link/inbound-channel', async (req, res) => {
   const userId = String(req.body.nexusUserId || '');
   const serverId = String(req.body.serverId || '');
   const channelId = String(req.body.channelId || '');
-  const content = String(req.body.content || '').trim().slice(0, 4000);
-  if (!userId || !serverId || !channelId || !content) return res.status(400).json({ error: 'A mapped Nexus channel and message are required' });
+  let content;
+  try {
+    content = safeMessageContent(req.body.content, { field: 'Message' });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  if (!userId || !serverId || !channelId) return res.status(400).json({ error: 'A mapped Nexus channel is required' });
   const globalMute = await getGlobalMuteState(userId);
   if (globalMute) return res.status(403).json({ error: 'Your Nexus account is globally muted' });
   const serverMute = await getMuteState(serverId, userId);
   if (serverMute) return res.status(403).json({ error: 'Your Nexus account is muted in this server' });
+  const channelAccess = await getChannelAccess(pool, serverId, channelId, userId);
+  if (!channelAccess || !['text', 'forum'].includes(channelAccess.channel_type || 'text')) {
+    return res.status(403).json({ error: 'The linked Nexus account cannot post in that mapped channel' });
+  }
   const result = await pool.query(
     `SELECT u.username, u.display_name, (u.avatar_data IS NOT NULL) AS has_avatar, u.active_decoration, u.active_nameplate,
       sm.role, sr.name AS role_name, sr.color AS role_color, sr.gradient_start, sr.gradient_end,
@@ -329,7 +483,7 @@ app.post('/api/nexus-link/inbound-channel', async (req, res) => {
     }
   };
   await pool.query('INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)', [msg.id, channelId, userId, content, now]);
-  io.to(`server:${serverId}`).emit('new_channel_message', msg);
+  emitToChannel(serverId, channelId, 'new_channel_message', msg);
   res.json({ success: true, nexusMessageId: msg.id });
 });
 
@@ -341,9 +495,12 @@ app.post('/api/nexus-link/inbound-channel-reaction', async (req, res) => {
   if (!userId || !messageId || !emoji) return res.status(400).json({ error: 'A reaction is required' });
   const message = await pool.query(`SELECT cm.channel_id, ch.server_id FROM channel_messages cm JOIN channels ch ON ch.id=cm.channel_id JOIN server_members sm ON sm.server_id=ch.server_id AND sm.user_id=$2 WHERE cm.id=$1`, [messageId, userId]);
   if (!message.rows[0]) return res.status(403).json({ error: 'The linked account cannot react to that message' });
+  if (!await canAccessChannel(pool, message.rows[0].server_id, message.rows[0].channel_id, userId)) {
+    return res.status(403).json({ error: 'The linked account cannot access that channel' });
+  }
   await pool.query(`INSERT INTO channel_message_reactions (id, message_id, user_id, emoji) VALUES ($1,$2,$3,$4) ON CONFLICT (message_id, user_id, emoji) DO NOTHING`, [uuidv4(), messageId, userId, emoji]);
   const aggregate = await pool.query(`SELECT emoji, COUNT(*)::int AS count, BOOL_OR(user_id=$2) AS reacted FROM channel_message_reactions WHERE message_id=$1 GROUP BY emoji ORDER BY count DESC, emoji ASC`, [messageId, userId]);
-  io.to(`server:${message.rows[0].server_id}`).emit('channel_message_reaction_updated', { channelId: message.rows[0].channel_id, messageId, reactions: aggregate.rows.map(row => ({ emoji: row.emoji, count: parseInt(row.count, 10) || 0, reacted: !!row.reacted })) });
+  emitToChannel(message.rows[0].server_id, message.rows[0].channel_id, 'channel_message_reaction_updated', { channelId: message.rows[0].channel_id, messageId, reactions: aggregate.rows.map(row => ({ emoji: row.emoji, count: parseInt(row.count, 10) || 0, reacted: !!row.reacted })) });
   res.json({ success: true });
 });
 
@@ -415,6 +572,9 @@ const CALL_USER_KEY_PREFIX = 'nexus:call:user:';
 const CALL_ROOM_KEY_PREFIX = 'nexus:call:room:';
 const NEXUS_BOT_ID = '00000000-0000-0000-0000-000000000001';
 const NEXUS_BOT_NAME = 'NexusGuard';
+const NEXTBOT_ID = '00000000-0000-0000-0000-000000000002';
+const NEXTBOT_NAME = 'NextBOT';
+const NEXTBOT_AVATAR_DATA_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJuIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMTMxYzQwIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNzQ1Y2Y0Ii8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImIiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNhYmI4ZmYiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM2MTZlZjIiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgcj0iNDYiIGN5PSI0OCIgZmlsbD0idXJsKCNuKSIvPjxwYXRoIGQ9Ik0yNSA0NWg0NnYySDMxdjE2aDQwdjEwSDI1WiIgZmlsbD0iIzBiMTAyMCIgb3BhY2l0eT0iLjYiLz48cGF0aCBkPSJNMjggMzZoNDB2MjRIMjh6IiBmaWxsPSJ1cmwoI2IpIi8+PHBhdGggZD0iTTM5IDQ1aDR2NmgtNnYtMnptMTQgMGg0djZoLTZ2LTJ6bS0xNCAxNWgyMHY0SDM5eiIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yOCAyOGg4djZoLTh6bTMyIDBoOHY2aC04eiIgZmlsbD0iI2FiYjhmZiIvPjwvc3ZnPg==';
 const NEXUS_BOT_AVATAR_DATA_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmNTllMGIiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmOTczMTYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgY3k9IjQ4IiByPSI0NiIgZmlsbD0idXJsKCNnKSIvPjxwYXRoIGQ9Ik00OCAxNmwyNCA4djIyYzAgMTgtMTAgMzAtMjQgMzYtMTQtNi0yNC0xOC0yNC0zNlYyNHoiIGZpbGw9InVybCgjYSkiLz48cGF0aCBkPSJNNDggMjZsMTQgNXYxNWMwIDExLTYgMTktMTQgMjMtOC00LTE0LTEyLTE0LTIzVjMxeiIgZmlsbD0iIzExMTgyNyIgb3BhY2l0eT0iLjY1Ii8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0NSIgcj0iNyIgZmlsbD0iI2ZkZTY4YSIvPjxwYXRoIGQ9Ik0zNiA1OWgyNHY1SDM2eiIgZmlsbD0iI2ZkZTY4YSIvPjwvc3ZnPg==';
 const spamTracker = new Map();
 const TABLE_TOKEN_NUMERATOR = 1000;
@@ -659,6 +819,17 @@ const NEXUS_BOT_AUTHOR = {
   activeColor: '#f4b942',
   activeFont: null
 };
+const NEXTBOT_AUTHOR = {
+  username: 'nextbot',
+  displayName: NEXTBOT_NAME,
+  avatarDataUrl: NEXTBOT_AVATAR_DATA_URL,
+  roleColor: '#aab8ff',
+  roleName: 'App',
+  isBot: true,
+  activeDecoration: null,
+  activeColor: '#7c8cff',
+  activeFont: null
+};
 
 async function ensureNexusGuardExists() {
   await pool.query(
@@ -806,6 +977,12 @@ io.use(async (socket, next) => {
   const activityToken = verifyActivityCallToken(socket.handshake.auth?.nexusLinkCallToken);
   const userId = String(sess?.userId || activityToken?.nexusUserId || '');
   if (!userId) return next(new Error('Unauthorized'));
+  if (!takeSocketRateToken(userId, 'socket_connect', 12, 60 * 1000)) {
+    return next(new Error('RATE_LIMITED'));
+  }
+  if (!activityToken && sess?.authVersion !== SESSION_SECURITY_VERSION) {
+    return next(new Error('Session expired for a security update'));
+  }
   try {
     if (activityToken) {
       socket.data.activityOnly = true;
@@ -888,6 +1065,185 @@ function humanDuration(seconds) {
   return `${Math.ceil(s / 86400)}d`;
 }
 
+function giveawayMessageContent(giveawayId) {
+  return `[[nextbot-giveaway:${giveawayId}]]`;
+}
+
+function giveawayForClient(row) {
+  return {
+    id: row.id,
+    serverId: row.server_id,
+    channelId: row.channel_id,
+    messageId: row.message_id,
+    prize: row.prize,
+    description: row.description || '',
+    winnerCount: Math.max(1, parseInt(row.winner_count, 10) || 1),
+    createdBy: row.created_by,
+    createdAt: parseInt(row.created_at, 10) || 0,
+    endsAt: parseInt(row.ends_at, 10) || 0,
+    endedAt: row.ended_at ? parseInt(row.ended_at, 10) : null,
+    status: row.status,
+    entryCount: Math.max(0, parseInt(row.entry_count, 10) || 0),
+    entered: !!row.entered,
+    winners: Array.isArray(row.winners) ? row.winners : []
+  };
+}
+
+async function getGiveawaySnapshot(giveawayId, viewerId = null) {
+  const result = await pool.query(
+    `SELECT g.*,
+      COALESCE(entries.entry_count, 0)::int AS entry_count,
+      COALESCE(winner_data.winners, '[]'::json) AS winners,
+      CASE WHEN $2::text IS NULL THEN FALSE ELSE EXISTS (
+        SELECT 1 FROM server_giveaway_entries self_entry
+        WHERE self_entry.giveaway_id=g.id AND self_entry.user_id=$2
+      ) END AS entered
+     FROM server_giveaways g
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS entry_count
+       FROM server_giveaway_entries entry_count
+       WHERE entry_count.giveaway_id=g.id
+     ) entries ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT json_agg(json_build_object(
+         'id', u.id,
+         'displayName', u.display_name,
+         'username', u.username,
+         'position', w.position
+       ) ORDER BY w.position ASC) AS winners
+       FROM server_giveaway_winners w
+       JOIN users u ON u.id=w.user_id
+       WHERE w.giveaway_id=g.id
+     ) winner_data ON TRUE
+     WHERE g.id=$1`,
+    [giveawayId, viewerId]
+  );
+  return result.rows[0] ? giveawayForClient(result.rows[0]) : null;
+}
+
+async function emitGiveawayUpdate(giveawayId, viewerId = null) {
+  const giveaway = await getGiveawaySnapshot(giveawayId, viewerId);
+  if (giveaway) {
+    if (!viewerId) delete giveaway.entered;
+  emitToChannel(giveaway.serverId, giveaway.channelId, 'giveaway_updated', giveaway);
+  }
+  return giveaway;
+}
+
+async function createServerGiveaway({ serverId, channelId, createdBy, prize, description = '', durationSeconds, winnerCount }) {
+  await ensureNextBotExists();
+  const now = Math.floor(Date.now() / 1000);
+  const giveawayId = uuidv4();
+  const messageId = uuidv4();
+  const endsAt = now + durationSeconds;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO server_giveaways
+       (id, server_id, channel_id, message_id, prize, description, winner_count, created_by, ends_at, status, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active',$10)`,
+      [giveawayId, serverId, channelId, messageId, prize, description || null, winnerCount, createdBy, endsAt, now]
+    );
+    await client.query(
+      'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
+      [messageId, channelId, NEXTBOT_ID, giveawayMessageContent(giveawayId), now]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  const giveaway = await getGiveawaySnapshot(giveawayId, createdBy);
+  const message = {
+    id: messageId,
+    serverId,
+    channelId,
+    fromId: NEXTBOT_ID,
+    content: giveawayMessageContent(giveawayId),
+    createdAt: now,
+    giveaway,
+    author: NEXTBOT_AUTHOR
+  };
+  emitToChannel(serverId, channelId, 'new_channel_message', message);
+  return giveaway;
+}
+
+async function completeServerGiveaway(giveawayId, force = false) {
+  const client = await pool.connect();
+  let completed = null;
+  try {
+    await client.query('BEGIN');
+    const giveawayResult = await client.query('SELECT * FROM server_giveaways WHERE id=$1 FOR UPDATE', [giveawayId]);
+    const giveaway = giveawayResult.rows[0];
+    if (!giveaway || giveaway.status !== 'active') {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    const now = Math.floor(Date.now() / 1000);
+    if (!force && Number(giveaway.ends_at) > now) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    const entries = await client.query(
+      'SELECT user_id FROM server_giveaway_entries WHERE giveaway_id=$1 ORDER BY entered_at ASC, user_id ASC',
+      [giveawayId]
+    );
+    const candidates = entries.rows.map(row => row.user_id);
+    for (let index = candidates.length - 1; index > 0; index--) {
+      const swapIndex = crypto.randomInt(index + 1);
+      [candidates[index], candidates[swapIndex]] = [candidates[swapIndex], candidates[index]];
+    }
+    const winners = candidates.slice(0, Math.min(Number(giveaway.winner_count) || 1, candidates.length));
+    for (let index = 0; index < winners.length; index++) {
+      await client.query(
+        'INSERT INTO server_giveaway_winners (giveaway_id, user_id, position) VALUES ($1,$2,$3)',
+        [giveawayId, winners[index], index + 1]
+      );
+    }
+    await client.query("UPDATE server_giveaways SET status='ended', ended_at=$2 WHERE id=$1", [giveawayId, now]);
+    await client.query('COMMIT');
+    completed = giveaway;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  if (!completed) return null;
+  const giveaway = await emitGiveawayUpdate(giveawayId);
+  (giveaway?.winners || []).forEach(winner => {
+    io.to(`user:${winner.id}`).emit('giveaway_won', {
+      giveawayId,
+      prize: giveaway.prize,
+      serverId: giveaway.serverId,
+      channelId: giveaway.channelId
+    });
+  });
+  return giveaway;
+}
+
+let giveawaySweepRunning = false;
+async function settleDueGiveaways() {
+  if (giveawaySweepRunning) return;
+  giveawaySweepRunning = true;
+  try {
+    const due = await pool.query(
+      "SELECT id FROM server_giveaways WHERE status='active' AND ends_at <= $1 ORDER BY ends_at ASC LIMIT 25",
+      [Math.floor(Date.now() / 1000)]
+    );
+    for (const row of due.rows) {
+      try { await completeServerGiveaway(row.id); }
+      catch (error) { console.error('Giveaway completion failed:', error.message); }
+    }
+  } finally {
+    giveawaySweepRunning = false;
+  }
+}
+
 async function emitBotChannelMessage({ serverId, channelId, content, botName = null }) {
   let resolvedBotName = botName;
   if (!resolvedBotName) {
@@ -907,7 +1263,7 @@ async function emitBotChannelMessage({ serverId, channelId, content, botName = n
       displayName: resolvedBotName || NEXUS_BOT_NAME
     }
   };
-  io.to(`server:${serverId}`).emit('new_channel_message', msg);
+  emitToChannel(serverId, channelId, 'new_channel_message', msg);
   pool.query(
     'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
     [msg.id, channelId, NEXUS_BOT_ID, content, now]
@@ -938,6 +1294,21 @@ async function sendBotDirectMessage({ toUserId, content }) {
   await pool.query(
     'INSERT INTO messages (id, from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4,$5)',
     [msg.id, NEXUS_BOT_ID, toUserId, trimmed, now]
+  );
+}
+
+async function ensureNextBotExists() {
+  await pool.query(
+    `INSERT INTO users (id, username, display_name, password_hash, status, active_color, avatar_mime, avatar_data)
+     VALUES ($1,'nextbot','NextBOT','nextbot-local-only','online','#7c8cff','image/svg+xml',$2)
+     ON CONFLICT (id) DO UPDATE SET
+       username='nextbot',
+       display_name='NextBOT',
+       status='online',
+       active_color='#7c8cff',
+       avatar_mime='image/svg+xml',
+       avatar_data=$2`,
+    [NEXTBOT_ID, NEXTBOT_AVATAR_DATA_URL.replace(/^data:image\/svg\+xml;base64,/, '')]
   );
 }
 
@@ -1061,7 +1432,8 @@ async function getGlobalMuteState(userId) {
 
 async function runChannelCommand({ socket, serverId, channelId, actorUserId, actorDisplayName, input, botConfig }) {
   const raw = String(input || '').trim();
-  const prefix = (botConfig?.botPrefix || '/').toString();
+  const isGiveawaySlashCommand = /^\/giveaway(?:\s|$)/i.test(raw);
+  const prefix = isGiveawaySlashCommand ? '/' : (botConfig?.botPrefix || '/').toString();
   if (!raw.startsWith(prefix)) return false;
   const cmdToken = raw.split(/\s+/)[0].toLowerCase();
   const cmd = cmdToken.slice(prefix.length);
@@ -1079,12 +1451,13 @@ async function runChannelCommand({ socket, serverId, channelId, actorUserId, act
       channelId,
       botName: botConfig?.botName,
       content: [
-        `**${NEXUS_BOT_NAME} Commands**`,
+        `**${NEXUS_BOT_NAME} and ${NEXTBOT_NAME} Commands**`,
         `\`${prefix}help\` \`${prefix}serverstats\` \`${prefix}poll question | option1 | option2 ...\``,
         `\`${prefix}warn @user reason\` \`${prefix}mute @user 10m reason\` \`${prefix}unmute @user\``,
         `\`${prefix}kick @user reason\` \`${prefix}ban @user reason\` \`${prefix}unban @user\``,
         `\`${prefix}setmodlog\` (sets current channel as moderation log)`,
         `\`${prefix}modlog 10\` (show recent moderation actions)`,
+        '`/giveaway` (admins: open a NextBOT giveaway creator)',
         `\`${prefix}botconfig show|prefix|enabled|automod|links|caps|spam|words\``
       ].join('\n')
     });
@@ -1103,6 +1476,44 @@ async function runChannelCommand({ socket, serverId, channelId, actorUserId, act
       botName: botConfig?.botName,
       content: `**Server Stats**\nMembers: ${memberCount.rows[0].count}\nChannels: ${channelCount.rows[0].count}\nBanned users: ${banCount.rows[0].count}`
     });
+    return true;
+  }
+
+  if (cmd === 'giveaway') {
+    if (!perms.isAdmin) {
+      socket.emit('channel_error', { channelId, error: 'Only server owners and admins can create giveaways.' });
+      return true;
+    }
+    const payload = raw.replace(/^\/giveaway\b/i, '').trim();
+    if (!payload) {
+      socket.emit('giveaway_composer_open', { serverId, channelId });
+      return true;
+    }
+    const parts = payload.split('|').map(part => part.trim()).filter(Boolean);
+    if (parts.length < 2) {
+      socket.emit('channel_error', { channelId, error: 'Use /giveaway to open the creator, or /giveaway Prize | 1h | 1.' });
+      return true;
+    }
+    const prize = parts[0].slice(0, 160);
+    const durationSeconds = parseDurationToSeconds(parts[1]);
+    const winnerCount = Math.min(20, Math.max(1, parseInt(parts[2], 10) || 1));
+    if (!prize || durationSeconds < 60 || durationSeconds > 60 * 60 * 24 * 30) {
+      socket.emit('channel_error', { channelId, error: 'Giveaways must last from 1 minute to 30 days. Example: /giveaway Pro | 2h | 1' });
+      return true;
+    }
+    const channel = await pool.query('SELECT channel_type FROM channels WHERE id=$1 AND server_id=$2', [channelId, serverId]);
+    if (!channel.rows.length || (channel.rows[0].channel_type || 'text') !== 'text') {
+      socket.emit('channel_error', { channelId, error: 'Giveaways can only be created in text channels.' });
+      return true;
+    }
+    try {
+      const giveaway = await createServerGiveaway({ serverId, channelId, createdBy: actorUserId, prize, durationSeconds, winnerCount });
+      await logModerationAction({ serverId, channelId, action: 'giveaway_create', actorUserId, details: `${prize} | ${humanDuration(durationSeconds)} | ${winnerCount} winner(s)` });
+      socket.emit('giveaway_created', giveaway);
+    } catch (error) {
+      console.error('Giveaway command creation failed:', error.message);
+      socket.emit('channel_error', { channelId, error: 'Could not create the giveaway. Try again.' });
+    }
     return true;
   }
 
@@ -1440,6 +1851,27 @@ async function runChannelCommand({ socket, serverId, channelId, actorUserId, act
 io.on('connection', (socket) => {
   const userId = socket.userId;
   socket.use(async ([event], next) => {
+    const rateLimits = {
+      send_message: [8, 5000],
+      send_channel_message: [8, 5000],
+      typing_start: [12, 5000],
+      typing_stop: [12, 5000],
+      channel_typing_start: [12, 5000],
+      channel_typing_stop: [12, 5000],
+      call_invite: [6, 30000],
+      join_server_room: [12, 10000],
+      join_channel_room: [16, 10000],
+      toggle_channel_reaction: [20, 5000],
+      channel_message_deleted: [6, 5000],
+      join_group_call: [8, 30000],
+      call_game_open: [6, 30000],
+      call_game_join: [8, 30000],
+      call_game_action: [20, 5000]
+    };
+    const limit = rateLimits[event];
+    if (limit && !takeSocketRateToken(userId, event, limit[0], limit[1])) {
+      return next(new Error('RATE_LIMITED'));
+    }
     if (socket.data.activityOnly) {
       if (!ACTIVITY_ONLY_EVENTS.has(event)) return next(new Error('FORBIDDEN_EVENT'));
       return next();
@@ -1472,8 +1904,13 @@ io.on('connection', (socket) => {
 
   socket.on('send_message', async ({ toId, content }) => {
     if (!toId || !content || typeof content !== 'string') return;
-    const trimmed = content.trim().slice(0, 4000);
-    if (!trimmed) return;
+    let trimmed;
+    try {
+      trimmed = safeMessageContent(content, { field: 'Message' });
+    } catch (error) {
+      socket.emit('message_error', { error: error.message });
+      return;
+    }
     const globalMute = await getGlobalMuteState(userId);
     if (globalMute) {
       socket.emit('message_error', { error: `You are globally muted for ${humanDuration(globalMute.mutedUntil - Math.floor(Date.now() / 1000))} more.` });
@@ -1547,32 +1984,163 @@ io.on('connection', (socket) => {
     trackAchievement(userId, ['messages_sent', 'dms_sent']);
   });
 
-  socket.on('typing_start', async ({ toId }) => {
+  socket.on('typing_start', async ({ toId } = {}) => {
+    const friendship = await pool.query(
+      'SELECT 1 FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1',
+      [userId, String(toId || '')]
+    );
+    if (!friendship.rows.length) return;
     const u = await pool.query('SELECT username FROM users WHERE id=$1', [userId]);
     io.to(`user:${toId}`).emit('user_typing', { fromId: userId, username: u.rows[0]?.username });
   });
 
-  socket.on('typing_stop', ({ toId }) => {
+  socket.on('typing_stop', async ({ toId } = {}) => {
+    const friendship = await pool.query(
+      'SELECT 1 FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1',
+      [userId, String(toId || '')]
+    );
+    if (!friendship.rows.length) return;
     io.to(`user:${toId}`).emit('user_stop_typing', { fromId: userId });
   });
 
-  // Join server socket rooms on connect
-  pool.query(
-    'SELECT server_id FROM server_members WHERE user_id=$1',
-    [userId]
-  ).then(r => {
-    r.rows.forEach(({ server_id }) => socket.join(`server:${server_id}`));
+  socket.on('join_server_room', async ({ serverId } = {}) => {
+    const normalizedServerId = String(serverId || '');
+    if (!normalizedServerId) return;
+    const membership = await pool.query(
+      'SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2 LIMIT 1',
+      [normalizedServerId, userId]
+    );
+    if (!membership.rows.length) {
+      socket.emit('channel_error', { error: 'You are not a member of that server.' });
+      return;
+    }
+    socket.data.activeServerId = normalizedServerId;
+    leaveChannelRooms(socket);
   });
 
-  socket.on('join_server_room', ({ serverId }) => {
-    socket.join(`server:${serverId}`);
+  socket.on('join_channel_room', async ({ serverId, channelId } = {}) => {
+    const normalizedServerId = String(serverId || '');
+    const normalizedChannelId = String(channelId || '');
+    if (!normalizedServerId || !normalizedChannelId) return;
+    const channel = await getChannelAccess(pool, normalizedServerId, normalizedChannelId, userId);
+    if (!channel) {
+      socket.emit('channel_error', { channelId: normalizedChannelId, error: 'You cannot view that channel.' });
+      return;
+    }
+    socket.data.activeServerId = normalizedServerId;
+    leaveChannelRooms(socket);
+    socket.join(channelRoomId(normalizedServerId, normalizedChannelId));
+  });
+
+  socket.on('create_giveaway', async ({ serverId, channelId, prize, description, duration, winnerCount }, ack = () => {}) => {
+    try {
+      const perms = await getServerActorPerms(serverId, userId);
+      if (!perms?.isAdmin) throw new Error('Only server owners and admins can create giveaways.');
+      const safePrize = String(prize || '').trim().slice(0, 160);
+      const safeDescription = String(description || '').trim().slice(0, 400);
+      const durationSeconds = parseDurationToSeconds(duration);
+      const safeWinnerCount = Math.min(20, Math.max(1, parseInt(winnerCount, 10) || 1));
+      if (!safePrize) throw new Error('Giveaway prize is required.');
+      if (durationSeconds < 60 || durationSeconds > 60 * 60 * 24 * 30) throw new Error('Choose a duration from 1 minute to 30 days.');
+      const channel = await pool.query('SELECT channel_type FROM channels WHERE id=$1 AND server_id=$2', [channelId, serverId]);
+      if (!channel.rows.length || (channel.rows[0].channel_type || 'text') !== 'text') throw new Error('Giveaways can only be created in text channels.');
+      await ensureNextBotExists();
+      const giveaway = await createServerGiveaway({
+        serverId,
+        channelId,
+        createdBy: userId,
+        prize: safePrize,
+        description: safeDescription,
+        durationSeconds,
+        winnerCount: safeWinnerCount
+      });
+      await logModerationAction({ serverId, channelId, action: 'giveaway_create', actorUserId: userId, details: `${safePrize} | ${humanDuration(durationSeconds)} | ${safeWinnerCount} winner(s)` });
+      ack({ giveaway });
+    } catch (error) {
+      ack({ error: error.message || 'Could not create the giveaway.' });
+    }
+  });
+
+  socket.on('toggle_giveaway_entry', async ({ giveawayId }, ack = () => {}) => {
+    const client = await pool.connect();
+    let expiredGiveawayId = null;
+    try {
+      await client.query('BEGIN');
+      const member = await client.query(
+        `SELECT g.id, g.server_id, g.ends_at, g.status
+         FROM server_giveaways g
+         JOIN server_members sm ON sm.server_id=g.server_id AND sm.user_id=$2
+         WHERE g.id=$1
+         FOR UPDATE OF g`,
+        [String(giveawayId || ''), userId]
+      );
+      const giveaway = member.rows[0];
+      if (!giveaway) throw new Error('Giveaway not found or unavailable.');
+      if (giveaway.status !== 'active') throw new Error('This giveaway has already ended.');
+      if (Number(giveaway.ends_at) <= Math.floor(Date.now() / 1000)) {
+        expiredGiveawayId = giveaway.id;
+        await client.query('ROLLBACK');
+        throw new Error('This giveaway just ended.');
+      }
+      const existing = await client.query(
+        'SELECT 1 FROM server_giveaway_entries WHERE giveaway_id=$1 AND user_id=$2',
+        [giveaway.id, userId]
+      );
+      const entered = !existing.rows.length;
+      if (entered) {
+        await client.query('INSERT INTO server_giveaway_entries (giveaway_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [giveaway.id, userId]);
+      } else {
+        await client.query('DELETE FROM server_giveaway_entries WHERE giveaway_id=$1 AND user_id=$2', [giveaway.id, userId]);
+      }
+      await client.query('COMMIT');
+      const ownView = await getGiveawaySnapshot(giveaway.id, userId);
+      const sharedView = await getGiveawaySnapshot(giveaway.id);
+      delete sharedView.entered;
+      emitToChannel(giveaway.server_id, giveaway.channel_id, 'giveaway_updated', sharedView);
+      io.to(`user:${userId}`).emit('giveaway_updated', ownView);
+      ack({ giveaway: ownView, entered });
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      if (expiredGiveawayId) {
+        try { await completeServerGiveaway(expiredGiveawayId); } catch (finishError) { console.error('Late giveaway completion failed:', finishError.message); }
+      }
+      ack({ error: error.message || 'Could not update giveaway entry.' });
+    } finally {
+      client.release();
+    }
+  });
+
+  socket.on('end_giveaway', async ({ giveawayId }, ack = () => {}) => {
+    try {
+      const giveaway = await pool.query('SELECT server_id, channel_id, prize FROM server_giveaways WHERE id=$1', [String(giveawayId || '')]);
+      const row = giveaway.rows[0];
+      if (!row) throw new Error('Giveaway not found.');
+      const perms = await getServerActorPerms(row.server_id, userId);
+      if (!perms?.isAdmin) throw new Error('Only server owners and admins can end giveaways.');
+      const completed = await completeServerGiveaway(String(giveawayId || ''), true);
+      if (!completed) throw new Error('This giveaway has already ended.');
+      await logModerationAction({ serverId: row.server_id, channelId: row.channel_id, action: 'giveaway_end', actorUserId: userId, details: row.prize });
+      ack({ giveaway: completed });
+    } catch (error) {
+      ack({ error: error.message || 'Could not end the giveaway.' });
+    }
   });
 
   socket.on('send_channel_message', async ({ serverId, channelId, content, replyToMessageId }) => {
     if (!content || typeof content !== 'string') return;
-    const trimmed = content.trim().slice(0, 4000);
+    let trimmed;
+    try {
+      trimmed = safeMessageContent(content, { field: 'Message' });
+    } catch (error) {
+      socket.emit('channel_error', { channelId, error: error.message });
+      return;
+    }
     const normalizedReplyId = typeof replyToMessageId === 'string' && replyToMessageId.trim() ? replyToMessageId.trim() : null;
-    if (!trimmed) return;
+    const channelAccess = await getChannelAccess(pool, serverId, channelId, userId);
+    if (!channelAccess) {
+      socket.emit('channel_error', { channelId, error: 'You cannot view or post in that channel.' });
+      return;
+    }
     const globalMute = await getGlobalMuteState(userId);
     if (globalMute) {
       socket.emit('channel_error', {
@@ -1599,7 +2167,7 @@ io.on('connection', (socket) => {
 
     const botConfig = await getServerBotConfig(serverId);
 
-    if (trimmed.startsWith(botConfig.botPrefix || '/')) {
+    if (trimmed.startsWith(botConfig.botPrefix || '/') || /^\/giveaway(?:\s|$)/i.test(trimmed)) {
       const handled = await runChannelCommand({
         socket,
         serverId,
@@ -1774,13 +2342,12 @@ io.on('connection', (socket) => {
       }
     };
     // Resolve mentions for notification
-    const userMentionMatches = [...trimmed.matchAll(/<@user:([a-f0-9-]+)>/g)];
+    const mentionedUserIds = await getChannelAccessibleUserIds(pool, serverId, channelId, Object.keys(mentions.users || {}));
     const roleMentionMatches = [...trimmed.matchAll(/<@role:([a-f0-9-]+)>/g)];
     const specialMentionMatches = [...new Set([...trimmed.matchAll(/<@(everyone|here)>/g)].map(m => m[1]))];
 
     // Notify mentioned users
-    userMentionMatches.forEach(m => {
-      const mentionedId = m[1];
+    mentionedUserIds.forEach(mentionedId => {
       if (mentionedId !== userId) {
         io.to(`user:${mentionedId}`).emit('mentioned', {
           type: 'channel', serverId, channelId,
@@ -1793,24 +2360,27 @@ io.on('connection', (socket) => {
     // Notify mentioned role members
     if (roleMentionMatches.length) {
       const roleIds = roleMentionMatches.map(m => m[1]);
-      pool.query(
-        `SELECT user_id FROM server_members WHERE server_id=$1 AND role_id = ANY($2)`,
+      const roleMembers = await pool.query(
+        `SELECT DISTINCT sm.user_id
+         FROM server_members sm
+         LEFT JOIN server_member_roles smr ON smr.server_id=sm.server_id AND smr.user_id=sm.user_id
+         WHERE sm.server_id=$1 AND (sm.role_id = ANY($2) OR smr.role_id = ANY($2))`,
         [serverId, roleIds]
-      ).then(r => {
-        r.rows.forEach(({ user_id }) => {
-          if (user_id !== userId) {
-            io.to(`user:${user_id}`).emit('mentioned', {
-              type: 'channel', serverId, channelId,
-              fromUser: { displayName: row.display_name, username: row.username },
-              preview: trimmed.replace(/<@(user|role):[a-f0-9-]+>/g, '@...').slice(0, 80)
-            });
-          }
-        });
+      );
+      const visibleRoleMemberIds = await getChannelAccessibleUserIds(pool, serverId, channelId, roleMembers.rows.map(row => row.user_id));
+      visibleRoleMemberIds.forEach(mentionedId => {
+        if (mentionedId !== userId) {
+          io.to(`user:${mentionedId}`).emit('mentioned', {
+            type: 'channel', serverId, channelId,
+            fromUser: { displayName: row.display_name, username: row.username },
+            preview: trimmed.replace(/<@(user|role):[a-f0-9-]+>/g, '@...').slice(0, 80)
+          });
+        }
       });
     }
 
     if (specialMentionMatches.length) {
-      socket.to(`server:${serverId}`).emit('mentioned', {
+      socket.to(channelRoomId(serverId, channelId)).emit('mentioned', {
         type: 'channel', serverId, channelId,
         special: specialMentionMatches.includes('everyone') ? 'everyone' : 'here',
         fromUser: { displayName: row.display_name, username: row.username },
@@ -1818,9 +2388,9 @@ io.on('connection', (socket) => {
       });
     }
 
-    // Emit to sender immediately, then rest of server room
+    // Emit to the sender immediately, then sockets currently viewing this channel.
     socket.emit('new_channel_message', msg);
-    socket.to(`server:${serverId}`).emit('new_channel_message', msg);
+    socket.to(channelRoomId(serverId, channelId)).emit('new_channel_message', msg);
     // Persist non-blocking
     pool.query(
       'INSERT INTO channel_messages (id, channel_id, from_id, content, created_at, reply_to_id) VALUES ($1,$2,$3,$4,$5,$6)',
@@ -1839,45 +2409,36 @@ io.on('connection', (socket) => {
     trackAchievement(userId, ['messages_sent', 'channel_msgs']);
   });
 
-  socket.on('channel_typing_start', ({ serverId, channelId }) => {
+  socket.on('channel_typing_start', async ({ serverId, channelId } = {}) => {
+    if (!await canAccessChannel(pool, serverId, channelId, userId)) return;
     pool.query('SELECT username FROM users WHERE id=$1', [userId]).then(r => {
-      socket.to(`server:${serverId}`).emit('channel_user_typing', {
+      socket.to(channelRoomId(serverId, channelId)).emit('channel_user_typing', {
         channelId, userId, username: r.rows[0]?.username
       });
     });
   });
 
-  socket.on('channel_typing_stop', ({ serverId, channelId }) => {
-    socket.to(`server:${serverId}`).emit('channel_user_stop_typing', { channelId, userId });
+  socket.on('channel_typing_stop', async ({ serverId, channelId } = {}) => {
+    if (!await canAccessChannel(pool, serverId, channelId, userId)) return;
+    socket.to(channelRoomId(serverId, channelId)).emit('channel_user_stop_typing', { channelId, userId });
   });
 
-  socket.on('channel_message_deleted', ({ serverId, channelId, messageId }) => {
-    // Broadcast deletion to all server members
-    io.to(`server:${serverId}`).emit('channel_message_deleted', { channelId, messageId });
+  socket.on('channel_message_deleted', async ({ serverId, channelId, messageId } = {}) => {
+    if (!await canAccessChannel(pool, serverId, channelId, userId)) return;
+    const stillExists = await pool.query(
+      `SELECT 1 FROM channel_messages cm
+       JOIN channels ch ON ch.id=cm.channel_id
+       WHERE cm.id=$1 AND cm.channel_id=$2 AND ch.server_id=$3 LIMIT 1`,
+      [messageId, channelId, serverId]
+    );
+    if (stillExists.rows.length) return;
+    emitToChannel(serverId, channelId, 'channel_message_deleted', { channelId, messageId });
   });
 
   socket.on('toggle_channel_reaction', async ({ serverId, channelId, messageId, emoji }) => {
     const normalizedEmoji = String(emoji || '').trim().slice(0, 16);
     if (!normalizedEmoji) return;
-
-    const member = await pool.query(
-      `SELECT sm.id, sm.role, s.owner_id,
-       (NOT EXISTS(
-         SELECT 1 FROM server_member_roles smr0
-         WHERE smr0.server_id=sm.server_id AND smr0.user_id=sm.user_id
-       ) OR EXISTS(
-         SELECT 1 FROM server_member_roles smr JOIN server_roles sr ON sr.id=smr.role_id
-         WHERE smr.server_id=sm.server_id AND smr.user_id=sm.user_id AND sr.can_connect_voice=TRUE
-       )) AS can_connect_voice
-       FROM server_members sm JOIN servers s ON s.id=sm.server_id
-       WHERE sm.server_id=$1 AND sm.user_id=$2`,
-      [serverId, userId]
-    );
-    if (!member.rows.length) return;
-    if (member.rows[0].owner_id !== userId && member.rows[0].role !== 'admin' && !member.rows[0].can_connect_voice) {
-      socket.emit('group_call_error', { error: 'You do not have permission to connect to this voice channel' });
-      return;
-    }
+    if (!await canAccessChannel(pool, serverId, channelId, userId)) return;
 
     const msg = await pool.query(
       `SELECT cm.id
@@ -1915,7 +2476,7 @@ io.on('connection', (socket) => {
       [messageId, userId]
     );
 
-    io.to(`server:${serverId}`).emit('channel_message_reaction_updated', {
+    emitToChannel(serverId, channelId, 'channel_message_reaction_updated', {
       channelId,
       messageId,
       reactions: agg.rows.map(r => ({
@@ -1937,7 +2498,12 @@ io.on('connection', (socket) => {
     io.to(`user:${targetUserId}`).emit('account_suspended', { suspendedUntil, reason: reason || null });
   });
 
-  socket.on('call_invite', async ({ toId, callType }) => {
+  socket.on('call_invite', async ({ toId, callType } = {}) => {
+    const friendship = await pool.query(
+      'SELECT 1 FROM friendships WHERE (user1_id=$1 AND user2_id=$2) OR (user1_id=$2 AND user2_id=$1) LIMIT 1',
+      [userId, String(toId || '')]
+    );
+    if (!friendship.rows.length) return socket.emit('call_error', { error: 'You can only call friends.' });
     const targetRoom = await getUserCallRoom(toId);
     if (targetRoom) { socket.emit('call_busy', { userId: toId }); return; }
     const roomId = uuidv4();
@@ -1995,62 +2561,69 @@ io.on('connection', (socket) => {
     io.to(`user:${toId}`).emit('call_declined', { roomId, byId: userId });
   });
 
-  socket.on('join_call', ({ roomId }) => {
+  socket.on('join_call', async ({ roomId } = {}) => {
     if (socket.data.activityOnly && socket.data.activityCall && socket.data.activityCall.roomId !== roomId) return;
+    const participants = await getRoomParticipants(String(roomId || ''));
+    if (!participants.has(userId)) return socket.emit('call_error', { error: 'You are not invited to this call.' });
     socket.data.callRoomId = roomId;
     socket.join(`call:${roomId}`);
     socket.to(`call:${roomId}`).emit('peer_joined', { userId });
   });
 
-  socket.on('webrtc_offer', ({ roomId, toId, offer }) => {
+  socket.on('webrtc_offer', async ({ roomId, toId, offer } = {}) => {
     if (socket.data.activityOnly && socket.data.activityCall && (socket.data.activityCall.roomId !== roomId || socket.data.activityCall.callerId !== String(toId || ''))) return;
+    const participants = await getRoomParticipants(String(roomId || ''));
+    if (!participants.has(userId) || !participants.has(String(toId || ''))) return;
     io.to(`user:${toId}`).emit('webrtc_offer', { roomId, fromId: userId, offer });
   });
-  socket.on('webrtc_answer', ({ roomId, toId, answer }) => {
+  socket.on('webrtc_answer', async ({ roomId, toId, answer } = {}) => {
     if (socket.data.activityOnly && socket.data.activityCall && (socket.data.activityCall.roomId !== roomId || socket.data.activityCall.callerId !== String(toId || ''))) return;
+    const participants = await getRoomParticipants(String(roomId || ''));
+    if (!participants.has(userId) || !participants.has(String(toId || ''))) return;
     io.to(`user:${toId}`).emit('webrtc_answer', { roomId, fromId: userId, answer });
   });
-  socket.on('webrtc_ice', ({ roomId, toId, candidate }) => {
+  socket.on('webrtc_ice', async ({ roomId, toId, candidate } = {}) => {
     if (socket.data.activityOnly && socket.data.activityCall && (socket.data.activityCall.roomId !== roomId || socket.data.activityCall.callerId !== String(toId || ''))) return;
+    const participants = await getRoomParticipants(String(roomId || ''));
+    if (!participants.has(userId) || !participants.has(String(toId || ''))) return;
     io.to(`user:${toId}`).emit('webrtc_ice', { roomId, fromId: userId, candidate });
   });
 
-  socket.on('call_end', async ({ roomId }) => {
+  socket.on('call_end', async ({ roomId } = {}) => {
     if (socket.data.activityOnly && socket.data.activityCall && socket.data.activityCall.roomId !== roomId) return;
+    const participants = await getRoomParticipants(String(roomId || ''));
+    if (!participants.has(userId)) return;
     await closeDirectCallRoom(roomId);
     socket.data.callRoomId = null;
     socket.leave(`call:${roomId}`);
   });
 
-  socket.on('call_cancel', ({ toId, roomId }) => {
-    if (roomId) { callTypes.delete(roomId); directCallInvites.delete(roomId); }
+  socket.on('call_cancel', ({ toId, roomId } = {}) => {
+    const invite = roomId ? directCallInvites.get(roomId) : null;
+    if (!invite || invite.fromId !== userId || invite.toId !== toId) return;
+    callTypes.delete(roomId); directCallInvites.delete(roomId);
     // Receiver will ignore if there is no pending call.
     io.to(`user:${toId}`).emit('call_cancelled', { fromId: userId });
   });
 
-  socket.on('screenshare_started', ({ roomId, toId }) => {
+  socket.on('screenshare_started', async ({ roomId, toId } = {}) => {
+    const participants = await getRoomParticipants(String(roomId || ''));
+    if (!participants.has(userId) || !participants.has(String(toId || ''))) return;
     io.to(`user:${toId}`).emit('screenshare_started', { fromId: userId });
   });
 
-  socket.on('screenshare_stopped', ({ roomId, toId }) => {
+  socket.on('screenshare_stopped', async ({ roomId, toId } = {}) => {
+    const participants = await getRoomParticipants(String(roomId || ''));
+    if (!participants.has(userId) || !participants.has(String(toId || ''))) return;
     io.to(`user:${toId}`).emit('screenshare_stopped', { fromId: userId });
   });
 
   socket.on('join_group_call', async ({ serverId, channelId }) => {
     if (!serverId || !channelId) return;
-
-    const member = await pool.query(
-      'SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2',
-      [serverId, userId]
-    );
-    if (!member.rows.length) return;
-
-    const channel = await pool.query(
-      `SELECT id, channel_type FROM channels WHERE id=$1 AND server_id=$2`,
-      [channelId, serverId]
-    );
-    if (!channel.rows.length) return;
-    if ((channel.rows[0].channel_type || 'text') !== 'voice') return;
+    const channel = await getChannelAccess(pool, serverId, channelId, userId);
+    if (!channel || (channel.channel_type || 'text') !== 'voice') {
+      return socket.emit('group_call_error', { error: 'You cannot join that voice channel.' });
+    }
 
     const roomId = getGroupCallRoomId(serverId, channelId);
     const previousRoomId = userGroupCallRoom.get(userId);
@@ -2485,6 +3058,11 @@ async function start() {
   }
 
   await initDb();
+  await ensureNextBotExists();
+  await settleDueGiveaways();
+  setInterval(() => {
+    settleDueGiveaways().catch(error => console.error('Giveaway sweep failed:', error.message));
+  }, 30 * 1000).unref();
   await setupRedisBackplane();
   server.listen(PORT, () => console.log(`Nexus running on port ${PORT}`));
 }

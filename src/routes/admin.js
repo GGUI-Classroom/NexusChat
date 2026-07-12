@@ -1,7 +1,9 @@
 const express = require('express');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 const { requireAuth } = require('../middleware/auth');
+const { safeDisplayName } = require('../utils/inputSafety');
 const { buildReportPayload, clearReportCache, getActiveReport } = require('../utils/systemReport');
 const { clearSafetyTermCache, normalizeTerm } = require('../utils/globalSafety');
 const { getCurrentTos, setCachedTos } = require('../utils/tosPolicy');
@@ -12,7 +14,7 @@ const router = express.Router();
 router.use(requireAuth);
 const NEXUS_GUARD_AVATAR = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmNTllMGIiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmOTczMTYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgY3k9IjQ4IiByPSI0NiIgZmlsbD0idXJsKCNnKSIvPjxwYXRoIGQ9Ik00OCAxNmwyNCA4djIyYzAgMTgtMTAgMzAtMjQgMzYtMTQtNi0yNC0xOC0yNC0zNlYyNHoiIGZpbGw9InVybCgjYSkiLz48cGF0aCBkPSJNNDggMjZsMTQgNXYxNWMwIDExLTYgMTktMTQgMjMtOC00LTE0LTEyLTE0LTIzVjMxeiIgZmlsbD0iIzExMTgyNyIgb3BhY2l0eT0iLjY1Ii8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0NSIgcj0iNyIgZmlsbD0iI2ZkZTY4YSIvPjxwYXRoIGQ9Ik0zNiA1OWgyNHY1SDM2eiIgZmlsbD0iI2ZkZTY4YSIvPjwvc3ZnPg==';
 const NEXUS_GUARD_ID = '00000000-0000-0000-0000-000000000001';
-const ADMIN_QR_REQUIRED_CODE = process.env.ADMIN_QR_CODE || 'JJKLOL12DAJWUDIUWQ';
+const ADMIN_QR_REQUIRED_CODE = String(process.env.ADMIN_QR_CODE || '');
 const NON_REMOVABLE_ADMIN_ID = '537b58c9-b9cd-4239-b0e6-2f862c30ac01';
 
 async function ensureNexusGuardExists() {
@@ -79,6 +81,13 @@ async function requireAdmin(req, res, next) {
     console.error('requireAdmin failed:', e.message);
     return res.status(500).json({ error: 'Admin check failed' });
   }
+}
+
+function matchesAdminEnrollmentCode(value) {
+  if (!ADMIN_QR_REQUIRED_CODE) return false;
+  const actual = Buffer.from(String(value || ''));
+  const expected = Buffer.from(ADMIN_QR_REQUIRED_CODE);
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 router.use(requireAdmin);
 
@@ -711,7 +720,13 @@ router.patch('/users/:userId/identity', async (req, res) => {
     await pool.query('UPDATE users SET username=$1 WHERE id=$2', [username.toLowerCase(), userId]);
   }
   if (displayName) {
-    await pool.query('UPDATE users SET display_name=$1 WHERE id=$2', [displayName, userId]);
+    let safeName;
+    try {
+      safeName = safeDisplayName(displayName);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    await pool.query('UPDATE users SET display_name=$1 WHERE id=$2', [safeName, userId]);
   }
   const r = await pool.query('SELECT username, display_name FROM users WHERE id=$1', [userId]);
   res.json({ success: true, username: r.rows[0].username, displayName: r.rows[0].display_name });
@@ -936,8 +951,9 @@ router.post('/admins', async (req, res) => {
   const username = String(req.body.username || '').trim();
   const qrCode = String(req.body.qrCode || '').trim();
   if (!username) return res.status(400).json({ error: 'Username required' });
+  if (!ADMIN_QR_REQUIRED_CODE) return res.status(503).json({ error: 'Admin enrollment is not configured. Set ADMIN_QR_CODE in the service environment.' });
   if (!qrCode) return res.status(400).json({ error: 'QR scan code required' });
-  if (qrCode !== ADMIN_QR_REQUIRED_CODE) return res.status(403).json({ error: 'Invalid QR verification code' });
+  if (!matchesAdminEnrollmentCode(qrCode)) return res.status(403).json({ error: 'Invalid QR verification code' });
 
   const target = await pool.query('SELECT id, username, display_name FROM users WHERE LOWER(username)=LOWER($1)', [username]);
   if (!target.rows.length) return res.status(404).json({ error: 'User not found' });

@@ -29,8 +29,16 @@ router.get('/connect', requireAuth, (req, res) => {
   const stateSecret = process.env.NEXUS_LINK_STATE_SECRET;
   if (!linkUrl || !stateSecret) return res.status(503).send('Nexus LINK account connection is not configured yet.');
   const nexusUserId = req.session.userId;
-  const signature = crypto.createHmac('sha256', stateSecret).update(nexusUserId).digest('hex');
-  const params = new URLSearchParams({ nexus_user_id: nexusUserId, signature });
+  const expiresAt = Math.floor(Date.now() / 1000) + (5 * 60);
+  const nonce = crypto.randomBytes(18).toString('base64url');
+  const stateValue = `${nexusUserId}:${expiresAt}:${nonce}`;
+  const signature = crypto.createHmac('sha256', stateSecret).update(stateValue).digest('hex');
+  const params = new URLSearchParams({
+    nexus_user_id: nexusUserId,
+    expires_at: String(expiresAt),
+    nonce,
+    signature
+  });
   res.redirect(`${linkUrl}/auth/discord/start?${params}`);
 });
 
