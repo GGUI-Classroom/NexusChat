@@ -1,7 +1,14 @@
 node_modules/
+.pnpm-store/
+.wsl/
 data/
 *.db
 *.db-shm
 *.db-wal
 .env
 .DS_Store
+LOCAL FILES/
+NEXUS LINK/
+.agents/
+.codex/
+.git.placeholder.*/

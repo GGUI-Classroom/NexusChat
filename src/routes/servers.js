@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 const { requireAuth } = require('../middleware/auth');
@@ -42,7 +43,9 @@ const upload = multer({
   }
 });
 
-function genInviteCode() { return Math.random().toString(36).substring(2,10).toUpperCase(); }
+function genInviteCode() {
+  return crypto.randomBytes(8).toString('base64url').replace(/[-_]/g, '').slice(0, 10).toUpperCase();
+}
 
 function clientHex(value, fallback = '#8892a4') {
   return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toLowerCase() : fallback;

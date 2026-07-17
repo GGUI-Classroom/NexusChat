@@ -7,10 +7,17 @@ const { getActiveReportForUser } = require('../utils/systemReport');
 const { requestIp, requestDeviceId } = require('../utils/ip');
 const { getCurrentTos, getUserTosState } = require('../utils/tosPolicy');
 const { safeDisplayName } = require('../utils/inputSafety');
+const {
+  SESSION_SECURITY_VERSION,
+  ensureCsrfToken,
+  rotateCsrfToken,
+  bindDeviceSessionToRequest,
+  revokeCurrentDeviceSession,
+  getUserSessionVersion
+} = require('../utils/security');
 
 const router = express.Router();
 const DEFAULT_SERVER_INVITE_CODE = 'GPFA9B32';
-const SESSION_SECURITY_VERSION = 3;
 const authAttemptBuckets = new Map();
 
 function allowAuthAttempt(req, action) {
@@ -28,16 +35,27 @@ function allowAuthAttempt(req, action) {
 
 function establishFreshSession(req, userId, tosAcceptedVersion = 0) {
   return new Promise((resolve, reject) => {
-    req.session.regenerate(error => {
+    req.session.regenerate(async error => {
       if (error) return reject(error);
-      req.session.userId = userId;
-      req.session.authVersion = SESSION_SECURITY_VERSION;
-      req.session.authIssuedAt = Date.now();
-      req.session.tosAcceptedVersion = tosAcceptedVersion;
-      req.session.save(saveError => saveError ? reject(saveError) : resolve());
+      try {
+        req.session.userId = userId;
+        req.session.authVersion = SESSION_SECURITY_VERSION;
+        req.session.authIssuedAt = Date.now();
+        req.session.userSessionVersion = await getUserSessionVersion(userId);
+        req.session.tosAcceptedVersion = tosAcceptedVersion;
+        rotateCsrfToken(req);
+        const deviceSession = await bindDeviceSessionToRequest(req, userId);
+        req.session.save(saveError => saveError ? reject(saveError) : resolve(deviceSession));
+      } catch (setupError) {
+        reject(setupError);
+      }
     });
   });
 }
+
+router.get('/csrf', (req, res) => {
+  res.json({ csrfToken: ensureCsrfToken(req) });
+});
 
 router.post('/register', async (req, res) => {
   const { username, displayName, password } = req.body;
@@ -83,10 +101,10 @@ router.post('/register', async (req, res) => {
         [uuidv4(), defaultServer.rows[0].id, id]
       );
     }
-    await establishFreshSession(req, id, 0);
+    const deviceSession = await establishFreshSession(req, id, 0);
     const systemReport = await getActiveReportForUser(pool, id);
     const tos = await getCurrentTos();
-    return res.json({ success: true, systemReport, tosRequired: true, tos, user: { id, username: username.toLowerCase(), displayName: safeName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null, developerMode: false, tutorialCompleted: false } });
+    return res.json({ success: true, csrfToken: ensureCsrfToken(req), deviceToken: deviceSession?.token || null, systemReport, tosRequired: true, tos, user: { id, username: username.toLowerCase(), displayName: safeName, bio: null, activeDecoration: null, activeColor: null, activeFont: null, activeRingtone: null, developerMode: false, tutorialCompleted: false } });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'Server error' });
@@ -134,11 +152,11 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    await establishFreshSession(req, user.id, parseInt(user.accepted_tos_version, 10) || 0);
+    const deviceSession = await establishFreshSession(req, user.id, parseInt(user.accepted_tos_version, 10) || 0);
     await pool.query('UPDATE users SET last_ip=$1, last_device_id=$2 WHERE id=$3', [ip || null, deviceId || null, user.id]);
     const systemReport = await getActiveReportForUser(pool, user.id);
     const tosState = await getUserTosState(user.id);
-    return res.json({ success: true, systemReport, tosRequired: tosState.required, tos: tosState.required ? tosState.policy : null, user: {
+    return res.json({ success: true, csrfToken: ensureCsrfToken(req), deviceToken: deviceSession?.token || null, systemReport, tosRequired: tosState.required, tos: tosState.required ? tosState.policy : null, user: {
       id: user.id, username: user.username, displayName: user.display_name,
       avatarDataUrl: avatarUrl(user.id, !!user.has_avatar),
       bio: user.bio || null,
@@ -155,8 +173,22 @@ router.post('/login', async (req, res) => {
   }
 });
 
-router.post('/logout', (req, res) => {
-  req.session.destroy(() => res.json({ success: true }));
+router.post('/logout', async (req, res) => {
+  try {
+    await revokeCurrentDeviceSession(req);
+  } catch (error) {
+    console.error('Device session revoke failed:', error.message);
+  }
+  if (req.session) {
+    delete req.session.csrfToken;
+    delete req.session.deviceSessionId;
+    delete req.session.deviceId;
+    delete req.session.deviceTokenHash;
+  }
+  req.session.destroy(() => {
+    res.clearCookie('nexus.sid');
+    res.json({ success: true });
+  });
 });
 
 router.get('/me', async (req, res) => {
@@ -186,7 +218,7 @@ router.get('/me', async (req, res) => {
     req.session.tosAcceptedVersion = parseInt(user.accepted_tos_version, 10) || 0;
     const systemReport = await getActiveReportForUser(pool, user.id);
     const tosState = await getUserTosState(user.id);
-    return res.json({ systemReport, tosRequired: tosState.required, tos: tosState.required ? tosState.policy : null, user: {
+    return res.json({ csrfToken: ensureCsrfToken(req), systemReport, tosRequired: tosState.required, tos: tosState.required ? tosState.policy : null, user: {
       id: user.id, username: user.username, displayName: user.display_name,
       avatarDataUrl: avatarUrl(user.id, !!user.has_avatar),
       bio: user.bio || null,

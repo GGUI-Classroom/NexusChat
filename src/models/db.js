@@ -53,6 +53,7 @@ async function initDb() {
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS accepted_tos_version INTEGER NOT NULL DEFAULT 0`, 'alter_users_accepted_tos_version');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS accepted_tos_at BIGINT DEFAULT NULL`, 'alter_users_accepted_tos_at');
   await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS developer_mode BOOLEAN DEFAULT FALSE`, 'alter_users_developer_mode');
+  await runSql(`ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0`, 'alter_users_session_version');
 
   await runSql(`CREATE TABLE IF NOT EXISTS terms_of_service (
     id TEXT PRIMARY KEY,
@@ -612,6 +613,22 @@ async function initDb() {
     created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
     UNIQUE(user_id)
   )`, 'admin_users');
+
+  await runSql(`CREATE TABLE IF NOT EXISTS user_device_sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_id TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    session_id TEXT DEFAULT NULL,
+    user_agent TEXT DEFAULT NULL,
+    ip_address TEXT DEFAULT NULL,
+    created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    last_seen_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+    revoked_at BIGINT DEFAULT NULL,
+    UNIQUE(token_hash)
+  )`, 'user_device_sessions');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_user_device_sessions_user_active ON user_device_sessions(user_id, revoked_at)`, 'idx_user_device_sessions_user_active');
+  await runSql(`CREATE INDEX IF NOT EXISTS idx_user_device_sessions_device_active ON user_device_sessions(device_id, revoked_at)`, 'idx_user_device_sessions_device_active');
 
   await runSql(`CREATE TABLE IF NOT EXISTS user_client_state (
     id TEXT PRIMARY KEY,

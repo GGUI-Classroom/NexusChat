@@ -12,6 +12,8 @@ services:
         value: production
       - key: SESSION_SECRET
         generateValue: true
+      - key: ALLOW_INSECURE_DEV_SECRET
+        value: "false"
       - key: DATABASE_URL
         sync: false
       - key: DATABASE_SSL
@@ -39,6 +41,10 @@ services:
       - key: NEXUS_LINK_URL
         sync: false
       - key: NEXUS_LINK_STATE_SECRET
+        sync: false
+      - key: CORE_ADMIN_IDS
+        sync: false
+      - key: NON_REMOVABLE_ADMIN_IDS
         sync: false
       - key: ADMIN_QR_CODE
         sync: false

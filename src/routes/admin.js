@@ -9,13 +9,20 @@ const { clearSafetyTermCache, normalizeTerm } = require('../utils/globalSafety')
 const { getCurrentTos, setCachedTos } = require('../utils/tosPolicy');
 const { avatarUrl, clearCachedAvatar } = require('../utils/avatar');
 const { deleteCachedMedia } = require('../utils/mediaCache');
+const {
+  CORE_ADMIN_IDS,
+  isGlobalAdmin,
+  isCoreAdmin,
+  isNonRemovableAdmin,
+  bumpUserSessionVersion,
+  revokeDeviceSessionsForDevice
+} = require('../utils/security');
 
 const router = express.Router();
 router.use(requireAuth);
 const NEXUS_GUARD_AVATAR = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMWUyOTNiIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNmNTllMGIiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNmOTczMTYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSI0OCIgY3k9IjQ4IiByPSI0NiIgZmlsbD0idXJsKCNnKSIvPjxwYXRoIGQ9Ik00OCAxNmwyNCA4djIyYzAgMTgtMTAgMzAtMjQgMzYtMTQtNi0yNC0xOC0yNC0zNlYyNHoiIGZpbGw9InVybCgjYSkiLz48cGF0aCBkPSJNNDggMjZsMTQgNXYxNWMwIDExLTYgMTktMTQgMjMtOC00LTE0LTEyLTE0LTIzVjMxeiIgZmlsbD0iIzExMTgyNyIgb3BhY2l0eT0iLjY1Ii8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0NSIgcj0iNyIgZmlsbD0iI2ZkZTY4YSIvPjxwYXRoIGQ9Ik0zNiA1OWgyNHY1SDM2eiIgZmlsbD0iI2ZkZTY4YSIvPjwvc3ZnPg==';
 const NEXUS_GUARD_ID = '00000000-0000-0000-0000-000000000001';
 const ADMIN_QR_REQUIRED_CODE = String(process.env.ADMIN_QR_CODE || '');
-const NON_REMOVABLE_ADMIN_ID = '537b58c9-b9cd-4239-b0e6-2f862c30ac01';
 
 async function ensureNexusGuardExists() {
   await pool.query(
@@ -59,18 +66,6 @@ async function sendNexusGuardDM(req, userId, content) {
   }
 }
 
-// Hardcoded admin user IDs
-const ADMIN_IDS = new Set([
-  '537b58c9-b9cd-4239-b0e6-2f862c30ac01',
-]);
-
-async function isGlobalAdmin(userId) {
-  if (!userId) return false;
-  if (ADMIN_IDS.has(userId)) return true;
-  const r = await pool.query('SELECT id FROM admin_users WHERE user_id=$1', [userId]);
-  return !!r.rows.length;
-}
-
 async function requireAdmin(req, res, next) {
   try {
     if (!(await isGlobalAdmin(req.session.userId))) {
@@ -92,7 +87,7 @@ function matchesAdminEnrollmentCode(value) {
 router.use(requireAdmin);
 
 function requireCoreAdmin(req, res, next) {
-  if (!ADMIN_IDS.has(req.session.userId)) {
+  if (!isCoreAdmin(req.session.userId)) {
     return res.status(403).json({ error: 'Core admins only' });
   }
   next();
@@ -149,7 +144,7 @@ router.use((req, res, next) => {
 
 // Check if current user is admin (used by frontend on load)
 router.get('/check', (req, res) => {
-  res.json({ isAdmin: true, isCoreAdmin: ADMIN_IDS.has(req.session.userId) });
+  res.json({ isAdmin: true, isCoreAdmin: isCoreAdmin(req.session.userId) });
 });
 
 router.get('/system-report', requireCoreAdmin, async (req, res) => {
@@ -246,7 +241,7 @@ router.post('/suspend', async (req, res) => {
 
   const user = await pool.query('SELECT id, username FROM users WHERE LOWER(username)=LOWER($1)', [username]);
   if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
-  if (ADMIN_IDS.has(user.rows[0].id)) return res.status(403).json({ error: 'Cannot suspend an admin' });
+  if (await isGlobalAdmin(user.rows[0].id)) return res.status(403).json({ error: 'Cannot suspend an admin' });
 
   const multipliers = { minutes: 60, hours: 3600, days: 86400 };
   const seconds = parseInt(duration) * (multipliers[unit] || 60);
@@ -265,6 +260,7 @@ router.post('/suspend', async (req, res) => {
       reason: reason || null
     });
   }
+  await bumpUserSessionVersion(user.rows[0].id);
 
   try {
     await sendNexusGuardDM(
@@ -309,7 +305,7 @@ router.post('/global-mutes', async (req, res) => {
   const reason = String(req.body.reason || '').trim().slice(0, 300);
   const target = await pool.query('SELECT id,username FROM users WHERE LOWER(username)=LOWER($1)', [username]);
   if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
-  if (ADMIN_IDS.has(target.rows[0].id)) return res.status(403).json({ error: 'A core admin cannot be globally muted' });
+  if (isCoreAdmin(target.rows[0].id)) return res.status(403).json({ error: 'A core admin cannot be globally muted' });
   await pool.query('UPDATE global_mutes SET active=FALSE WHERE user_id=$1 AND active=TRUE', [target.rows[0].id]);
   const id = uuidv4();
   const mutedUntil = Math.floor(Date.now() / 1000) + durationSeconds;
@@ -333,7 +329,7 @@ router.post('/ip-ban', async (req, res) => {
   const user = await pool.query('SELECT id, username, last_ip, last_device_id FROM users WHERE LOWER(username)=LOWER($1)', [username]);
   if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
   const row = user.rows[0];
-  if (ADMIN_IDS.has(row.id)) return res.status(403).json({ error: 'Cannot device ban a core admin' });
+  if (isCoreAdmin(row.id)) return res.status(403).json({ error: 'Cannot device ban a core admin' });
   if (!row.last_device_id) return res.status(400).json({ error: 'That user has no recorded device yet. Have them log in with the updated client first.' });
   await pool.query('UPDATE ip_bans SET active=FALSE WHERE device_id=$1 AND active=TRUE', [row.last_device_id]);
   const banId = uuidv4();
@@ -342,6 +338,7 @@ router.post('/ip-ban', async (req, res) => {
      VALUES ($1,$2,$3,$4,$5,$6,$7)`,
     [banId, row.last_ip || 'unknown', row.last_device_id, row.username, row.id, req.session.userId, reason]
   );
+  await revokeDeviceSessionsForDevice(row.last_device_id);
   if (req.io) req.io.to(`user:${row.id}`).emit('force_logout', { reason: 'This device was banned from Nexus.' });
   res.json({ success: true, id: banId, username: row.username, ip: row.last_ip || null, deviceId: row.last_device_id });
 });
@@ -392,7 +389,7 @@ router.get('/servers', async (req, res) => {
 });
 
 // Join a server as admin (force join with admin role)
-router.post('/servers/:serverId/join', async (req, res) => {
+router.post('/servers/:serverId/join', requireCoreAdmin, async (req, res) => {
   const { serverId } = req.params;
   const already = await pool.query('SELECT id FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, req.session.userId]);
   if (already.rows.length) {
@@ -406,7 +403,7 @@ router.post('/servers/:serverId/join', async (req, res) => {
 });
 
 // Delete a server
-router.delete('/servers/:serverId', async (req, res) => {
+router.delete('/servers/:serverId', requireCoreAdmin, async (req, res) => {
   await pool.query('DELETE FROM servers WHERE id=$1', [req.params.serverId]);
   res.json({ success: true });
 });
@@ -699,18 +696,21 @@ router.get('/users/:userId', async (req, res) => {
 });
 
 // Change user password
-router.patch('/users/:userId/password', async (req, res) => {
+router.patch('/users/:userId/password', requireCoreAdmin, async (req, res) => {
   const { userId } = req.params;
   const { password } = req.body;
-  if (!password || password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+    return res.status(400).json({ error: 'Password must be 8-128 characters' });
+  }
   const bcrypt = require('bcryptjs');
   const hash = await bcrypt.hash(password, 12);
   await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, userId]);
+  await bumpUserSessionVersion(userId);
   res.json({ success: true });
 });
 
 // Change username/display name
-router.patch('/users/:userId/identity', async (req, res) => {
+router.patch('/users/:userId/identity', requireCoreAdmin, async (req, res) => {
   const { userId } = req.params;
   const { username, displayName } = req.body;
   if (username) {
@@ -733,7 +733,7 @@ router.patch('/users/:userId/identity', async (req, res) => {
 });
 
 // Give decoration to user
-router.post('/users/:userId/decorations', async (req, res) => {
+router.post('/users/:userId/decorations', requireCoreAdmin, async (req, res) => {
   const { userId } = req.params;
   const { decorationId } = req.body;
   const already = await pool.query('SELECT id FROM user_decorations WHERE user_id=$1 AND decoration_id=$2', [userId, decorationId]);
@@ -743,7 +743,7 @@ router.post('/users/:userId/decorations', async (req, res) => {
 });
 
 // Remove decoration from user
-router.delete('/users/:userId/decorations/:decorationId', async (req, res) => {
+router.delete('/users/:userId/decorations/:decorationId', requireCoreAdmin, async (req, res) => {
   const { userId, decorationId } = req.params;
   await pool.query('UPDATE users SET active_decoration=NULL WHERE id=$1 AND active_decoration=$2', [userId, decorationId]);
   await pool.query('DELETE FROM user_decorations WHERE user_id=$1 AND decoration_id=$2', [userId, decorationId]);
@@ -819,7 +819,7 @@ router.delete('/users/:userId/pro', requireCoreAdmin, async (req, res) => {
   res.json({ success: true, expiresAt: 0 });
 });
 
-router.post('/users/:userId/fonts', async (req, res) => {
+router.post('/users/:userId/fonts', requireCoreAdmin, async (req, res) => {
   const { userId } = req.params;
   const { fontId } = req.body;
   const { FONTS } = require('./colors');
@@ -830,7 +830,7 @@ router.post('/users/:userId/fonts', async (req, res) => {
   res.json({ success: true });
 });
 
-router.delete('/users/:userId/fonts/:fontId', async (req, res) => {
+router.delete('/users/:userId/fonts/:fontId', requireCoreAdmin, async (req, res) => {
   const { userId, fontId } = req.params;
   await pool.query('UPDATE users SET active_font=NULL WHERE id=$1 AND active_font=$2', [userId, fontId]);
   await pool.query('DELETE FROM user_fonts WHERE user_id=$1 AND font_id=$2', [userId, fontId]);
@@ -838,7 +838,7 @@ router.delete('/users/:userId/fonts/:fontId', async (req, res) => {
 });
 
 // Update user nexals
-router.patch('/users/:userId/nexals', async (req, res) => {
+router.patch('/users/:userId/nexals', requireCoreAdmin, async (req, res) => {
   const { userId } = req.params;
   const { nexals } = req.body;
   if (nexals === undefined || isNaN(parseInt(nexals))) return res.status(400).json({ error: 'Invalid nexals value' });
@@ -852,7 +852,7 @@ router.post('/users/:userId/warn', async (req, res) => {
   const reason = String(req.body.reason || '').trim() || 'No reason provided';
   const target = await pool.query('SELECT id, username FROM users WHERE id=$1', [userId]);
   if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
-  if (ADMIN_IDS.has(target.rows[0].id)) return res.status(403).json({ error: 'Cannot warn an admin' });
+  if (await isGlobalAdmin(target.rows[0].id)) return res.status(403).json({ error: 'Cannot warn an admin' });
 
   const content = `[NexusGuard] You have received an admin warning. Reason: ${reason}`;
   await sendNexusGuardDM(req, userId, content);
@@ -861,7 +861,7 @@ router.post('/users/:userId/warn', async (req, res) => {
 });
 
 // Nexus client controls (only affects Nexus client UI, not system screen)
-router.post('/users/:userId/client-control', async (req, res) => {
+router.post('/users/:userId/client-control', requireCoreAdmin, async (req, res) => {
   const { userId } = req.params;
   const action = String(req.body.action || '').trim().toLowerCase();
   const message = String(req.body.message || '').trim().slice(0, 300);
@@ -924,7 +924,7 @@ router.post('/users/:userId/client-control', async (req, res) => {
 });
 
 router.get('/admins', async (req, res) => {
-  const seeded = Array.from(ADMIN_IDS).map(id => ({ user_id: id, seeded: true }));
+  const seeded = Array.from(CORE_ADMIN_IDS).map(id => ({ user_id: id, seeded: true }));
   const dbAdmins = await pool.query('SELECT user_id, added_by, created_at FROM admin_users ORDER BY created_at DESC');
   const all = [...seeded, ...dbAdmins.rows];
   const unique = new Map();
@@ -941,13 +941,13 @@ router.get('/admins', async (req, res) => {
     username: byId.get(a.user_id)?.username || 'unknown',
     displayName: byId.get(a.user_id)?.display_name || 'Unknown User',
     seeded: !!a.seeded,
-    removable: !a.seeded && a.user_id !== NON_REMOVABLE_ADMIN_ID,
+    removable: !a.seeded && !isNonRemovableAdmin(a.user_id),
     addedBy: a.added_by || null,
     createdAt: a.created_at ? parseInt(a.created_at, 10) : null
   })) });
 });
 
-router.post('/admins', async (req, res) => {
+router.post('/admins', requireCoreAdmin, async (req, res) => {
   const username = String(req.body.username || '').trim();
   const qrCode = String(req.body.qrCode || '').trim();
   if (!username) return res.status(400).json({ error: 'Username required' });
@@ -962,23 +962,21 @@ router.post('/admins', async (req, res) => {
   if (await isGlobalAdmin(u.id)) return res.status(409).json({ error: 'User is already an admin' });
 
   await pool.query('INSERT INTO admin_users (id, user_id, added_by) VALUES ($1,$2,$3)', [uuidv4(), u.id, req.session.userId]);
+  await bumpUserSessionVersion(u.id);
   res.json({ success: true, admin: { id: u.id, username: u.username, displayName: u.display_name } });
 });
 
-router.delete('/admins/:userId', async (req, res) => {
+router.delete('/admins/:userId', requireCoreAdmin, async (req, res) => {
   const { userId } = req.params;
-  if (userId === NON_REMOVABLE_ADMIN_ID) {
+  if (isNonRemovableAdmin(userId)) {
     return res.status(403).json({ error: 'This admin cannot be removed' });
-  }
-  if (ADMIN_IDS.has(userId)) {
-    return res.status(403).json({ error: 'Core admins cannot be removed' });
   }
 
   const removed = await pool.query('DELETE FROM admin_users WHERE user_id=$1', [userId]);
   if (!removed.rowCount) return res.status(404).json({ error: 'Admin record not found' });
+  await bumpUserSessionVersion(userId);
   res.json({ success: true });
 });
 
 module.exports = router;
-module.exports.ADMIN_IDS = ADMIN_IDS;
 module.exports.isGlobalAdmin = isGlobalAdmin;

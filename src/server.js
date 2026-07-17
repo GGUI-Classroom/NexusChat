@@ -14,6 +14,14 @@ const { envFlag } = require('./config/env');
 const { pool, initDb } = require('./models/db');
 const { avatarUrl } = require('./utils/avatar');
 const { requestIp, requestDeviceId, socketDeviceId } = require('./utils/ip');
+const {
+  SESSION_SECURITY_VERSION,
+  requireCsrfToken,
+  validateHttpDeviceSession,
+  validateSocketDeviceSession,
+  getUserSessionVersion,
+  isGlobalAdmin
+} = require('./utils/security');
 const { enforceGlobalSafety, findConfiguredViolation } = require('./utils/globalSafety');
 const { getCurrentTos, getUserTosState, requireCurrentTos } = require('./utils/tosPolicy');
 const { getChannelAccess, canAccessChannel, getChannelAccessibleUserIds } = require('./utils/channelAccess');
@@ -31,7 +39,6 @@ const REQUIRE_REDIS = envFlag('REQUIRE_REDIS', false);
 const TRUST_PROXY = process.env.TRUST_PROXY || (isProd ? '1' : '');
 const ALLOW_FILE_CLIENTS = envFlag('ALLOW_FILE_CLIENTS', false);
 const COOKIE_SAME_SITE = (process.env.COOKIE_SAME_SITE || (ALLOW_FILE_CLIENTS ? 'none' : 'lax')).toLowerCase();
-const SESSION_SECURITY_VERSION = 3;
 const PUBLIC_APP_ORIGINS = new Set(
   [process.env.PUBLIC_APP_ORIGIN, process.env.RENDER_EXTERNAL_URL]
     .filter(Boolean)
@@ -48,6 +55,12 @@ const ACTIVITY_ONLY_EVENTS = new Set(['call_accept', 'join_call', 'webrtc_offer'
 const socketRateBuckets = new Map();
 const apiRateBuckets = new Map();
 
+if (!process.env.SESSION_SECRET && !envFlag('ALLOW_INSECURE_DEV_SECRET', false)) {
+  throw new Error('SESSION_SECRET must be set. For throwaway local testing only, set ALLOW_INSECURE_DEV_SECRET=true.');
+}
+if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length < 32) {
+  throw new Error('SESSION_SECRET must be at least 32 characters.');
+}
 if (isProd && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32)) {
   throw new Error('SESSION_SECRET must be set to a random value of at least 32 characters in production.');
 }
@@ -59,6 +72,18 @@ if (isProd && !COOKIE_SECURE) {
 }
 if (isProd && !['lax', 'strict'].includes(COOKIE_SAME_SITE)) {
   throw new Error('COOKIE_SAME_SITE must be lax or strict in production.');
+}
+if (isProd && process.env.NEXUS_LINK_SHARED_SECRET && process.env.NEXUS_LINK_SHARED_SECRET.length < 32) {
+  throw new Error('NEXUS_LINK_SHARED_SECRET must be at least 32 characters when configured in production.');
+}
+if (isProd && process.env.ADMIN_QR_CODE && process.env.ADMIN_QR_CODE.length < 16) {
+  throw new Error('ADMIN_QR_CODE must be at least 16 characters when configured in production.');
+}
+if (isProd && process.env.LIMITED_ADMIN_NFC_CODE && process.env.LIMITED_ADMIN_NFC_CODE.length < 16) {
+  throw new Error('LIMITED_ADMIN_NFC_CODE must be at least 16 characters when configured in production.');
+}
+if (isProd && process.env.LIMITED_ADMIN_ACCESS_CODE && process.env.LIMITED_ADMIN_ACCESS_CODE.length < 16) {
+  throw new Error('LIMITED_ADMIN_ACCESS_CODE must be at least 16 characters when configured in production.');
 }
 
 function isAllowedClientOrigin(origin, req) {
@@ -236,7 +261,7 @@ app.use((req, res, next) => {
     res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Nexus-Device-Id');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Nexus-Device-Id, X-Nexus-Device-Token, X-CSRF-Token');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -253,6 +278,29 @@ app.use((req, res, next) => {
     if (req.path.startsWith('/api')) return res.status(401).json({ error: 'Your session expired for a security update. Please sign in again.' });
     next();
   });
+});
+app.use('/api', requireCsrfToken);
+app.use('/api', async (req, res, next) => {
+  if (!req.session?.userId) return next();
+  try {
+    const currentVersion = await getUserSessionVersion(req.session.userId);
+    if ((Number(req.session.userSessionVersion) || 0) !== currentVersion) {
+      return req.session.destroy(() => {
+        res.clearCookie('nexus.sid');
+        res.status(401).json({ error: 'Your session was revoked. Please sign in again.' });
+      });
+    }
+    if (!(await validateHttpDeviceSession(req))) {
+      return req.session.destroy(() => {
+        res.clearCookie('nexus.sid');
+        res.status(401).json({ error: 'This device session expired. Please sign in again.' });
+      });
+    }
+    next();
+  } catch (error) {
+    console.error('Session validation failed:', error.message);
+    res.status(500).json({ error: 'Session validation failed' });
+  }
 });
 app.use('/api', (req, res, next) => {
   if (req.method !== 'OPTIONS' && !takeApiRateToken(req, 240, 60 * 1000)) {
@@ -591,7 +639,7 @@ function tableTokensToNexals(tokens) {
 function gameDeck() {
   return ['A','2','3','4','5','6','7','8','9','10','J','Q','K'].flatMap(rank => ['S','H','D','C'].map(suit => ({ rank, suit })));
 }
-function shuffle(cards) { for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cards[i], cards[j]] = [cards[j], cards[i]]; } return cards; }
+function shuffle(cards) { for (let i = cards.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [cards[i], cards[j]] = [cards[j], cards[i]]; } return cards; }
 function blackjackScore(cards) { let total = cards.reduce((sum, c) => sum + (c.rank === 'A' ? 11 : ['J','Q','K'].includes(c.rank) ? 10 : Number(c.rank)), 0); let aces = cards.filter(c => c.rank === 'A').length; while (total > 21 && aces--) total -= 10; return total; }
 function unoDeck() {
   const cards = [];
@@ -730,7 +778,7 @@ function beginCallGameRound(game) {
     if (!first) first = { id: uuidv4(), color: 'red', value: '0' };
     game.discard.push(first);
     const colors = ['red', 'yellow', 'green', 'blue'];
-    game.currentColor = first.color === 'wild' ? colors[Math.floor(Math.random() * colors.length)] : first.color;
+    game.currentColor = first.color === 'wild' ? colors[crypto.randomInt(colors.length)] : first.color;
     const startingIndex = (game.startingPlayerIndex || 0) % game.players.length;
     game.turnId = game.players[startingIndex].id;
     game.startingPlayerIndex = (startingIndex + 1) % game.players.length;
@@ -995,6 +1043,13 @@ io.use(async (socket, next) => {
       if (deviceId) {
         const banned = await pool.query('SELECT reason FROM ip_bans WHERE device_id=$1 AND active=TRUE LIMIT 1', [deviceId]);
         if (banned.rows.length) return next(new Error('This device is banned from Nexus'));
+      }
+      const currentVersion = await getUserSessionVersion(userId);
+      if ((Number(sess.userSessionVersion) || 0) !== currentVersion) {
+        return next(new Error('Session revoked'));
+      }
+      if (!(await validateSocketDeviceSession(socket))) {
+        return next(new Error('Device session expired'));
       }
       await pool.query('UPDATE users SET last_ip=$1, last_device_id=$2 WHERE id=$3', [ip || null, deviceId || null, userId]);
       const tosState = await getUserTosState(userId);
@@ -2491,8 +2546,6 @@ io.on('connection', (socket) => {
 
   // Admin: force-suspend an active user
   socket.on('admin_suspend_user', async ({ targetUserId, suspendedUntil, reason }) => {
-    // Verify the requesting socket is an admin
-    const { isGlobalAdmin } = require('./routes/admin');
     if (!(await isGlobalAdmin(userId))) return;
     // Emit suspended event to all of that user's sockets
     io.to(`user:${targetUserId}`).emit('account_suspended', { suspendedUntil, reason: reason || null });
@@ -2989,7 +3042,7 @@ io.on('connection', (socket) => {
       const active = game.players.filter(p => !p.folded);
       const index = active.findIndex(p => p.id === userId);
       if (active.length === 1) { game.winnerId = active[0].id; active[0].chips += game.pot; game.phase = game.roundNumber >= game.roundsTotal ? 'complete' : 'round_complete'; game.message = game.phase === 'complete' ? 'Match complete: everyone else folded.' : `Round ${game.roundNumber} complete. Host can start the next round.`; if (game.phase === 'complete') await settleCallGame(roomId, game.message); }
-      else if (index === active.length - 1) { game.community.push(game.deck.pop(), game.deck.pop()); const winner = active[Math.floor(Math.random() * active.length)]; winner.chips += game.pot; game.winnerId = winner.id; game.phase = game.roundNumber >= game.roundsTotal ? 'complete' : 'round_complete'; game.message = game.phase === 'complete' ? 'Match complete: showdown complete.' : `Round ${game.roundNumber} complete. Host can start the next round.`; if (game.phase === 'complete') await settleCallGame(roomId, game.message); }
+      else if (index === active.length - 1) { game.community.push(game.deck.pop(), game.deck.pop()); const winner = active[crypto.randomInt(active.length)]; winner.chips += game.pot; game.winnerId = winner.id; game.phase = game.roundNumber >= game.roundsTotal ? 'complete' : 'round_complete'; game.message = game.phase === 'complete' ? 'Match complete: showdown complete.' : `Round ${game.roundNumber} complete. Host can start the next round.`; if (game.phase === 'complete') await settleCallGame(roomId, game.message); }
       else game.turnId = active[index + 1].id;
     }
     emitGame(roomId);

@@ -41,6 +41,8 @@ REDIS_URL=
 REQUIRE_REDIS=false
 COOKIE_SECURE=false
 TRUST_PROXY=
+CORE_ADMIN_IDS=comma-separated-core-admin-user-ids
+NON_REMOVABLE_ADMIN_IDS=optional-comma-separated-user-ids
 ```
 
 ## 4. Run the app

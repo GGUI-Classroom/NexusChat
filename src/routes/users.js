@@ -7,6 +7,7 @@ const { avatarUrl, clearCachedAvatar, getAvatar } = require('../utils/avatar');
 const { deleteCachedMedia, getCachedMedia, setCachedMedia } = require('../utils/mediaCache');
 const { safeDisplayName, safeBio } = require('../utils/inputSafety');
 const { safeUploadMime, safeStoredImageMime } = require('../utils/imageSafety');
+const { bumpUserSessionVersion } = require('../utils/security');
 
 const router = express.Router();
 const TRUSTED_BUILT_IN_SVG_USERS = new Set([
@@ -249,6 +250,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
 
   const newHash = await bcrypt.hash(newPassword, 12);
   await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [newHash, req.session.userId]);
+  await bumpUserSessionVersion(req.session.userId);
   res.json({ success: true });
 });
 

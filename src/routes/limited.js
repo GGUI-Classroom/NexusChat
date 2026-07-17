@@ -4,11 +4,11 @@ const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 const { requireAuth } = require('../middleware/auth');
 const { DECORATIONS } = require('./shop');
+const { isCoreAdmin } = require('../utils/security');
 
 const router = express.Router();
 router.use(requireAuth);
 
-const CORE_ADMIN_IDS = new Set(['537b58c9-b9cd-4239-b0e6-2f862c30ac01']);
 const ADMIN_NFC_CODE = String(process.env.LIMITED_ADMIN_NFC_CODE || '');
 const ADMIN_ACCESS_CODE = String(process.env.LIMITED_ADMIN_ACCESS_CODE || '');
 const ADMIN_ACCESS_SECONDS = 20 * 60;
@@ -46,7 +46,7 @@ function publicDecoration(decoration) {
 }
 
 function requireCoreAdmin(req, res, next) {
-  if (!CORE_ADMIN_IDS.has(req.session.userId)) {
+  if (!isCoreAdmin(req.session.userId)) {
     return res.status(403).json({ error: 'Core admins only' });
   }
   next();

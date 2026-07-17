@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
 const { requireAuth } = require('../middleware/auth');
@@ -488,15 +489,17 @@ function rollPackItem(pack) {
       collectibleType: item.decorationId ? 'decoration' : 'nameplate'
     }))
     .filter(item => item.collectible);
-  const total = candidates.reduce((sum, item) => sum + item.chance, 0);
+  const scale = 100;
+  const weighted = candidates.map(item => ({ ...item, weight: Math.max(0, Math.round(item.chance * scale)) }));
+  const total = weighted.reduce((sum, item) => sum + item.weight, 0);
   if (!total) return null;
 
-  let roll = Math.random() * total;
-  for (const item of candidates) {
-    roll -= item.chance;
-    if (roll <= 0) return { collectibleType: item.collectibleType, item: item.collectible };
+  let roll = crypto.randomInt(total);
+  for (const item of weighted) {
+    roll -= item.weight;
+    if (roll < 0) return { collectibleType: item.collectibleType, item: item.collectible };
   }
-  const fallback = candidates[candidates.length - 1];
+  const fallback = weighted[weighted.length - 1];
   return { collectibleType: fallback.collectibleType, item: fallback.collectible };
 }
 

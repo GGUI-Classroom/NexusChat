@@ -1429,12 +1429,48 @@
     return id;
   }
 
+  let csrfToken = sessionStorage.getItem('nexus.csrfToken') || '';
+
+  function getDeviceToken() {
+    return localStorage.getItem('nexus.deviceToken') || '';
+  }
+
+  function rememberSecurityTokens(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    if (payload.csrfToken) {
+      csrfToken = payload.csrfToken;
+      sessionStorage.setItem('nexus.csrfToken', csrfToken);
+    }
+    if (payload.deviceToken) {
+      localStorage.setItem('nexus.deviceToken', payload.deviceToken);
+    }
+  }
+
+  async function ensureCsrfToken() {
+    if (csrfToken) return csrfToken;
+    const res = await fetch('/api/auth/csrf', {
+      method: 'GET',
+      credentials: 'include',
+      headers: deviceHeaders()
+    });
+    const data = await res.json().catch(() => ({}));
+    rememberSecurityTokens(data);
+    return csrfToken;
+  }
+
   function deviceHeaders(extra = {}) {
-    return { ...extra, 'X-Nexus-Device-Id': getDeviceId() };
+    const headers = { ...extra, 'X-Nexus-Device-Id': getDeviceId() };
+    const deviceToken = getDeviceToken();
+    if (deviceToken) headers['X-Nexus-Device-Token'] = deviceToken;
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    return headers;
   }
 
   // ---- Auth ----
   async function api(method, path, data) {
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(String(method).toUpperCase())) {
+      await ensureCsrfToken();
+    }
     const opts = {
       method,
       headers: deviceHeaders({ 'Content-Type': 'application/json' }),
@@ -1446,6 +1482,12 @@
       const text = await res.text();
       try {
         const parsed = JSON.parse(text);
+        rememberSecurityTokens(parsed);
+        if (path === '/api/auth/logout' && parsed.success) {
+          localStorage.removeItem('nexus.deviceToken');
+          sessionStorage.removeItem('nexus.csrfToken');
+          csrfToken = '';
+        }
         if (parsed.tosRequired && parsed.tos) {
           pendingTos = parsed.tos;
           if (currentUser) showTosAgreement(parsed.tos);
@@ -2952,6 +2994,7 @@
     if (iconFile) fd.append('icon', iconFile);
     let r;
     try {
+      await ensureCsrfToken();
       const res = await fetch('/api/servers', { method: 'POST', body: fd, credentials: 'include', headers: deviceHeaders() });
       const text = await res.text();
       try { r = JSON.parse(text); } catch(e) {
@@ -3156,6 +3199,7 @@
     const form = new FormData();
     form.append('name', name);
     form.append('image', file);
+    await ensureCsrfToken();
     const response = await fetch(`/api/servers/${activeServerId}/emojis`, { method: 'POST', body: form, credentials: 'include', headers: deviceHeaders() });
     const result = await response.json().catch(() => ({ error: 'Invalid server response' }));
     if (!response.ok || result.error) return showError('server-emoji-error', result.error || 'Upload failed');
@@ -3602,6 +3646,7 @@
     if (iconFile) fd.append('icon', iconFile);
     let r;
     try {
+      await ensureCsrfToken();
       const res = await fetch(`/api/servers/${activeServerId}`, { method: 'PATCH', body: fd, credentials: 'include', headers: deviceHeaders() });
       const text = await res.text();
       try { r = JSON.parse(text); } catch(e) {
@@ -4777,7 +4822,7 @@
       }
     }
 
-    socket = io({ transports: ['websocket', 'polling'], auth: { deviceId: getDeviceId() } });
+    socket = io({ transports: ['websocket', 'polling'], auth: { deviceId: getDeviceId(), deviceToken: getDeviceToken() } });
 
     socket.on('tos_required', ({ tos }) => {
       if (!tos || !currentUser) return;
@@ -6022,6 +6067,7 @@
     }
     const fd = new FormData();
     fd.append('avatar', file);
+    await ensureCsrfToken();
     const res = await fetch('/api/users/avatar', { method: 'POST', body: fd, credentials: 'same-origin', headers: deviceHeaders() });
     const r = await res.json();
     if (r.error) return toast(r.error, 'error');
@@ -7998,6 +8044,7 @@
     toast('Uploading profile banner...', 'info', 1800);
     let response;
     try {
+      await ensureCsrfToken();
       response = await fetch(normalizeAssetUrl('/api/users/profile-banner'), { method: 'POST', body: form, credentials: 'include', headers: deviceHeaders() });
     } catch (error) {
       input.value = '';
