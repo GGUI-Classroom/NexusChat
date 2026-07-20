@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 1920 1080" preserveAspectRatio="none" style="position:fixed;inset:0;display:block;background:#080a0f">
+  <foreignObject x="0" y="0" width="100%" height="100%">
+    <body xmlns="http://www.w3.org/1999/xhtml" id="nexus-svg-body" style="margin:0;width:100vw;height:100vh;overflow:hidden;background:#080a0f;color:#e8ecf5">
+      <div id="nexus-svg-mount" style="width:100%;height:100%;display:grid;place-items:center;font-family:system-ui,sans-serif">
+        <div style="text-align:center;color:#8892a4">Loading Nexus...</div>
+      </div>
+    </body>
+  </foreignObject>
+  <script type="application/ecmascript"><![CDATA[
+(function () {
+  'use strict';
+
+  // This shell is intentionally served from the Nexus origin. It keeps API calls,
+  // Socket.IO, and session cookies same-origin instead of weakening CORS for files.
+  var XHTML_NS = 'http://www.w3.org/1999/xhtml';
+  var xhtmlBody = document.getElementById('nexus-svg-body');
+  var mount = document.getElementById('nexus-svg-mount');
+  var xhtmlHead = document.createElementNS(XHTML_NS, 'head');
+  var nativeCreateElement = document.createElement.bind(document);
+  xhtmlBody.insertBefore(xhtmlHead, mount);
+
+  try {
+    Object.defineProperty(document, 'head', {
+      configurable: true,
+      get: function () { return xhtmlHead; }
+    });
+    Object.defineProperty(document, 'body', {
+      configurable: true,
+      get: function () { return xhtmlBody; }
+    });
+    document.createElement = function (tag, options) {
+      return document.createElementNS(XHTML_NS, tag, options);
+    };
+  } catch (error) {
+    // Chromium supports the overrides above. Leave the native methods untouched
+    // in browsers that do not expose configurable document accessors.
+    document.createElement = nativeCreateElement;
+  }
+
+  function appendStylesheet(url) {
+    return new Promise(function (resolve, reject) {
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = url;
+      link.onload = resolve;
+      link.onerror = reject;
+      xhtmlHead.appendChild(link);
+    });
+  }
+
+  function appendScript(url) {
+    return new Promise(function (resolve, reject) {
+      var script = document.createElement('script');
+      script.src = url;
+      script.async = false;
+      script.onload = resolve;
+      script.onerror = reject;
+      xhtmlBody.appendChild(script);
+    });
+  }
+
+  function installIndexMarkup(html) {
+    var parsed = new DOMParser().parseFromString(html, 'text/html');
+    parsed.querySelectorAll('script').forEach(function (script) { script.remove(); });
+    mount.innerHTML = parsed.body.innerHTML;
+
+    // These two helpers normally come from index.html's small inline bootstrap.
+    window.switchAuthTab = function (tab) {
+      document.querySelectorAll('.tab-btn').forEach(function (button) {
+        button.classList.toggle('active', button.dataset.tab === tab);
+      });
+      document.querySelectorAll('.tab-panel').forEach(function (panel) {
+        panel.classList.toggle('active', panel.id === 'tab-' + tab);
+      });
+    };
+    window.switchServerTab = function (tab) {
+      document.querySelectorAll('.stab').forEach(function (button) {
+        button.classList.toggle('active', button.dataset.stab === tab);
+      });
+      document.querySelectorAll('.stab-panel').forEach(function (panel) {
+        panel.classList.toggle('active', panel.id === 'stab-' + tab);
+      });
+    };
+  }
+
+  function showFailure() {
+    mount.innerHTML = '<div style="max-width:420px;padding:28px;text-align:center;font-family:system-ui,sans-serif;color:#e8ecf5">' +
+      '<h1 style="margin:0 0 10px;font-size:22px">Nexus could not load</h1>' +
+      '<p style="margin:0;color:#8892a4;line-height:1.5">Open Nexus from its normal web address and try the SVG link again.</p>' +
+      '</div>';
+  }
+
+  fetch('/?nexus-svg-shell=1', { credentials: 'same-origin', cache: 'no-store' })
+    .then(function (response) {
+      if (!response.ok) throw new Error('Nexus page request failed');
+      return response.text();
+    })
+    .then(function (html) {
+      installIndexMarkup(html);
+      return appendStylesheet('/css/main.css?v=20260720-svg-client');
+    })
+    .then(function () { return appendScript('/socket.io/socket.io.js'); })
+    .then(function () { return appendScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'); })
+    .then(function () { return appendScript('/js/app.js?v=20260720-svg-client'); })
+    .catch(function () { showFailure(); });
+}());
+  ]]></script>
+</svg>
