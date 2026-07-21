@@ -321,6 +321,11 @@ app.use('/api', (req, res, next) => {
   next();
 });
 app.use((req, res, next) => { req.io = io; req.userSockets = userSockets; next(); });
+app.get('/nexus.svg', (req, res) => {
+  res.type('image/svg+xml');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, '../public/nexus.svg'));
+});
 app.use(express.static(path.join(__dirname, '../public'), {
   etag: true,
   maxAge: isProd ? '1h' : 0,
