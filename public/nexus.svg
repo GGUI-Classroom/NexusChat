@@ -39,14 +39,13 @@
   }
 
   function appendStylesheet(url) {
-    return new Promise(function (resolve, reject) {
-      var link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = url;
-      link.onload = resolve;
-      link.onerror = reject;
-      xhtmlHead.appendChild(link);
-    });
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = url;
+    xhtmlHead.appendChild(link);
+    // A stylesheet can apply normally inside a foreignObject while never
+    // dispatching a load event. It must not block the actual chat client.
+    return Promise.resolve();
   }
 
   function appendScript(url) {
@@ -84,7 +83,8 @@
     };
   }
 
-  function showFailure() {
+  function showFailure(error) {
+    if (window.console && console.error) console.error('Nexus SVG bootstrap failed:', error);
     mount.innerHTML = '<div style="max-width:420px;padding:28px;text-align:center;font-family:system-ui,sans-serif;color:#e8ecf5">' +
       '<h1 style="margin:0 0 10px;font-size:22px">Nexus could not load</h1>' +
       '<p style="margin:0;color:#8892a4;line-height:1.5">Open Nexus from its normal web address and try the SVG link again.</p>' +
@@ -101,9 +101,11 @@
       return appendStylesheet('/css/main.css?v=20260720-svg-client');
     })
     .then(function () { return appendScript('/socket.io/socket.io.js'); })
-    .then(function () { return appendScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'); })
+    // QR scanning is optional. A network that blocks the CDN should never
+    // prevent normal chat, calls, or messages from loading.
+    .then(function () { return appendScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js').catch(function () { return null; }); })
     .then(function () { return appendScript('/js/app.js?v=20260720-svg-client'); })
-    .catch(function () { showFailure(); });
+    .catch(function (error) { showFailure(error); });
 }());
   ]]></script>
 </svg>
