@@ -328,8 +328,8 @@ app.use(express.static(path.join(__dirname, '../public'), {
     const extension = path.extname(filePath).toLowerCase();
     if (extension === '.html') {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    } else if (extension === '.js' || extension === '.svg') {
-      // Security fixes and the SVG shell must replace an old cached client immediately after deploy.
+    } else if (extension === '.js') {
+      // Security fixes must replace an old cached client immediately after deploy.
       res.setHeader('Cache-Control', 'no-cache');
     }
   }
