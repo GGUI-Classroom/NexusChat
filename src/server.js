@@ -45,6 +45,7 @@ const PUBLIC_APP_ORIGINS = new Set(
     .map(origin => String(origin).trim().replace(/\/$/, ''))
 );
 const TRUSTED_EXTERNAL_ORIGINS = new Set([
+  'https://edu.palypro.com',
   'https://quizizz.com',
   'https://media.quizizz.com'
 ]);
