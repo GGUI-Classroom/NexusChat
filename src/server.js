@@ -44,6 +44,10 @@ const PUBLIC_APP_ORIGINS = new Set(
     .filter(Boolean)
     .map(origin => String(origin).trim().replace(/\/$/, ''))
 );
+const TRUSTED_EXTERNAL_ORIGINS = new Set([
+  'https://quizizz.com',
+  'https://media.quizizz.com'
+]);
 
 // <img> requests cannot attach the device-token headers used by fetch/XHR.
 // These are still protected by the signed same-origin session and their route
@@ -101,7 +105,7 @@ if (isProd && process.env.LIMITED_ADMIN_ACCESS_CODE && process.env.LIMITED_ADMIN
 function isAllowedClientOrigin(origin, req) {
   if (!origin) return true;
   if (origin === 'null') return ALLOW_FILE_CLIENTS;
-  if (STATIC_CLIENT_ORIGINS.has(origin) || PUBLIC_APP_ORIGINS.has(origin)) return true;
+  if (STATIC_CLIENT_ORIGINS.has(origin) || PUBLIC_APP_ORIGINS.has(origin) || TRUSTED_EXTERNAL_ORIGINS.has(origin)) return true;
   if (!req) return false;
   const protocol = req.protocol || (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
   const host = req.get ? req.get('host') : req.headers.host;
@@ -118,9 +122,10 @@ function setSecurityHeaders(req, res, next) {
     "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "img-src 'self' data: blob:",
-    "media-src 'self' data: blob:",
-    "connect-src 'self'",
+    "img-src 'self' data: blob: https://quizizz.com https://media.quizizz.com",
+    "media-src 'self' data: blob: https://quizizz.com https://media.quizizz.com",
+    "connect-src 'self' https://quizizz.com https://media.quizizz.com",
+    "frame-src 'self' https://quizizz.com https://media.quizizz.com",
     "worker-src 'self' blob:"
   ].join('; '));
   res.setHeader('X-Content-Type-Options', 'nosniff');
