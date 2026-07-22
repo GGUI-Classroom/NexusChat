@@ -3,6 +3,10 @@
   'use strict';
 
   const isEmbeddedFrame = window.self !== window.top;
+  const securityStoragePrefix = isEmbeddedFrame ? 'nexus.embed' : 'nexus';
+  const deviceIdStorageKey = `${securityStoragePrefix}.deviceId`;
+  const deviceTokenStorageKey = `${securityStoragePrefix}.deviceToken`;
+  const csrfTokenStorageKey = `${securityStoragePrefix}.csrfToken`;
 
   // ---- State ----
   let currentUser = null;
@@ -1420,38 +1424,37 @@
   }
 
   function getDeviceId() {
-    const key = 'nexus.deviceId';
-    let id = localStorage.getItem(key);
+    let id = localStorage.getItem(deviceIdStorageKey);
     if (!id) {
       id = window.crypto && crypto.randomUUID
         ? crypto.randomUUID()
         : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
-      localStorage.setItem(key, id);
+      localStorage.setItem(deviceIdStorageKey, id);
     }
     return id;
   }
 
-  let csrfToken = sessionStorage.getItem('nexus.csrfToken') || '';
+  let csrfToken = sessionStorage.getItem(csrfTokenStorageKey) || '';
   let csrfRefreshPromise = null;
 
   function getDeviceToken() {
-    return localStorage.getItem('nexus.deviceToken') || '';
+    return localStorage.getItem(deviceTokenStorageKey) || '';
   }
 
   function rememberSecurityTokens(payload) {
     if (!payload || typeof payload !== 'object') return;
     if (payload.csrfToken) {
       csrfToken = payload.csrfToken;
-      sessionStorage.setItem('nexus.csrfToken', csrfToken);
+      sessionStorage.setItem(csrfTokenStorageKey, csrfToken);
     }
     if (payload.deviceToken) {
-      localStorage.setItem('nexus.deviceToken', payload.deviceToken);
+      localStorage.setItem(deviceTokenStorageKey, payload.deviceToken);
     }
   }
 
   function clearCsrfToken() {
     csrfToken = '';
-    sessionStorage.removeItem('nexus.csrfToken');
+    sessionStorage.removeItem(csrfTokenStorageKey);
   }
 
   async function ensureCsrfToken(forceRefresh = false) {
@@ -1525,8 +1528,8 @@
         const parsed = JSON.parse(text);
         rememberSecurityTokens(parsed);
         if (path === '/api/auth/logout' && parsed.success) {
-          localStorage.removeItem('nexus.deviceToken');
-          sessionStorage.removeItem('nexus.csrfToken');
+          localStorage.removeItem(deviceTokenStorageKey);
+          sessionStorage.removeItem(csrfTokenStorageKey);
           csrfToken = '';
         }
         if (parsed.tosRequired && parsed.tos) {
