@@ -117,7 +117,7 @@ function setSecurityHeaders(req, res, next) {
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
-    "frame-ancestors 'none'",
+    "frame-ancestors 'self' https://quizizz.com https://media.quizizz.com",
     "form-action 'self'",
     "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -129,7 +129,6 @@ function setSecurityHeaders(req, res, next) {
     "worker-src 'self' blob:"
   ].join('; '));
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(), payment=(), usb=()');
   next();
