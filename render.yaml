@@ -29,7 +29,7 @@ services:
       - key: COOKIE_SAME_SITE
         value: "none"
       - key: COOKIE_PARTITIONED
-        value: "true"
+        value: "false"
       - key: ALLOW_FILE_CLIENTS
         value: "false"
       - key: STATIC_CLIENT_ORIGINS

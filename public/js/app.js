@@ -4858,7 +4858,7 @@
     }
 
     socket = io({
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       withCredentials: true,
       auth: { deviceId: getDeviceId(), deviceToken: getDeviceToken() }
     });
