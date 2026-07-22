@@ -27,7 +27,9 @@ services:
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAME_SITE
-        value: "lax"
+        value: "none"
+      - key: ALLOW_CROSS_SITE_IFRAMES
+        value: "true"
       - key: ALLOW_FILE_CLIENTS
         value: "false"
       - key: STATIC_CLIENT_ORIGINS

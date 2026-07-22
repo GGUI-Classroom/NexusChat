@@ -38,7 +38,10 @@ const COOKIE_SECURE = envFlag('COOKIE_SECURE', isProd);
 const REQUIRE_REDIS = envFlag('REQUIRE_REDIS', false);
 const TRUST_PROXY = process.env.TRUST_PROXY || (isProd ? '1' : '');
 const ALLOW_FILE_CLIENTS = envFlag('ALLOW_FILE_CLIENTS', false);
-const COOKIE_SAME_SITE = (process.env.COOKIE_SAME_SITE || (ALLOW_FILE_CLIENTS ? 'none' : 'lax')).toLowerCase();
+const ALLOW_CROSS_SITE_IFRAMES = envFlag('ALLOW_CROSS_SITE_IFRAMES', isProd);
+const COOKIE_SAME_SITE = (
+  ALLOW_CROSS_SITE_IFRAMES ? 'none' : (process.env.COOKIE_SAME_SITE || (ALLOW_FILE_CLIENTS ? 'none' : 'lax'))
+).toLowerCase();
 const PUBLIC_APP_ORIGINS = new Set(
   [process.env.PUBLIC_APP_ORIGIN, process.env.RENDER_EXTERNAL_URL]
     .filter(Boolean)
@@ -87,8 +90,11 @@ if (isProd && ALLOW_FILE_CLIENTS) {
 if (isProd && !COOKIE_SECURE) {
   throw new Error('COOKIE_SECURE must be true in production.');
 }
-if (isProd && !['lax', 'strict'].includes(COOKIE_SAME_SITE)) {
-  throw new Error('COOKIE_SAME_SITE must be lax or strict in production.');
+if (!['lax', 'strict', 'none'].includes(COOKIE_SAME_SITE)) {
+  throw new Error('COOKIE_SAME_SITE must be lax, strict, or none.');
+}
+if (COOKIE_SAME_SITE === 'none' && !COOKIE_SECURE) {
+  throw new Error('COOKIE_SECURE must be true when cross-site iframe sessions are enabled.');
 }
 if (isProd && process.env.NEXUS_LINK_SHARED_SECRET && process.env.NEXUS_LINK_SHARED_SECRET.length < 32) {
   throw new Error('NEXUS_LINK_SHARED_SECRET must be at least 32 characters when configured in production.');
