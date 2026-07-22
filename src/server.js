@@ -39,7 +39,7 @@ const REQUIRE_REDIS = envFlag('REQUIRE_REDIS', false);
 const TRUST_PROXY = process.env.TRUST_PROXY || (isProd ? '1' : '');
 const ALLOW_FILE_CLIENTS = envFlag('ALLOW_FILE_CLIENTS', false);
 const ALLOW_CROSS_SITE_IFRAMES = envFlag('ALLOW_CROSS_SITE_IFRAMES', isProd);
-const SESSION_COOKIE_NAME = 'nexus.sid';
+const SESSION_COOKIE_NAME = 'nexus.primary.sid';
 const EMBEDDED_SESSION_COOKIE_NAME = 'nexus.embed.sid';
 const COOKIE_SAME_SITE = (
   ALLOW_CROSS_SITE_IFRAMES ? 'none' : (process.env.COOKIE_SAME_SITE || (ALLOW_FILE_CLIENTS ? 'none' : 'lax'))
@@ -264,11 +264,12 @@ if (TRUST_PROXY && !['0', 'false', 'no', 'off'].includes(TRUST_PROXY.toLowerCase
   app.set('trust proxy', /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY);
 }
 
-const sessionStore = new pgSession({ pool, createTableIfMissing: true });
-
 function createSessionMiddleware(name, cookieOverrides = {}) {
   return session({
-    store: sessionStore,
+    // express-session installs a request-session generator on the store.
+    // Each cookie configuration therefore needs its own store instance even
+    // though both instances use the same backing table.
+    store: new pgSession({ pool, createTableIfMissing: true }),
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
@@ -290,7 +291,8 @@ const embeddedSessionMiddleware = createSessionMiddleware(EMBEDDED_SESSION_COOKI
 });
 
 function isEmbeddedHttpRequest(req) {
-  return ALLOW_CROSS_SITE_IFRAMES && req.get('x-nexus-embedded') === '1';
+  return ALLOW_CROSS_SITE_IFRAMES
+    && (req.get('x-nexus-embedded') === '1' || String(req.query?.embedded || '') === '1');
 }
 
 function applySelectedSession(req, res, next) {

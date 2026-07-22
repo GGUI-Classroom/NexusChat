@@ -202,7 +202,7 @@ router.post('/logout', async (req, res) => {
   }
   req.session.destroy(() => {
     const embedded = req.sessionCookieName === 'nexus.embed.sid';
-    res.clearCookie(req.sessionCookieName || 'nexus.sid', embedded ? {
+    res.clearCookie(req.sessionCookieName || 'nexus.primary.sid', embedded ? {
       secure: true,
       sameSite: 'none',
       partitioned: true

@@ -64,8 +64,16 @@
 
   function normalizeAssetUrl(url) {
     if (!url || typeof url !== 'string') return url;
-    if (url.startsWith('/api/') && window.NEXUS_API_URL) return String(window.NEXUS_API_URL).replace(/\/+$/, '') + url;
-    return url;
+    let normalized = url;
+    if (normalized.startsWith('/api/') && window.NEXUS_API_URL) {
+      normalized = String(window.NEXUS_API_URL).replace(/\/+$/, '') + normalized;
+    }
+    if (isEmbeddedFrame && url.startsWith('/api/')) {
+      const parsed = new URL(normalized, window.location.href);
+      parsed.searchParams.set('embedded', '1');
+      return parsed.href;
+    }
+    return normalized;
   }
 
   const SECRET_CATEGORY = '???SECRET???';
@@ -1935,7 +1943,7 @@
       const abbr = s.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
       return `<button class="rail-btn" data-server-id="${s.id}" title="${esc(s.name)}" onclick="railSelect('${s.id}')">
         ${s.iconDataUrl
-          ? `<img src="${s.iconDataUrl}" alt="${esc(s.name)}">`
+          ? `<img src="${esc(normalizeAssetUrl(s.iconDataUrl))}" alt="${esc(s.name)}">`
           : `<span class="rail-initial">${abbr}</span>`}
       </button>`;
     }).join('');
@@ -1982,7 +1990,7 @@
           ${customized ? '<span class="discovery-invite-label">CUSTOM SERVER INVITE</span>' : ''}
         </div>
         <div class="discovery-card-body">
-          <div class="discovery-card-icon">${server.iconDataUrl ? `<img src="${server.iconDataUrl}" alt="">` : esc(initials)}</div>
+          <div class="discovery-card-icon">${server.iconDataUrl ? `<img src="${esc(normalizeAssetUrl(server.iconDataUrl))}" alt="">` : esc(initials)}</div>
           <h3>${esc(server.name)}</h3>
           <p>${esc(server.inviteDescription || 'Join this community on Nexus.')}</p>
           <div class="discovery-card-meta"><span>${Number(server.memberCount || 0).toLocaleString()} members</span></div>
@@ -2890,7 +2898,7 @@
       }
       return `<button type="button" class="mention-item" data-mention-idx="${i}">
         <div class="mention-item-icon" style="background:var(--bg-hover)">
-          ${item.avatarDataUrl ? `<img src="${item.avatarDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : esc((item.name || '?')[0].toUpperCase())}
+          ${item.avatarDataUrl ? `<img src="${esc(normalizeAssetUrl(item.avatarDataUrl))}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : esc((item.name || '?')[0].toUpperCase())}
         </div>
         <div><div class="mention-item-name">${esc(item.name)}</div><div class="mention-item-sub">@${esc(item.username || '')}</div></div>
       </button>`;
@@ -3145,7 +3153,7 @@
     updateInviteBannerControls();
     $('settings-tag-group').style.display = (s.boostCount || 0) >= 2 ? 'block' : 'none';
     if (s.iconDataUrl) {
-      $('settings-icon-preview').innerHTML = `<img src="${s.iconDataUrl}" alt="">`;
+      $('settings-icon-preview').innerHTML = `<img src="${esc(normalizeAssetUrl(s.iconDataUrl))}" alt="">`;
     } else {
       $('settings-icon-preview').textContent = s.name[0].toUpperCase();
     }
@@ -3231,7 +3239,7 @@
     activeServerEmojis = result.emojis || [];
     $('upload-server-emoji-btn').disabled = !result.enabled;
     $('server-emoji-settings-grid').innerHTML = activeServerEmojis.length
-      ? activeServerEmojis.map(emoji => `<div class="server-emoji-item"><img src="${emoji.imageDataUrl}" alt=""><span>:${esc(emoji.name)}:</span><button class="icon-btn" onclick="deleteServerEmoji('${emoji.id}')" title="Delete">×</button></div>`).join('')
+      ? activeServerEmojis.map(emoji => `<div class="server-emoji-item"><img src="${esc(normalizeAssetUrl(emoji.imageDataUrl))}" alt=""><span>:${esc(emoji.name)}:</span><button class="icon-btn" onclick="deleteServerEmoji('${emoji.id}')" title="Delete">×</button></div>`).join('')
       : '<div class="empty-state">No custom emojis yet.</div>';
   }
 
@@ -6116,7 +6124,7 @@
     const r = await res.json();
     if (r.error) return toast(r.error, 'error');
     currentUser.avatarDataUrl = r.avatarDataUrl;
-    $('profile-avatar-preview').innerHTML = `<img src="${r.avatarDataUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    $('profile-avatar-preview').innerHTML = `<img src="${esc(normalizeAssetUrl(r.avatarDataUrl))}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
     updateSelfCard();
     toast('Avatar updated!', 'success');
   });
@@ -6347,7 +6355,7 @@
     list.innerHTML = r.servers.map(s => {
       const isMember = servers.some(sv => sv.id === s.id);
       const icon = s.iconDataUrl
-        ? `<img src="${s.iconDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        ? `<img src="${esc(normalizeAssetUrl(s.iconDataUrl))}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
         : `<span>${esc(s.name[0].toUpperCase())}</span>`;
       return `<div class="admin-server-row">
         <div class="admin-server-icon">${icon}</div>
@@ -6529,7 +6537,7 @@
             ${data.servers.length ? data.servers.map(s=>`
               <div style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px">
                 <div style="width:24px;height:24px;border-radius:50%;background:var(--bg-hover);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">
-                  ${s.iconDataUrl?`<img src="${s.iconDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:esc((s.name||'?')[0])}
+                  ${s.iconDataUrl?`<img src="${esc(normalizeAssetUrl(s.iconDataUrl))}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:esc((s.name||'?')[0])}
                 </div>
                 <div style="flex:1;min-width:0;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</div>
                 <div style="font-size:10px;color:var(--text-muted)">${s.role||'member'}</div>
@@ -8934,7 +8942,7 @@
       const tag = $('popup-server-tag');
       if (r.serverTag && r.serverTag.tag) {
         tag.style.display = 'flex'; tag.style.setProperty('--tag-background', safeHexColor(r.serverTag.background, '#5865f2'));
-        tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${r.serverTag.iconDataUrl}" alt="">` : ''}<span>${esc(r.serverTag.tag)}${r.serverTag.private ? '' : ` | ${esc(r.serverTag.name)}`}</span>`;
+        tag.innerHTML = `${r.serverTag.iconDataUrl ? `<img src="${esc(normalizeAssetUrl(r.serverTag.iconDataUrl))}" alt="">` : ''}<span>${esc(r.serverTag.tag)}${r.serverTag.private ? '' : ` | ${esc(r.serverTag.name)}`}</span>`;
         const invite = $('popup-tag-invite');
         tag.onclick = () => {
           invite.style.display = invite.style.display === 'none' ? 'block' : 'none';
@@ -9250,7 +9258,7 @@
       ? activeServerEmojis.filter(emoji => !normalized || emoji.name.includes(normalized))
       : [];
     picker.innerHTML = `<div class="global-emoji-search"><input id="global-emoji-search-input" placeholder="Search emojis" value="${esc(query || '')}"><button type="button" id="global-emoji-close">×</button></div>
-      ${custom.length ? `<div class="emoji-section-title">SERVER EMOJIS</div><div class="global-emoji-grid custom">${custom.map(emoji => `<button type="button" data-custom-emoji="${esc(emoji.name)}" title=":${esc(emoji.name)}:"><img src="${emoji.imageDataUrl}" alt=""></button>`).join('')}</div>` : ''}
+      ${custom.length ? `<div class="emoji-section-title">SERVER EMOJIS</div><div class="global-emoji-grid custom">${custom.map(emoji => `<button type="button" data-custom-emoji="${esc(emoji.name)}" title=":${esc(emoji.name)}:"><img src="${esc(normalizeAssetUrl(emoji.imageDataUrl))}" alt=""></button>`).join('')}</div>` : ''}
       <div class="emoji-section-title">STANDARD EMOJIS</div>
       <div class="global-emoji-grid">${unicodeEmojiCatalog.map(emoji => `<button type="button" data-unicode-emoji="${emoji}">${emoji}</button>`).join('')}</div>`;
     $('global-emoji-search-input').addEventListener('input', event => renderGlobalEmojiPicker(event.target.value));
@@ -9284,7 +9292,7 @@
     if (activeView === 'channel' && activeServerEmojis.length) {
       activeServerEmojis.forEach(emoji => {
         const token = `:${emoji.name}:`;
-        html = html.split(token).join(`<img class="inline-custom-emoji" src="${emoji.imageDataUrl}" alt="${token}" title="${token}">`);
+        html = html.split(token).join(`<img class="inline-custom-emoji" src="${esc(normalizeAssetUrl(emoji.imageDataUrl))}" alt="${token}" title="${token}">`);
       });
     }
     html = html.replace(/&lt;@(everyone|here)&gt;/g, (match, name) => {
