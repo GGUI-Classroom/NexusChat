@@ -2,6 +2,8 @@
 (function () {
   'use strict';
 
+  const isEmbeddedFrame = window.self !== window.top;
+
   // ---- State ----
   let currentUser = null;
   let socket = null;
@@ -1476,6 +1478,7 @@
 
   function deviceHeaders(extra = {}) {
     const headers = { ...extra, 'X-Nexus-Device-Id': getDeviceId() };
+    if (isEmbeddedFrame) headers['X-Nexus-Embedded'] = '1';
     const deviceToken = getDeviceToken();
     if (deviceToken) headers['X-Nexus-Device-Token'] = deviceToken;
     if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
@@ -4857,7 +4860,11 @@
       }
     }
 
-    socket = io({ transports: ['websocket', 'polling'], auth: { deviceId: getDeviceId(), deviceToken: getDeviceToken() } });
+    socket = io({
+      transports: ['websocket', 'polling'],
+      query: { embedded: isEmbeddedFrame ? '1' : '0' },
+      auth: { deviceId: getDeviceId(), deviceToken: getDeviceToken() }
+    });
 
     socket.on('tos_required', ({ tos }) => {
       if (!tos || !currentUser) return;

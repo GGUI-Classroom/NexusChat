@@ -201,7 +201,12 @@ router.post('/logout', async (req, res) => {
     delete req.session.deviceTokenHash;
   }
   req.session.destroy(() => {
-    res.clearCookie('nexus.sid');
+    const embedded = req.sessionCookieName === 'nexus.embed.sid';
+    res.clearCookie(req.sessionCookieName || 'nexus.sid', embedded ? {
+      secure: true,
+      sameSite: 'none',
+      partitioned: true
+    } : undefined);
     res.json({ success: true });
   });
 });

@@ -39,6 +39,8 @@ const REQUIRE_REDIS = envFlag('REQUIRE_REDIS', false);
 const TRUST_PROXY = process.env.TRUST_PROXY || (isProd ? '1' : '');
 const ALLOW_FILE_CLIENTS = envFlag('ALLOW_FILE_CLIENTS', false);
 const ALLOW_CROSS_SITE_IFRAMES = envFlag('ALLOW_CROSS_SITE_IFRAMES', isProd);
+const SESSION_COOKIE_NAME = 'nexus.sid';
+const EMBEDDED_SESSION_COOKIE_NAME = 'nexus.embed.sid';
 const COOKIE_SAME_SITE = (
   ALLOW_CROSS_SITE_IFRAMES ? 'none' : (process.env.COOKIE_SAME_SITE || (ALLOW_FILE_CLIENTS ? 'none' : 'lax'))
 ).toLowerCase();
@@ -262,19 +264,49 @@ if (TRUST_PROXY && !['0', 'false', 'no', 'off'].includes(TRUST_PROXY.toLowerCase
   app.set('trust proxy', /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY);
 }
 
-const sessionMiddleware = session({
-  store: new pgSession({ pool, createTableIfMissing: true }),
-  secret: SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  name: 'nexus.sid',
-  cookie: {
-    secure: COOKIE_SECURE,
-    httpOnly: true,
-    sameSite: COOKIE_SAME_SITE,
-    maxAge: 7 * 24 * 60 * 60 * 1000
-  }
+const sessionStore = new pgSession({ pool, createTableIfMissing: true });
+
+function createSessionMiddleware(name, cookieOverrides = {}) {
+  return session({
+    store: sessionStore,
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    name,
+    cookie: {
+      secure: COOKIE_SECURE,
+      httpOnly: true,
+      sameSite: COOKIE_SAME_SITE,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      ...cookieOverrides
+    }
+  });
+}
+
+const sessionMiddleware = createSessionMiddleware(SESSION_COOKIE_NAME);
+const embeddedSessionMiddleware = createSessionMiddleware(EMBEDDED_SESSION_COOKIE_NAME, {
+  sameSite: 'none',
+  partitioned: true
 });
+
+function isEmbeddedHttpRequest(req) {
+  return ALLOW_CROSS_SITE_IFRAMES && req.get('x-nexus-embedded') === '1';
+}
+
+function applySelectedSession(req, res, next) {
+  const embedded = isEmbeddedHttpRequest(req);
+  req.sessionCookieName = embedded ? EMBEDDED_SESSION_COOKIE_NAME : SESSION_COOKIE_NAME;
+  return (embedded ? embeddedSessionMiddleware : sessionMiddleware)(req, res, next);
+}
+
+function clearRequestSessionCookie(req, res) {
+  const embedded = req.sessionCookieName === EMBEDDED_SESSION_COOKIE_NAME;
+  res.clearCookie(req.sessionCookieName || SESSION_COOKIE_NAME, embedded ? {
+    secure: COOKIE_SECURE,
+    sameSite: 'none',
+    partitioned: true
+  } : undefined);
+}
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -284,7 +316,7 @@ app.use((req, res, next) => {
     res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Nexus-Device-Id, X-Nexus-Device-Token, X-CSRF-Token');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Nexus-Device-Id, X-Nexus-Device-Token, X-CSRF-Token, X-Nexus-Embedded');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -293,11 +325,11 @@ app.use(setSecurityHeaders);
 app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(sessionMiddleware);
+app.use(applySelectedSession);
 app.use((req, res, next) => {
   if (!req.session?.userId || req.session.authVersion === SESSION_SECURITY_VERSION) return next();
   req.session.destroy(() => {
-    res.clearCookie('nexus.sid');
+    clearRequestSessionCookie(req, res);
     if (req.path.startsWith('/api')) return res.status(401).json({ error: 'Your session expired for a security update. Please sign in again.' });
     next();
   });
@@ -309,13 +341,13 @@ app.use('/api', async (req, res, next) => {
     const currentVersion = await getUserSessionVersion(req.session.userId);
     if ((Number(req.session.userSessionVersion) || 0) !== currentVersion) {
       return req.session.destroy(() => {
-        res.clearCookie('nexus.sid');
+        clearRequestSessionCookie(req, res);
         res.status(401).json({ error: 'Your session was revoked. Please sign in again.' });
       });
     }
     if (!isBrowserMediaRequest(req) && !(await validateHttpDeviceSession(req))) {
       return req.session.destroy(() => {
-        res.clearCookie('nexus.sid');
+        clearRequestSessionCookie(req, res);
         res.status(401).json({ error: 'This device session expired. Please sign in again.' });
       });
     }
@@ -628,7 +660,11 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
+io.use((socket, next) => {
+  const embedded = ALLOW_CROSS_SITE_IFRAMES && String(socket.handshake.query?.embedded || '') === '1';
+  socket.request.sessionCookieName = embedded ? EMBEDDED_SESSION_COOKIE_NAME : SESSION_COOKIE_NAME;
+  return (embedded ? embeddedSessionMiddleware : sessionMiddleware)(socket.request, {}, next);
+});
 
 const userSockets = new Map();
 const voiceRooms = new Map();
