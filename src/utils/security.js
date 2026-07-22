@@ -60,7 +60,10 @@ function requireCsrfToken(req, res, next) {
   const expectedBuffer = Buffer.from(expected);
   const actualBuffer = Buffer.from(actual);
   if (!expected || actualBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(actualBuffer, expectedBuffer)) {
-    return res.status(403).json({ error: 'Security token expired. Refresh Nexus and try again.' });
+    return res.status(403).json({
+      error: 'Security token expired. Refreshing Nexus and retrying...',
+      code: 'CSRF_TOKEN_INVALID'
+    });
   }
   next();
 }

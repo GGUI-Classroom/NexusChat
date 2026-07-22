@@ -1430,6 +1430,7 @@
   }
 
   let csrfToken = sessionStorage.getItem('nexus.csrfToken') || '';
+  let csrfRefreshPromise = null;
 
   function getDeviceToken() {
     return localStorage.getItem('nexus.deviceToken') || '';
@@ -1446,16 +1447,31 @@
     }
   }
 
-  async function ensureCsrfToken() {
-    if (csrfToken) return csrfToken;
-    const res = await fetch('/api/auth/csrf', {
-      method: 'GET',
-      credentials: 'include',
-      headers: deviceHeaders()
-    });
-    const data = await res.json().catch(() => ({}));
-    rememberSecurityTokens(data);
-    return csrfToken;
+  function clearCsrfToken() {
+    csrfToken = '';
+    sessionStorage.removeItem('nexus.csrfToken');
+  }
+
+  async function ensureCsrfToken(forceRefresh = false) {
+    if (!forceRefresh && csrfToken) return csrfToken;
+    if (csrfRefreshPromise) return csrfRefreshPromise;
+    csrfRefreshPromise = (async () => {
+      if (forceRefresh) clearCsrfToken();
+      const res = await fetch('/api/auth/csrf', {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store',
+        headers: deviceHeaders()
+      });
+      const data = await res.json().catch(() => ({}));
+      rememberSecurityTokens(data);
+      return csrfToken;
+    })();
+    try {
+      return await csrfRefreshPromise;
+    } finally {
+      csrfRefreshPromise = null;
+    }
   }
 
   function deviceHeaders(extra = {}) {
@@ -1466,19 +1482,41 @@
     return headers;
   }
 
+  function isCsrfFailure(response, payload) {
+    return response && response.status === 403 && payload && payload.code === 'CSRF_TOKEN_INVALID';
+  }
+
+  async function sessionFetch(path, options = {}, retryCsrf = true) {
+    const method = String(options.method || 'GET').toUpperCase();
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) await ensureCsrfToken();
+    const response = await fetch(path, {
+      ...options,
+      credentials: options.credentials || 'include',
+      cache: 'no-store',
+      headers: deviceHeaders(options.headers || {})
+    });
+
+    if (retryCsrf && response.status === 403) {
+      const payload = await response.clone().json().catch(() => null);
+      // CSRF validation happens before the route handler, so retrying this
+      // request cannot duplicate a server creation or any other action.
+      if (isCsrfFailure(response, payload)) {
+        const refreshedToken = await ensureCsrfToken(true);
+        if (refreshedToken) return sessionFetch(path, options, false);
+      }
+    }
+    return response;
+  }
+
   // ---- Auth ----
   async function api(method, path, data) {
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(String(method).toUpperCase())) {
-      await ensureCsrfToken();
-    }
     const opts = {
       method,
-      headers: deviceHeaders({ 'Content-Type': 'application/json' }),
-      credentials: 'include'
+      headers: { 'Content-Type': 'application/json' }
     };
     if (data) opts.body = JSON.stringify(data);
     try {
-      const res = await fetch(path, opts);
+      const res = await sessionFetch(path, opts);
       const text = await res.text();
       try {
         const parsed = JSON.parse(text);
@@ -2994,8 +3032,7 @@
     if (iconFile) fd.append('icon', iconFile);
     let r;
     try {
-      await ensureCsrfToken();
-      const res = await fetch('/api/servers', { method: 'POST', body: fd, credentials: 'include', headers: deviceHeaders() });
+      const res = await sessionFetch('/api/servers', { method: 'POST', body: fd });
       const text = await res.text();
       try { r = JSON.parse(text); } catch(e) {
         return failServerCreation('Server error: ' + text.slice(0, 120));
@@ -3199,8 +3236,7 @@
     const form = new FormData();
     form.append('name', name);
     form.append('image', file);
-    await ensureCsrfToken();
-    const response = await fetch(`/api/servers/${activeServerId}/emojis`, { method: 'POST', body: form, credentials: 'include', headers: deviceHeaders() });
+    const response = await sessionFetch(`/api/servers/${activeServerId}/emojis`, { method: 'POST', body: form });
     const result = await response.json().catch(() => ({ error: 'Invalid server response' }));
     if (!response.ok || result.error) return showError('server-emoji-error', result.error || 'Upload failed');
     $('server-emoji-name').value = '';
@@ -3646,8 +3682,7 @@
     if (iconFile) fd.append('icon', iconFile);
     let r;
     try {
-      await ensureCsrfToken();
-      const res = await fetch(`/api/servers/${activeServerId}`, { method: 'PATCH', body: fd, credentials: 'include', headers: deviceHeaders() });
+      const res = await sessionFetch(`/api/servers/${activeServerId}`, { method: 'PATCH', body: fd });
       const text = await res.text();
       try { r = JSON.parse(text); } catch(e) {
         return showError('settings-server-error', 'Server error: ' + text.slice(0, 120));
@@ -6067,8 +6102,7 @@
     }
     const fd = new FormData();
     fd.append('avatar', file);
-    await ensureCsrfToken();
-    const res = await fetch('/api/users/avatar', { method: 'POST', body: fd, credentials: 'same-origin', headers: deviceHeaders() });
+    const res = await sessionFetch('/api/users/avatar', { method: 'POST', body: fd });
     const r = await res.json();
     if (r.error) return toast(r.error, 'error');
     currentUser.avatarDataUrl = r.avatarDataUrl;
@@ -8044,8 +8078,7 @@
     toast('Uploading profile banner...', 'info', 1800);
     let response;
     try {
-      await ensureCsrfToken();
-      response = await fetch(normalizeAssetUrl('/api/users/profile-banner'), { method: 'POST', body: form, credentials: 'include', headers: deviceHeaders() });
+      response = await sessionFetch(normalizeAssetUrl('/api/users/profile-banner'), { method: 'POST', body: form });
     } catch (error) {
       input.value = '';
       return toast('Banner upload could not reach Nexus', 'error');

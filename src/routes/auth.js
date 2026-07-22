@@ -20,6 +20,15 @@ const router = express.Router();
 const DEFAULT_SERVER_INVITE_CODE = 'GPFA9B32';
 const authAttemptBuckets = new Map();
 
+// Auth responses contain per-session state. They must never be served from an
+// HTTP cache, otherwise the client can keep an obsolete CSRF token.
+router.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Vary', 'Cookie');
+  next();
+});
+
 function allowAuthAttempt(req, action) {
   const now = Date.now();
   const key = `${action}:${requestIp(req) || 'unknown'}`;
@@ -53,8 +62,14 @@ function establishFreshSession(req, userId, tosAcceptedVersion = 0) {
   });
 }
 
-router.get('/csrf', (req, res) => {
-  res.json({ csrfToken: ensureCsrfToken(req) });
+router.get('/csrf', (req, res, next) => {
+  const csrfToken = ensureCsrfToken(req);
+  // Persist a freshly created anonymous session before the browser makes its
+  // next write request. This avoids a race on a first login or registration.
+  req.session.save(error => {
+    if (error) return next(error);
+    res.json({ csrfToken });
+  });
 });
 
 router.post('/register', async (req, res) => {
