@@ -4857,11 +4857,7 @@
       }
     }
 
-    socket = io({
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-      auth: { deviceId: getDeviceId(), deviceToken: getDeviceToken() }
-    });
+    socket = io({ transports: ['websocket', 'polling'], auth: { deviceId: getDeviceId(), deviceToken: getDeviceToken() } });
 
     socket.on('tos_required', ({ tos }) => {
       if (!tos || !currentUser) return;

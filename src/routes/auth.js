@@ -201,7 +201,7 @@ router.post('/logout', async (req, res) => {
     delete req.session.deviceTokenHash;
   }
   req.session.destroy(() => {
-    res.clearCookie('nexus.sid.v2');
+    res.clearCookie('nexus.sid');
     res.json({ success: true });
   });
 });

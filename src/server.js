@@ -38,9 +38,7 @@ const COOKIE_SECURE = envFlag('COOKIE_SECURE', isProd);
 const REQUIRE_REDIS = envFlag('REQUIRE_REDIS', false);
 const TRUST_PROXY = process.env.TRUST_PROXY || (isProd ? '1' : '');
 const ALLOW_FILE_CLIENTS = envFlag('ALLOW_FILE_CLIENTS', false);
-const COOKIE_SAME_SITE = (process.env.COOKIE_SAME_SITE || (isProd || ALLOW_FILE_CLIENTS ? 'none' : 'lax')).toLowerCase();
-const COOKIE_PARTITIONED = envFlag('COOKIE_PARTITIONED', false);
-const SESSION_COOKIE_NAME = 'nexus.sid.v2';
+const COOKIE_SAME_SITE = (process.env.COOKIE_SAME_SITE || (ALLOW_FILE_CLIENTS ? 'none' : 'lax')).toLowerCase();
 const PUBLIC_APP_ORIGINS = new Set(
   [process.env.PUBLIC_APP_ORIGIN, process.env.RENDER_EXTERNAL_URL]
     .filter(Boolean)
@@ -88,14 +86,8 @@ if (isProd && ALLOW_FILE_CLIENTS) {
 if (isProd && !COOKIE_SECURE) {
   throw new Error('COOKIE_SECURE must be true in production.');
 }
-if (!['lax', 'strict', 'none'].includes(COOKIE_SAME_SITE)) {
-  throw new Error('COOKIE_SAME_SITE must be lax, strict, or none.');
-}
-if (COOKIE_SAME_SITE === 'none' && !COOKIE_SECURE) {
-  throw new Error('COOKIE_SECURE must be true when COOKIE_SAME_SITE is none.');
-}
-if (COOKIE_PARTITIONED && !COOKIE_SECURE) {
-  throw new Error('COOKIE_SECURE must be true when COOKIE_PARTITIONED is enabled.');
+if (isProd && !['lax', 'strict'].includes(COOKIE_SAME_SITE)) {
+  throw new Error('COOKIE_SAME_SITE must be lax or strict in production.');
 }
 if (isProd && process.env.NEXUS_LINK_SHARED_SECRET && process.env.NEXUS_LINK_SHARED_SECRET.length < 32) {
   throw new Error('NEXUS_LINK_SHARED_SECRET must be at least 32 characters when configured in production.');
@@ -268,12 +260,11 @@ const sessionMiddleware = session({
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  name: SESSION_COOKIE_NAME,
+  name: 'nexus.sid',
   cookie: {
     secure: COOKIE_SECURE,
     httpOnly: true,
     sameSite: COOKIE_SAME_SITE,
-    partitioned: COOKIE_PARTITIONED,
     maxAge: 7 * 24 * 60 * 60 * 1000
   }
 });
@@ -299,7 +290,7 @@ app.use(sessionMiddleware);
 app.use((req, res, next) => {
   if (!req.session?.userId || req.session.authVersion === SESSION_SECURITY_VERSION) return next();
   req.session.destroy(() => {
-    res.clearCookie(SESSION_COOKIE_NAME);
+    res.clearCookie('nexus.sid');
     if (req.path.startsWith('/api')) return res.status(401).json({ error: 'Your session expired for a security update. Please sign in again.' });
     next();
   });
@@ -311,13 +302,13 @@ app.use('/api', async (req, res, next) => {
     const currentVersion = await getUserSessionVersion(req.session.userId);
     if ((Number(req.session.userSessionVersion) || 0) !== currentVersion) {
       return req.session.destroy(() => {
-        res.clearCookie(SESSION_COOKIE_NAME);
+        res.clearCookie('nexus.sid');
         res.status(401).json({ error: 'Your session was revoked. Please sign in again.' });
       });
     }
     if (!isBrowserMediaRequest(req) && !(await validateHttpDeviceSession(req))) {
       return req.session.destroy(() => {
-        res.clearCookie(SESSION_COOKIE_NAME);
+        res.clearCookie('nexus.sid');
         res.status(401).json({ error: 'This device session expired. Please sign in again.' });
       });
     }
