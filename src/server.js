@@ -44,6 +44,18 @@ const PUBLIC_APP_ORIGINS = new Set(
     .filter(Boolean)
     .map(origin => String(origin).trim().replace(/\/$/, ''))
 );
+
+// <img> requests cannot attach the device-token headers used by fetch/XHR.
+// These are still protected by the signed same-origin session and their route
+// handlers' requireAuth middleware; only the header-based device check is
+// skipped so loading an avatar cannot invalidate the current user session.
+function isBrowserMediaRequest(req) {
+  if (!['GET', 'HEAD'].includes(req.method)) return false;
+  const requestPath = req.path;
+  return /^\/users\/(?:avatar|banner)\/[^/]+$/.test(requestPath)
+    || /^\/servers\/[^/]+\/icon$/.test(requestPath)
+    || /^\/servers\/[^/]+\/emojis\/[^/]+\/image$/.test(requestPath);
+}
 const STATIC_CLIENT_ORIGINS = new Set(
   (process.env.STATIC_CLIENT_ORIGINS || '')
     .split(',')
@@ -290,7 +302,7 @@ app.use('/api', async (req, res, next) => {
         res.status(401).json({ error: 'Your session was revoked. Please sign in again.' });
       });
     }
-    if (!(await validateHttpDeviceSession(req))) {
+    if (!isBrowserMediaRequest(req) && !(await validateHttpDeviceSession(req))) {
       return req.session.destroy(() => {
         res.clearCookie('nexus.sid');
         res.status(401).json({ error: 'This device session expired. Please sign in again.' });
