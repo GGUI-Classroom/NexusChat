@@ -2242,28 +2242,28 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('send_channel_message', async ({ serverId, channelId, content, replyToMessageId }) => {
-    if (!content || typeof content !== 'string') return;
+  socket.on('send_channel_message', async (payload = {}, acknowledge) => {
+    const { serverId, channelId, content, replyToMessageId } = payload || {};
+    const ack = typeof acknowledge === 'function' ? acknowledge : () => {};
+    const rejectMessage = error => {
+      socket.emit('channel_error', { channelId, error });
+      ack({ error });
+    };
+    if (!content || typeof content !== 'string') return rejectMessage('Enter a message before sending.');
     let trimmed;
     try {
       trimmed = safeMessageContent(content, { field: 'Message' });
     } catch (error) {
-      socket.emit('channel_error', { channelId, error: error.message });
-      return;
+      return rejectMessage(error.message);
     }
     const normalizedReplyId = typeof replyToMessageId === 'string' && replyToMessageId.trim() ? replyToMessageId.trim() : null;
     const channelAccess = await getChannelAccess(pool, serverId, channelId, userId);
     if (!channelAccess) {
-      socket.emit('channel_error', { channelId, error: 'You cannot view or post in that channel.' });
-      return;
+      return rejectMessage('You cannot view or post in that channel.');
     }
     const globalMute = await getGlobalMuteState(userId);
     if (globalMute) {
-      socket.emit('channel_error', {
-        channelId,
-        error: `You are globally muted for ${humanDuration(globalMute.mutedUntil - Math.floor(Date.now() / 1000))} more.`
-      });
-      return;
+      return rejectMessage(`You are globally muted for ${humanDuration(globalMute.mutedUntil - Math.floor(Date.now() / 1000))} more.`);
     }
 
     const safetyViolation = await enforceGlobalSafety({
@@ -2274,11 +2274,7 @@ io.on('connection', (socket) => {
       channelId
     });
     if (safetyViolation) {
-      socket.emit('channel_error', {
-        channelId,
-        error: 'Message blocked by NexusGuard global safety policy. The attempt was automatically reported.'
-      });
-      return;
+      return rejectMessage('Message blocked by NexusGuard global safety policy. The attempt was automatically reported.');
     }
 
     const botConfig = await getServerBotConfig(serverId);
@@ -2293,7 +2289,10 @@ io.on('connection', (socket) => {
         input: trimmed,
         botConfig
       });
-      if (handled) return;
+      if (handled) {
+        ack({ ok: true, command: true });
+        return;
+      }
     }
 
     // Single query: get member info, role info, channel validity, and permission check
@@ -2317,24 +2316,21 @@ io.on('connection', (socket) => {
        WHERE sm.server_id=$1 AND sm.user_id=$3`,
       [serverId, channelId, userId]
     );
-    if (!check.rows.length) return; // not a member or channel doesn't belong to server
+    if (!check.rows.length) return rejectMessage('You are no longer a member of this server or the channel no longer exists.');
     const row = check.rows[0];
 
     if ((trimmed.includes('<@everyone>') || trimmed.includes('<@here>')) &&
         row.member_role !== 'admin' && !row.is_admin && !row.can_mention_everyone) {
-      socket.emit('channel_error', { channelId, error: 'You do not have permission to mention everyone' });
-      return;
+      return rejectMessage('You do not have permission to mention everyone.');
     }
 
     if ((row.channel_type || 'text') === 'voice') {
-      socket.emit('channel_error', { channelId, error: 'This is a voice channel. Join voice to communicate here.' });
-      return;
+      return rejectMessage('This is a voice channel. Join voice to communicate here.');
     }
 
     // Check send permission (already fetched in initial query as perm_allow)
     if (row.locked && !row.is_admin && row.member_role !== 'admin' && !row.perm_allow) {
-      socket.emit('channel_error', { channelId, error: 'You do not have permission to send messages in this channel' });
-      return;
+      return rejectMessage('You do not have permission to send messages in this channel.');
     }
 
     const slowmodeSeconds = Math.max(0, parseInt(row.slowmode_seconds, 10) || 0);
@@ -2351,11 +2347,7 @@ io.on('connection', (socket) => {
         const nowSec = Math.floor(Date.now() / 1000);
         const elapsed = nowSec - parseInt(lastMsg.rows[0].created_at, 10);
         if (elapsed < slowmodeSeconds) {
-          socket.emit('channel_error', {
-            channelId,
-            error: `Slowmode is enabled. Wait ${slowmodeSeconds - elapsed}s before sending again.`
-          });
-          return;
+          return rejectMessage(`Slowmode is enabled. Wait ${slowmodeSeconds - elapsed}s before sending again.`);
         }
       }
     }
@@ -2363,17 +2355,13 @@ io.on('connection', (socket) => {
     const mute = await getMuteState(serverId, userId);
     if (mute) {
       const secondsLeft = Math.max(0, mute.mutedUntil - Math.floor(Date.now() / 1000));
-      socket.emit('channel_error', {
-        channelId,
-        error: `You are muted in this server for ${humanDuration(secondsLeft)} more.`
-      });
-      return;
+      return rejectMessage(`You are muted in this server for ${humanDuration(secondsLeft)} more.`);
     }
 
     if (botConfig.botEnabled && botConfig.botAutoMod) {
       const blockedWord = findConfiguredViolation(trimmed, botConfig.blockedWords || []);
       if (blockedWord) {
-        socket.emit('channel_error', { channelId, error: `Message blocked: contains blocked word "${blockedWord.term}".` });
+        rejectMessage(`Message blocked: contains blocked word "${blockedWord.term}".`);
         await sendBotDirectMessage({
           toUserId: userId,
           content: `[${NEXUS_BOT_NAME}] Your message in server ${serverId} was blocked for using a filtered word: ${blockedWord.term}`
@@ -2383,7 +2371,7 @@ io.on('connection', (socket) => {
 
       const linkHit = botConfig.botBlockLinks && /(https?:\/\/|www\.)/i.test(trimmed);
       if (linkHit) {
-        socket.emit('channel_error', { channelId, error: 'Links are blocked by server automod.' });
+        rejectMessage('Links are blocked by server automod.');
         await emitBotChannelMessage({
           serverId,
           channelId,
@@ -2398,8 +2386,7 @@ io.on('connection', (socket) => {
       if (lettersOnly.length >= 12) {
         const capsPct = Math.round((upperOnly.length / lettersOnly.length) * 100);
         if (capsPct >= botConfig.botCapsThreshold) {
-          socket.emit('channel_error', { channelId, error: `Message blocked: too much caps (${capsPct}%).` });
-          return;
+          return rejectMessage(`Message blocked: too much caps (${capsPct}%).`);
         }
       }
 
@@ -2410,8 +2397,7 @@ io.on('connection', (socket) => {
       recent.push(nowMs);
       spamTracker.set(spamKey, recent);
       if (recent.length > botConfig.botSpamWindow) {
-        socket.emit('channel_error', { channelId, error: 'Slow down. Automod detected message spam.' });
-        return;
+        return rejectMessage('Slow down. Automod detected message spam.');
       }
     }
 
@@ -2425,8 +2411,7 @@ io.on('connection', (socket) => {
         [normalizedReplyId, channelId]
       );
       if (!replyRes.rows.length) {
-        socket.emit('channel_error', { channelId, error: 'Reply target was not found in this channel.' });
-        return;
+        return rejectMessage('Reply target was not found in this channel.');
       }
       const r = replyRes.rows[0];
       replyTo = {
@@ -2523,6 +2508,7 @@ io.on('connection', (socket) => {
 
     // Achievement tracking
     trackAchievement(userId, ['messages_sent', 'channel_msgs']);
+    ack({ ok: true, messageId: msgId });
   });
 
   socket.on('channel_typing_start', async ({ serverId, channelId } = {}) => {

@@ -103,6 +103,7 @@
   let serverModerationData = { logs: [], mutes: [] };
   let isCurrentServerAdmin = false;
   let pendingChannelReply = null;
+  let channelMessageSending = false;
   let activeChannelTopic = null;
   let activeChannelSlowmode = 0;
   let activeChannelType = 'text';
@@ -2700,16 +2701,36 @@
     const content = input.value.trim();
     if (!content || !activeChannelId || !activeServerId) return;
     if (!socket || !socket.connected) return toast('Chat connection is reconnecting. Try again in a moment.', 'error');
-    socket.emit('send_channel_message', {
+    if (channelMessageSending) return;
+    const sendingChannelId = activeChannelId;
+    const sendingReply = pendingChannelReply;
+    channelMessageSending = true;
+    $('channel-send-btn').disabled = true;
+    socket.timeout(10000).emit('send_channel_message', {
       serverId: activeServerId,
-      channelId: activeChannelId,
+      channelId: sendingChannelId,
       content,
-      replyToMessageId: pendingChannelReply ? pendingChannelReply.id : null
+      replyToMessageId: sendingReply ? sendingReply.id : null
+    }, (timeoutError, result) => {
+      channelMessageSending = false;
+      $('channel-send-btn').disabled = false;
+      if (timeoutError) {
+        toast('The server did not confirm that message. Your text was kept so you can retry.', 'error', 5000);
+        return;
+      }
+      // The server also emits channel_error so older clients and every
+      // active channel receive the same visible rejection without duplicates.
+      if (result && result.error) return;
+      if (!result) return toast('That message could not be sent. Your text was kept.', 'error', 5000);
+      if (activeChannelId === sendingChannelId && input.value.trim() === content) {
+        input.value = '';
+        input.style.height = 'auto';
+      }
+      if (pendingChannelReply && sendingReply && pendingChannelReply.id === sendingReply.id) {
+        setChannelReply(null);
+      }
+      stopChannelTyping();
     });
-    input.value = '';
-    input.style.height = 'auto';
-    setChannelReply(null);
-    stopChannelTyping();
   }
 
   function setChannelReply(reply) {
@@ -4892,7 +4913,11 @@
         api('GET', '/api/auth/tos').then(result => {
           if (result.tos) showTosAgreement(result.tos);
         });
+        return;
       }
+      if (error?.message === 'RATE_LIMITED') return toast('You are sending too quickly. Wait a few seconds and retry.', 'error');
+      if (error?.message === 'FORBIDDEN_EVENT') return toast('This call-only session cannot send chat messages. Refresh Nexus and sign in normally.', 'error', 6000);
+      if (error?.message === 'TOS_UNAVAILABLE') return toast('Chat permissions could not be checked. Try again in a moment.', 'error');
     });
 
     socket.on('call_game_state', ({ roomId, game }) => {
