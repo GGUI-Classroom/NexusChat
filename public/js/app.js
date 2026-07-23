@@ -5234,11 +5234,16 @@
       toast(error || 'Message could not be sent', 'error');
     });
 
-    socket.on('screenshare_started', ({ fromId }) => {
+    socket.on('screenshare_started', ({ roomId, fromId }) => {
+      if (!callState || callState.roomId !== roomId) return;
       expectingRemoteScreenTrack = true;
-      const peer = callState && callState.peerUser;
-      if (callState && callState.remoteVideoStream) {
+      const peer = callState.peerUser;
+      if (callState.remoteVideoStream) {
         showRemoteScreenStream(callState.remoteVideoStream, peer ? peer.displayName : 'Peer');
+      } else {
+        $('screenshare-who').textContent = (peer ? peer.displayName : 'Peer') + ' is connecting their screen…';
+        $('screenshare-overlay').style.display = 'flex';
+        $('view-screen-btn').style.display = 'flex';
       }
       toast((peer ? peer.displayName : 'Peer') + ' started screen sharing', 'info');
     });
@@ -5301,7 +5306,8 @@
       toast(`${label} from ${fromUser.displayName} in ${serverName}: ${preview}`, 'info', 6000);
     });
 
-    socket.on('screenshare_stopped', () => {
+    socket.on('screenshare_stopped', ({ roomId } = {}) => {
+      if (callState && roomId && callState.roomId !== roomId) return;
       expectingRemoteScreenTrack = false;
       remoteScreenActive = false;
       $('screenshare-overlay').style.display = 'none';
@@ -5469,16 +5475,33 @@
     // don't hide it — keep it so they can close/reopen again
   });
 
+  $('screenshare-video').addEventListener('click', function () {
+    const playback = this.play();
+    if (playback && typeof playback.catch === 'function') playback.catch(() => {});
+  });
+
   function showRemoteScreenStream(stream, peerName = 'Peer') {
     if (!stream) return;
+    const videoTracks = stream.getVideoTracks();
+    if (!videoTracks.length) return;
+    const displayStream = new MediaStream(videoTracks);
     remoteScreenActive = true;
     $('screenshare-who').textContent = peerName + ' is sharing their screen';
     const vid = $('screenshare-video');
-    vid.srcObject = stream;
-    vid.muted = false;
+    vid.srcObject = displayStream;
+    // Screen audio is not requested. Muting guarantees autoplay is permitted
+    // in embedded contexts while call audio continues through its audio node.
+    vid.muted = true;
     $('screenshare-overlay').style.display = 'flex';
     $('view-screen-btn').style.display = 'flex';
     $('view-screen-btn').classList.add('viewing');
+    const playback = vid.play();
+    if (playback && typeof playback.catch === 'function') {
+      playback.catch(error => {
+        console.warn('Screen share playback failed:', error && error.message ? error.message : error);
+        toast('Click the screen-share viewer to start playback', 'info', 5000);
+      });
+    }
   }
 
   async function startScreenShare() {

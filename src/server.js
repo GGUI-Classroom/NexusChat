@@ -2728,13 +2728,13 @@ io.on('connection', (socket) => {
   socket.on('screenshare_started', async ({ roomId, toId } = {}) => {
     const participants = await getRoomParticipants(String(roomId || ''));
     if (!participants.has(userId) || !participants.has(String(toId || ''))) return;
-    io.to(`user:${toId}`).emit('screenshare_started', { fromId: userId });
+    io.to(`user:${toId}`).emit('screenshare_started', { roomId, fromId: userId });
   });
 
   socket.on('screenshare_stopped', async ({ roomId, toId } = {}) => {
     const participants = await getRoomParticipants(String(roomId || ''));
     if (!participants.has(userId) || !participants.has(String(toId || ''))) return;
-    io.to(`user:${toId}`).emit('screenshare_stopped', { fromId: userId });
+    io.to(`user:${toId}`).emit('screenshare_stopped', { roomId, fromId: userId });
   });
 
   socket.on('join_group_call', async ({ serverId, channelId }) => {
