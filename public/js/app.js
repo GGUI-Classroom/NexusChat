@@ -87,6 +87,7 @@
   let ringtonePreviewTimer = null;
   let isScreenSharing = false;
   let screenStream = null;
+  let screenSharePreviousVideoTrack = null;
   let outgoingCallTo = null;
   let outgoingCallRoomId = null;
   let outgoingCallType = 'voice';
@@ -5060,10 +5061,11 @@
 
     socket.on('peer_joined', ({ userId }) => {});
 
-    socket.on('webrtc_offer', async ({ roomId, fromId, offer }) => {
+    socket.on('webrtc_offer', async ({ roomId, fromId, offer, mediaKind }) => {
       if (!callState || callState.roomId !== roomId) return;
       const pc = callState.peerConnection;
       try {
+        if (mediaKind === 'screen') expectingRemoteScreenTrack = true;
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -5234,8 +5236,10 @@
 
     socket.on('screenshare_started', ({ fromId }) => {
       expectingRemoteScreenTrack = true;
-      // The ontrack handler deals with showing the video; this is just for notification
       const peer = callState && callState.peerUser;
+      if (callState && callState.remoteVideoStream) {
+        showRemoteScreenStream(callState.remoteVideoStream, peer ? peer.displayName : 'Peer');
+      }
       toast((peer ? peer.displayName : 'Peer') + ' started screen sharing', 'info');
     });
 
@@ -5465,24 +5469,49 @@
     // don't hide it — keep it so they can close/reopen again
   });
 
+  function showRemoteScreenStream(stream, peerName = 'Peer') {
+    if (!stream) return;
+    remoteScreenActive = true;
+    $('screenshare-who').textContent = peerName + ' is sharing their screen';
+    const vid = $('screenshare-video');
+    vid.srcObject = stream;
+    vid.muted = false;
+    $('screenshare-overlay').style.display = 'flex';
+    $('view-screen-btn').style.display = 'flex';
+    $('view-screen-btn').classList.add('viewing');
+  }
+
   async function startScreenShare() {
+    let announced = false;
     try {
+      const capturePolicy = document.permissionsPolicy || document.featurePolicy;
+      if (isEmbeddedFrame && capturePolicy?.allowsFeature
+        && !capturePolicy.allowsFeature('display-capture')) {
+        toast('Quizizz has not allowed screen capture for this embed. Open Nexus in a normal tab to share your screen.', 'error', 7000);
+        return;
+      }
       screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       const screenTrack = screenStream.getVideoTracks()[0];
 
       const pc = callState.peerConnection;
       const senders = pc.getSenders();
       const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+      screenSharePreviousVideoTrack = videoSender?.track || null;
       if (videoSender) {
         await videoSender.replaceTrack(screenTrack);
       } else {
         pc.addTrack(screenTrack, screenStream);
       }
 
+      // Notify first so the receiver routes the incoming video as a screen,
+      // even if setRemoteDescription fires its ontrack callback immediately.
+      socket.emit('screenshare_started', { roomId: callState.roomId, toId: callState.peerId });
+      announced = true;
+
       // Renegotiate so the peer actually receives the new video track
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      socket.emit('webrtc_offer', { roomId: callState.roomId, toId: callState.peerId, offer });
+      socket.emit('webrtc_offer', { roomId: callState.roomId, toId: callState.peerId, offer, mediaKind: 'screen' });
 
       isScreenSharing = true;
       $('screenshare-btn').classList.add('sharing');
@@ -5496,13 +5525,15 @@
       $('screenshare-overlay').style.display = 'flex';
       $('view-screen-btn').style.display = 'flex';
 
-      socket.emit('screenshare_started', { roomId: callState.roomId, toId: callState.peerId });
-
       screenTrack.onended = () => stopScreenShare();
 
     } catch (e) {
+      if (announced && callState) {
+        socket.emit('screenshare_stopped', { roomId: callState.roomId, toId: callState.peerId });
+      }
+      console.warn('Screen share failed:', e && e.message ? e.message : e);
       if (e.name !== 'NotAllowedError') {
-        toast('Could not start screen share', 'error');
+        toast('Could not start screen share: ' + (e.message || 'unknown browser error'), 'error', 6000);
       }
     }
   }
@@ -5517,8 +5548,12 @@
       const senders = pc.getSenders();
       const videoSender = senders.find(s => s.track && s.track.kind === 'video');
       if (videoSender) {
-        pc.removeTrack(videoSender);
-        // Renegotiate after removing track
+        if (screenSharePreviousVideoTrack && screenSharePreviousVideoTrack.readyState === 'live') {
+          await videoSender.replaceTrack(screenSharePreviousVideoTrack);
+        } else {
+          pc.removeTrack(videoSender);
+        }
+        // Renegotiate after restoring the camera or removing the screen track.
         try {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
@@ -5527,6 +5562,7 @@
       }
       socket.emit('screenshare_stopped', { roomId: callState.roomId, toId: callState.peerId });
     }
+    screenSharePreviousVideoTrack = null;
     isScreenSharing = false;
     $('screenshare-btn').classList.remove('sharing');
     $('screenshare-btn').title = 'Share screen';
@@ -5622,16 +5658,10 @@
           if (callState) callState.remoteAudio = audio;
         } else if (track.kind === 'video') {
           const peerName = callState && callState.peerUser ? callState.peerUser.displayName : 'Peer';
+          if (callState) callState.remoteVideoStream = e.streams[0];
           if (expectingRemoteScreenTrack) {
-            remoteScreenActive = true;
-            $('screenshare-who').textContent = peerName + ' is sharing their screen';
+            showRemoteScreenStream(e.streams[0], peerName);
             const vid = $('screenshare-video');
-            vid.srcObject = e.streams[0];
-            vid.muted = false;
-            $('screenshare-overlay').style.display = 'flex';
-            $('view-screen-btn').style.display = 'flex';
-            $('view-screen-btn').classList.add('viewing');
-            toast((peerName) + ' is sharing their screen — click 👁 to view', 'info', 5000);
             track.onended = () => {
               remoteScreenActive = false;
               expectingRemoteScreenTrack = false;

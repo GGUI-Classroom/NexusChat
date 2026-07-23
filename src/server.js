@@ -139,7 +139,7 @@ function setSecurityHeaders(req, res, next) {
   ].join('; '));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'geolocation=(), payment=(), usb=()');
+  res.setHeader('Permissions-Policy', 'geolocation=(), payment=(), usb=(), display-capture=(self)');
   next();
 }
 
@@ -2684,11 +2684,16 @@ io.on('connection', (socket) => {
     socket.to(`call:${roomId}`).emit('peer_joined', { userId });
   });
 
-  socket.on('webrtc_offer', async ({ roomId, toId, offer } = {}) => {
+  socket.on('webrtc_offer', async ({ roomId, toId, offer, mediaKind } = {}) => {
     if (socket.data.activityOnly && socket.data.activityCall && (socket.data.activityCall.roomId !== roomId || socket.data.activityCall.callerId !== String(toId || ''))) return;
     const participants = await getRoomParticipants(String(roomId || ''));
     if (!participants.has(userId) || !participants.has(String(toId || ''))) return;
-    io.to(`user:${toId}`).emit('webrtc_offer', { roomId, fromId: userId, offer });
+    io.to(`user:${toId}`).emit('webrtc_offer', {
+      roomId,
+      fromId: userId,
+      offer,
+      mediaKind: mediaKind === 'screen' ? 'screen' : 'default'
+    });
   });
   socket.on('webrtc_answer', async ({ roomId, toId, answer } = {}) => {
     if (socket.data.activityOnly && socket.data.activityCall && (socket.data.activityCall.roomId !== roomId || socket.data.activityCall.callerId !== String(toId || ''))) return;
