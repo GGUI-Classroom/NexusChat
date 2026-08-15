@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Nexus Client Template</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="rail" aria-label="Nexus navigation">
+        <div class="brand-mark">N</div>
+        <button class="rail-button active" type="button" aria-label="Chat">#</button>
+      </aside>
+
+      <aside class="sidebar">
+        <header class="sidebar-header">
+          <div class="wordmark">NEXUS</div>
+          <span class="template-label">CLIENT</span>
+        </header>
+        <section class="identity" id="identity"></section>
+        <nav class="nav-section" aria-label="Conversations">
+          <div class="section-title">DIRECT MESSAGES</div>
+          <div id="friend-list" class="nav-list"></div>
+        </nav>
+        <nav class="nav-section server-section" aria-label="Servers">
+          <div class="section-title">SERVERS</div>
+          <div id="server-list" class="nav-list"></div>
+        </nav>
+      </aside>
+
+      <section class="workspace">
+        <header class="chat-header">
+          <div>
+            <div class="eyebrow" id="chat-kind">NEXUS CLIENT</div>
+            <h1 id="chat-title">Choose a conversation</h1>
+          </div>
+          <div id="channel-list" class="channel-list" aria-label="Channels"></div>
+        </header>
+        <div class="connection-note" id="connection-note">Connected through your private Nexus Client API.</div>
+        <section class="messages" id="messages" aria-live="polite"></section>
+        <form class="composer" id="composer">
+          <label class="sr-only" for="message-input">Message</label>
+          <textarea id="message-input" rows="1" maxlength="4000" placeholder="Choose a conversation to start chatting" disabled></textarea>
+          <button id="send-button" type="submit" disabled>Send</button>
+        </form>
+      </section>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
