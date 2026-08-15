@@ -110,11 +110,19 @@ if (isProd && process.env.LIMITED_ADMIN_NFC_CODE && process.env.LIMITED_ADMIN_NF
 if (isProd && process.env.LIMITED_ADMIN_ACCESS_CODE && process.env.LIMITED_ADMIN_ACCESS_CODE.length < 16) {
   throw new Error('LIMITED_ADMIN_ACCESS_CODE must be at least 16 characters when configured in production.');
 }
-if (Boolean(process.env.NEXUS_PRIVATE_CLIENT_API_KEY) !== Boolean(process.env.NEXUS_PRIVATE_CLIENT_USER_ID)) {
-  throw new Error('NEXUS_PRIVATE_CLIENT_API_KEY and NEXUS_PRIVATE_CLIENT_USER_ID must be configured together.');
+const nexusClientApiValues = [
+  process.env.NEXUS_CLIENT_API_CLIENT_ID,
+  process.env.NEXUS_CLIENT_API_CLIENT_SECRET,
+  process.env.NEXUS_CLIENT_API_TOKEN_SECRET
+].filter(Boolean);
+if (nexusClientApiValues.length > 0 && nexusClientApiValues.length < 3) {
+  throw new Error('NEXUS_CLIENT_API_CLIENT_ID, NEXUS_CLIENT_API_CLIENT_SECRET, and NEXUS_CLIENT_API_TOKEN_SECRET must be configured together.');
 }
-if (isProd && process.env.NEXUS_PRIVATE_CLIENT_API_KEY && process.env.NEXUS_PRIVATE_CLIENT_API_KEY.length < 32) {
-  throw new Error('NEXUS_PRIVATE_CLIENT_API_KEY must be at least 32 characters when configured in production.');
+if (isProd && process.env.NEXUS_CLIENT_API_CLIENT_SECRET && process.env.NEXUS_CLIENT_API_CLIENT_SECRET.length < 32) {
+  throw new Error('NEXUS_CLIENT_API_CLIENT_SECRET must be at least 32 characters in production.');
+}
+if (isProd && process.env.NEXUS_CLIENT_API_TOKEN_SECRET && process.env.NEXUS_CLIENT_API_TOKEN_SECRET.length < 32) {
+  throw new Error('NEXUS_CLIENT_API_TOKEN_SECRET must be at least 32 characters in production.');
 }
 
 function isAllowedClientOrigin(origin, req) {
@@ -343,14 +351,14 @@ app.use((req, res, next) => {
   });
 });
 
-// This route is deliberately mounted before browser CSRF and device-session
-// checks. It authenticates with a private, server-side bearer key instead of a
-// browser session, and never enables CORS for that key.
+// This is a server-to-server, multi-user client API. The rebranded app proves
+// its identity with a private app secret, while each user supplies a signed
+// Nexus access token. It intentionally has no browser CORS access.
 app.set('io', io);
 app.set('relayNexusDirectMessage', relayNexusDirectMessage);
 app.set('relayNexusChannelMessage', relayNexusChannelMessage);
 app.set('trackAchievement', trackAchievement);
-app.use('/api/private-client/v1', require('./routes/private-client'));
+app.use('/api/client/v1', require('./routes/private-client'));
 
 app.use('/api', requireCsrfToken);
 app.use('/api', async (req, res, next) => {

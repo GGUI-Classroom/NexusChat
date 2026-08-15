@@ -1,21 +1,28 @@
 const express = require('express');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../models/db');
-const { safeMessageContent } = require('../utils/inputSafety');
+const { safeMessageContent, safeDisplayName } = require('../utils/inputSafety');
 const { enforceGlobalSafety, findConfiguredViolation } = require('../utils/globalSafety');
 const { getChannelAccess } = require('../utils/channelAccess');
 const { safeStoredImageMime } = require('../utils/imageSafety');
+const { getCurrentTos } = require('../utils/tosPolicy');
+const { getUserSessionVersion } = require('../utils/security');
 
 const router = express.Router();
 const NEXUS_GUARD_ID = '00000000-0000-0000-0000-000000000001';
-const privateRateBuckets = new Map();
-const privateSpamTracker = new Map();
+const DEFAULT_SERVER_INVITE_CODE = 'GPFA9B32';
+const clientRateBuckets = new Map();
+const clientSpamTracker = new Map();
+const authAttemptBuckets = new Map();
 
-function privateClientConfig() {
+function clientApiConfig() {
   return {
-    key: String(process.env.NEXUS_PRIVATE_CLIENT_API_KEY || ''),
-    userId: String(process.env.NEXUS_PRIVATE_CLIENT_USER_ID || '')
+    clientId: String(process.env.NEXUS_CLIENT_API_CLIENT_ID || ''),
+    clientSecret: String(process.env.NEXUS_CLIENT_API_CLIENT_SECRET || ''),
+    tokenSecret: String(process.env.NEXUS_CLIENT_API_TOKEN_SECRET || ''),
+    tokenLifetimeSeconds: Math.min(60 * 60 * 24 * 30, Math.max(15 * 60, parseInt(process.env.NEXUS_CLIENT_API_TOKEN_TTL_SECONDS, 10) || 60 * 60 * 24 * 7))
   };
 }
 
@@ -26,43 +33,176 @@ function timingSafeTokenMatch(expected, received) {
   return expectedBuffer.length === receivedBuffer.length && crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
 }
 
-function privateClientAuth(req, res, next) {
-  const { key, userId } = privateClientConfig();
-  if (!key || !userId) return res.status(404).json({ error: 'Not found' });
+function clientApplicationAuth(req, res, next) {
+  const { clientId, clientSecret, tokenSecret } = clientApiConfig();
+  if (!clientId || !clientSecret || !tokenSecret) return res.status(404).json({ error: 'Not found' });
 
-  // The browser template must call its own backend proxy. This keeps the key
-  // out of page source, local storage, and every visitor's dev tools.
+  // Browser code never sees the client secret. A rebranded client calls this
+  // API from its own backend, then keeps each user's Nexus token in a local
+  // HttpOnly session cookie.
   if (req.get('origin')) return res.status(403).json({ error: 'Use a server-side Nexus client proxy for this API' });
 
-  const authorization = String(req.get('authorization') || '');
-  const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1] || '';
-  const supplied = bearer || String(req.get('x-nexus-private-client-key') || '');
-  if (!timingSafeTokenMatch(key, supplied)) return res.status(401).json({ error: 'Unauthorized' });
+  const suppliedId = String(req.get('x-nexus-client-id') || '');
+  const suppliedSecret = String(req.get('x-nexus-client-secret') || '');
+  if (!timingSafeTokenMatch(clientId, suppliedId) || !timingSafeTokenMatch(clientSecret, suppliedSecret)) {
+    return res.status(401).json({ error: 'Unauthorized client application' });
+  }
 
-  req.nexusClient = { userId };
+  req.nexusClientApp = { clientId };
   next();
 }
 
 function takePrivateRateToken(req, limit, windowMs, scope) {
   const now = Date.now();
-  const client = req.ip || req.socket?.remoteAddress || 'unknown';
-  const key = `${scope}:${client}:${req.method}:${req.path}`;
-  if (privateRateBuckets.size > 2000) privateRateBuckets.clear();
-  const active = (privateRateBuckets.get(key) || []).filter(time => now - time < windowMs);
+  const authorization = String(req.get('authorization') || '');
+  const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1] || '';
+  const tokenClaims = token ? verifyUserAccessToken(token) : null;
+  const identity = tokenClaims?.sub
+    ? `user:${tokenClaims.sub}`
+    : `unauth:${String(req.body?.username || req.ip || req.socket?.remoteAddress || 'unknown').toLowerCase().slice(0, 80)}`;
+  const key = `${scope}:${req.nexusClientApp?.clientId || 'unknown'}:${identity}:${req.method}:${req.path}`;
+  if (clientRateBuckets.size > 2000) clientRateBuckets.clear();
+  const active = (clientRateBuckets.get(key) || []).filter(time => now - time < windowMs);
   if (active.length >= limit) {
-    privateRateBuckets.set(key, active);
+    clientRateBuckets.set(key, active);
     return false;
   }
   active.push(now);
-  privateRateBuckets.set(key, active);
+  clientRateBuckets.set(key, active);
   return true;
 }
 
-router.use(privateClientAuth);
+function encodeTokenPart(value) {
+  return Buffer.from(JSON.stringify(value)).toString('base64url');
+}
+
+function signTokenPart(value, tokenSecret) {
+  return crypto.createHmac('sha256', tokenSecret).update(value).digest('base64url');
+}
+
+function createUserAccessToken(userId, sessionVersion) {
+  const { clientId, tokenSecret, tokenLifetimeSeconds } = clientApiConfig();
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    sub: String(userId),
+    clientId,
+    sessionVersion: Number(sessionVersion || 0),
+    iat: now,
+    exp: now + tokenLifetimeSeconds,
+    nonce: crypto.randomBytes(12).toString('base64url')
+  };
+  const encoded = encodeTokenPart(payload);
+  return `${encoded}.${signTokenPart(encoded, tokenSecret)}`;
+}
+
+function verifyUserAccessToken(rawToken) {
+  const { clientId, tokenSecret } = clientApiConfig();
+  const [encoded, suppliedSignature, ...rest] = String(rawToken || '').split('.');
+  if (!encoded || !suppliedSignature || rest.length) return null;
+  const expectedSignature = signTokenPart(encoded, tokenSecret);
+  if (!timingSafeTokenMatch(expectedSignature, suppliedSignature)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+    if (!payload || payload.clientId !== clientId || !payload.sub || !Number.isFinite(payload.exp) || payload.exp <= Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function requireClientUser(req, res, next) {
+  const authorization = String(req.get('authorization') || '');
+  const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1] || '';
+  const claims = verifyUserAccessToken(token);
+  if (!claims) return res.status(401).json({ error: 'Your Nexus client session expired. Sign in again.' });
+  try {
+    const user = await pool.query(
+      `SELECT u.id, u.session_version, u.accepted_tos_version,
+        EXISTS(
+          SELECT 1 FROM suspensions
+          WHERE user_id=u.id AND active=TRUE AND suspended_until>EXTRACT(EPOCH FROM NOW())::BIGINT
+        ) AS suspended
+       FROM users u WHERE u.id=$1`,
+      [claims.sub]
+    );
+    const account = user.rows[0];
+    if (!account || Number(account.session_version || 0) !== Number(claims.sessionVersion || 0)) {
+      return res.status(401).json({ error: 'Your Nexus client session expired. Sign in again.' });
+    }
+    if (account.suspended) return res.status(403).json({ error: 'This Nexus account is suspended' });
+    req.nexusClient = {
+      clientId: req.nexusClientApp.clientId,
+      userId: account.id,
+      acceptedTosVersion: Number(account.accepted_tos_version || 0)
+    };
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+function allowAuthAttempt(req, action, identifier) {
+  const now = Date.now();
+  const key = `${req.nexusClientApp.clientId}:${action}:${String(identifier || '').toLowerCase()}`;
+  const active = (authAttemptBuckets.get(key) || []).filter(time => now - time < 15 * 60 * 1000);
+  if (active.length >= 15) {
+    authAttemptBuckets.set(key, active);
+    return false;
+  }
+  active.push(now);
+  authAttemptBuckets.set(key, active);
+  return true;
+}
+
+function safeClientDeviceId(value) {
+  const deviceId = String(value || '').trim();
+  return /^[A-Za-z0-9_-]{8,128}$/.test(deviceId) ? deviceId : null;
+}
+
+async function assertDeviceNotBanned(deviceId) {
+  if (!deviceId) return;
+  const result = await pool.query('SELECT reason FROM ip_bans WHERE device_id=$1 AND active=TRUE LIMIT 1', [deviceId]);
+  if (result.rows.length) {
+    const error = new Error('This device is banned from Nexus');
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
+async function currentUserForAuth(username) {
+  const result = await pool.query(
+    `SELECT u.id, u.username, u.display_name, u.password_hash, u.bio, u.status, (u.avatar_data IS NOT NULL) AS has_avatar,
+      u.active_decoration, u.active_nameplate, u.active_color, u.active_font, u.pro_expires_at,
+      u.profile_gradient_start, u.profile_gradient_end, u.profile_name_effect, u.accepted_tos_version, u.session_version,
+      EXISTS(
+        SELECT 1 FROM suspensions
+        WHERE user_id=u.id AND active=TRUE AND suspended_until>EXTRACT(EPOCH FROM NOW())::BIGINT
+      ) AS suspended
+     FROM users u WHERE LOWER(u.username)=LOWER($1)`,
+    [username]
+  );
+  return result.rows[0] || null;
+}
+
+async function requireCurrentClientTos(req, res, next) {
+  try {
+    const policy = await getCurrentTos();
+    if (req.nexusClient.acceptedTosVersion >= policy.version) return next();
+    return res.status(428).json({
+      error: 'Current Nexus Terms of Service must be accepted before using this client.',
+      tosRequired: true,
+      tos: policy
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+router.use(clientApplicationAuth);
 router.use((req, res, next) => {
   const write = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
   const allowed = takePrivateRateToken(req, write ? 90 : 300, 60 * 1000, write ? 'write' : 'read');
-  if (!allowed) return res.status(429).json({ error: 'Too many private client requests. Please slow down.' });
+  if (!allowed) return res.status(429).json({ error: 'Too many Nexus client API requests. Please slow down.' });
   next();
 });
 
@@ -202,10 +342,174 @@ async function userForMessage(userId) {
   return result.rows[0] || null;
 }
 
+router.get('/auth/terms', async (req, res, next) => {
+  try {
+    res.json({ tos: await getCurrentTos() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/auth/register', async (req, res, next) => {
+  const { username, displayName, password } = req.body || {};
+  try {
+    if (!allowAuthAttempt(req, 'register', username)) return res.status(429).json({ error: 'Too many registration attempts. Try again in a few minutes.' });
+    if (typeof username !== 'string' || typeof displayName !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ error: 'All fields must be text' });
+    }
+    if (!username || !displayName || !password) return res.status(400).json({ error: 'All fields required' });
+    if (username.length < 3 || username.length > 32) return res.status(400).json({ error: 'Username must be 3-32 characters' });
+    if (!/^[a-zA-Z0-9_.-]+$/.test(username)) return res.status(400).json({ error: 'Username may only contain letters, numbers, _, ., -' });
+    if (password.length < 8 || password.length > 128) return res.status(400).json({ error: 'Password must be 8-128 characters' });
+    let safeName;
+    try {
+      safeName = safeDisplayName(displayName);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    const policy = await getCurrentTos();
+    if (req.body?.acceptedTos !== true || Number(req.body?.acceptedTosVersion) !== policy.version) {
+      return res.status(409).json({ error: 'You must accept the current Nexus Terms of Service.', tosRequired: true, tos: policy });
+    }
+    const deviceId = safeClientDeviceId(req.body?.deviceId);
+    await assertDeviceNotBanned(deviceId);
+    const normalizedUsername = username.toLowerCase();
+    const passwordHash = await bcrypt.hash(password, 12);
+    const id = uuidv4();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const exists = await client.query('SELECT id FROM users WHERE LOWER(username)=LOWER($1) FOR UPDATE', [normalizedUsername]);
+      if (exists.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Username already taken' });
+      }
+      await client.query(
+        `INSERT INTO users
+          (id, username, display_name, password_hash, last_device_id, tutorial_completed, accepted_tos_version, accepted_tos_at)
+         VALUES ($1,$2,$3,$4,$5,FALSE,$6,EXTRACT(EPOCH FROM NOW())::BIGINT)`,
+        [id, normalizedUsername, safeName, passwordHash, deviceId, policy.version]
+      );
+      await client.query(
+        `INSERT INTO tos_acceptances (id, user_id, version)
+         VALUES ($1,$2,$3) ON CONFLICT (user_id, version) DO NOTHING`,
+        [uuidv4(), id, policy.version]
+      );
+      const defaultServer = await client.query('SELECT id FROM servers WHERE UPPER(invite_code)=UPPER($1) LIMIT 1', [DEFAULT_SERVER_INVITE_CODE]);
+      if (defaultServer.rows[0]) {
+        await client.query(
+          `INSERT INTO server_members (id, server_id, user_id)
+           VALUES ($1,$2,$3) ON CONFLICT (server_id, user_id) DO NOTHING`,
+          [uuidv4(), defaultServer.rows[0].id, id]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      if (error.code === '23505') return res.status(409).json({ error: 'Username already taken' });
+      throw error;
+    } finally {
+      client.release();
+    }
+    const sessionVersion = await getUserSessionVersion(id);
+    const user = {
+      id,
+      username: normalizedUsername,
+      display_name: safeName,
+      status: 'offline',
+      has_avatar: false,
+      active_decoration: null,
+      active_nameplate: null,
+      active_color: null,
+      active_font: null,
+      pro_expires_at: 0
+    };
+    res.status(201).json({
+      success: true,
+      accessToken: createUserAccessToken(id, sessionVersion),
+      expiresIn: clientApiConfig().tokenLifetimeSeconds,
+      tosRequired: false,
+      user: formatUser(user)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/auth/login', async (req, res, next) => {
+  const { username, password } = req.body || {};
+  try {
+    if (!allowAuthAttempt(req, 'login', username)) return res.status(429).json({ error: 'Too many sign-in attempts. Try again in a few minutes.' });
+    if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) return res.status(400).json({ error: 'Username and password are required' });
+    if (username.length > 32 || password.length > 128) return res.status(401).json({ error: 'Invalid credentials' });
+    const deviceId = safeClientDeviceId(req.body?.deviceId);
+    await assertDeviceNotBanned(deviceId);
+    const user = await currentUserForAuth(username);
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) return res.status(401).json({ error: 'Invalid credentials' });
+    if (user.suspended) return res.status(403).json({ error: 'This Nexus account is suspended' });
+    if (deviceId) await pool.query('UPDATE users SET last_device_id=$1 WHERE id=$2', [deviceId, user.id]);
+    const policy = await getCurrentTos();
+    const acceptedVersion = Number(user.accepted_tos_version || 0);
+    res.json({
+      success: true,
+      accessToken: createUserAccessToken(user.id, await getUserSessionVersion(user.id)),
+      expiresIn: clientApiConfig().tokenLifetimeSeconds,
+      tosRequired: acceptedVersion < policy.version,
+      tos: acceptedVersion < policy.version ? policy : null,
+      user: formatUser(user)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.use(requireClientUser);
+
+router.post('/auth/tos/accept', async (req, res, next) => {
+  try {
+    const policy = await getCurrentTos();
+    if (req.body?.accepted !== true || Number(req.body?.version) !== policy.version) {
+      return res.status(409).json({ error: 'The Terms of Service changed. Review the latest version.', tosRequired: true, tos: policy });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE users
+         SET accepted_tos_version=$1, accepted_tos_at=EXTRACT(EPOCH FROM NOW())::BIGINT
+         WHERE id=$2`,
+        [policy.version, req.nexusClient.userId]
+      );
+      await client.query(
+        `INSERT INTO tos_acceptances (id, user_id, version)
+         VALUES ($1,$2,$3) ON CONFLICT (user_id, version) DO NOTHING`,
+        [uuidv4(), req.nexusClient.userId, policy.version]
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      throw error;
+    } finally {
+      client.release();
+    }
+    res.json({ success: true, acceptedVersion: policy.version });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/auth/logout', (req, res) => {
+  // The white-label client clears its own HttpOnly session. Tokens are also
+  // invalidated immediately by a Nexus password/session-version change.
+  res.json({ success: true });
+});
+
+router.use(requireCurrentClientTos);
+
 router.get('/session', async (req, res, next) => {
   try {
     const user = await userForMessage(req.nexusClient.userId);
-    if (!user) return res.status(404).json({ error: 'The configured Nexus user no longer exists' });
+    if (!user) return res.status(404).json({ error: 'Nexus account not found' });
     res.json({ apiVersion: '1', user: formatUser(user) });
   } catch (error) {
     next(error);
@@ -380,7 +684,7 @@ router.post('/dms/:userId', async (req, res, next) => {
     if (!(await ensureFriendship(fromId, toId))) return res.status(403).json({ error: 'You can only message Nexus friends' });
 
     const sender = await userForMessage(fromId);
-    if (!sender) return res.status(404).json({ error: 'Configured Nexus user was not found' });
+    if (!sender) return res.status(404).json({ error: 'Nexus account was not found' });
     const now = Math.floor(Date.now() / 1000);
     const message = {
       id: uuidv4(),
@@ -417,7 +721,7 @@ router.post('/dms/:userId', async (req, res, next) => {
           activeServerTag: sender.server_tag || null
         },
         content
-      }).catch(error => console.error('Private client Nexus LINK DM relay error:', error.message));
+      }).catch(error => console.error('Nexus client API LINK DM relay error:', error.message));
     }
     const track = req.app.get('trackAchievement');
     track?.(fromId, ['messages_sent', 'dms_sent']);
@@ -584,9 +888,9 @@ router.post('/servers/:serverId/channels/:channelId/messages', async (req, res, 
       const threshold = Math.min(100, Math.max(50, Number(bot.bot_caps_threshold || 90)));
       if (letters.length >= 12 && Math.round((capitals.length / letters.length) * 100) >= threshold) return res.status(400).json({ error: 'Message blocked: too much caps.' });
       const spamKey = `${serverId}:${userId}`;
-      const recent = (privateSpamTracker.get(spamKey) || []).filter(time => Date.now() - time < 6000);
+      const recent = (clientSpamTracker.get(spamKey) || []).filter(time => Date.now() - time < 6000);
       recent.push(Date.now());
-      privateSpamTracker.set(spamKey, recent);
+      clientSpamTracker.set(spamKey, recent);
       const window = Math.min(20, Math.max(3, Number(bot.bot_spam_window || 6)));
       if (recent.length > window) return res.status(429).json({ error: 'Slow down. Automod detected message spam.' });
     }
@@ -637,7 +941,7 @@ router.post('/servers/:serverId/channels/:channelId/messages', async (req, res, 
         },
         content,
         replyTo
-      }).catch(error => console.error('Private client Nexus LINK channel relay error:', error.message));
+      }).catch(error => console.error('Nexus client API LINK channel relay error:', error.message));
     }
     const track = req.app.get('trackAchievement');
     track?.(userId, ['messages_sent', 'channel_msgs']);
@@ -688,9 +992,9 @@ router.get('/media/servers/:serverId/icon', async (req, res, next) => {
 
 router.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
-  console.error('Private Nexus client API error:', error.message);
-  const status = /must be text|must be 1-|unsupported characters|cannot contain HTML/i.test(error.message || '') ? 400 : 500;
-  res.status(status).json({ error: status === 400 ? error.message : 'Private Nexus client request failed' });
+  console.error('Nexus client API error:', error.message);
+  const status = Number(error.statusCode) || (/must be text|must be 1-|unsupported characters|cannot contain HTML/i.test(error.message || '') ? 400 : 500);
+  res.status(status).json({ error: status >= 400 && status < 500 ? error.message : 'Nexus client request failed' });
 });
 
 module.exports = router;

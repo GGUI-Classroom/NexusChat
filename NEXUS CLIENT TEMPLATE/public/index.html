@@ -8,7 +8,48 @@
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <main class="app-shell">
+    <section class="auth-screen" id="auth-screen" aria-labelledby="auth-title">
+      <div class="auth-card">
+        <div class="auth-mark" aria-hidden="true">N</div>
+        <p class="auth-eyebrow">POWERED BY NEXUS</p>
+        <h1 id="auth-title">Welcome back</h1>
+        <p class="auth-copy" id="auth-copy">Sign in with your Nexus account to continue.</p>
+        <form id="auth-form" class="auth-form">
+          <label id="display-name-field" hidden>
+            Display name
+            <input id="display-name-input" name="displayName" autocomplete="nickname" maxlength="48">
+          </label>
+          <label>
+            Username
+            <input id="username-input" name="username" autocomplete="username" minlength="3" maxlength="32" required>
+          </label>
+          <label>
+            Password
+            <input id="password-input" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
+          </label>
+          <label class="terms-check" id="terms-check-field" hidden>
+            <input id="terms-check" type="checkbox">
+            <span>I agree to the current Nexus Terms of Service.</span>
+          </label>
+          <p id="auth-error" class="auth-error" aria-live="polite"></p>
+          <button id="auth-submit" type="submit">Sign in</button>
+        </form>
+        <button id="auth-mode-toggle" class="text-button" type="button">Create a Nexus account</button>
+      </div>
+    </section>
+
+    <section class="terms-screen" id="terms-screen" hidden aria-labelledby="terms-title">
+      <div class="terms-card">
+        <p class="auth-eyebrow">NEXUS TERMS</p>
+        <h1 id="terms-title">Terms of Service</h1>
+        <p id="terms-version" class="terms-version"></p>
+        <pre id="terms-content" class="terms-content"></pre>
+        <p id="terms-error" class="auth-error" aria-live="polite"></p>
+        <button id="terms-accept" type="button">Agree and continue</button>
+      </div>
+    </section>
+
+    <main class="app-shell" id="app-shell" hidden>
       <aside class="rail" aria-label="Nexus navigation">
         <div class="brand-mark">N</div>
         <button class="rail-button active" type="button" aria-label="Chat">#</button>
@@ -18,6 +59,7 @@
         <header class="sidebar-header">
           <div class="wordmark">NEXUS</div>
           <span class="template-label">CLIENT</span>
+          <button id="logout-button" class="logout-button" type="button">Sign out</button>
         </header>
         <section class="identity" id="identity"></section>
         <nav class="nav-section" aria-label="Conversations">
@@ -38,7 +80,7 @@
           </div>
           <div id="channel-list" class="channel-list" aria-label="Channels"></div>
         </header>
-        <div class="connection-note" id="connection-note">Connected through your private Nexus Client API.</div>
+        <div class="connection-note" id="connection-note">Connected to the shared Nexus chat system.</div>
         <section class="messages" id="messages" aria-live="polite"></section>
         <form class="composer" id="composer">
           <label class="sr-only" for="message-input">Message</label>
