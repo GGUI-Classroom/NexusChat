@@ -678,6 +678,33 @@ app.get('/limited', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/limited.html'));
 });
 
+// Do not let a missing API route fall through to the SPA HTML page. The
+// browser API helper expects JSON from every /api request and should receive a
+// useful error instead of an unexpected <!DOCTYPE html> response.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Nexus API endpoint was not found' });
+});
+
+// Several routers intentionally call next(error) so one response boundary is
+// responsible for API errors. Without this, Express returns its stock HTML
+// error document and the client cannot surface the actual failure cleanly.
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  const requestedStatus = Number(error?.statusCode || error?.status);
+  const status = Number.isInteger(requestedStatus) && requestedStatus >= 400 && requestedStatus < 600
+    ? requestedStatus
+    : (error instanceof SyntaxError && Object.prototype.hasOwnProperty.call(error, 'body') ? 400 : 500);
+  const isClientError = status >= 400 && status < 500;
+  const message = isClientError && error?.message
+    ? error.message
+    : 'Nexus could not complete that request.';
+  console.error(`Nexus HTTP error [${req.method} ${req.originalUrl}]:`, error?.stack || error?.message || error);
+  if (req.path.startsWith('/api')) {
+    return res.status(status).json({ error: message });
+  }
+  return res.status(status).type('text/plain').send(message);
+});
+
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(path.join(__dirname, '../public/index.html'));
